@@ -1,33 +1,28 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
-import { db } from "~/server/db";
+import { PrismaClient } from "@prisma/client";
+
+export const db = new PrismaClient();
 
 export default async function SyncUserPage() {
-  console.log("Sync user page reached");
-
+ 
   const { userId } = await auth();
+
+  
   if (!userId) {
     throw new Error("User is not found");
   }
 
   const client = await clerkClient();
-  let user;
-  try {
-    user = await client.users.getUser(userId);
-  } catch (error) {
-    throw new Error("Failed to fetch user from Clerk");
-  }
+  const  user = await client.users.getUser(userId);
 
-  if (!user.emailAddresses || user.emailAddresses.length === 0) {
+  if (!user.emailAddresses[0]?.emailAddress) {
     return notFound();
   }
 
-  const email = user.emailAddresses[0]?.emailAddress || "";
-
-  try {
-    await db.user.upsert({
+  await db.user.upsert({
       where: {
-        emailAddress: email,
+        emailAddress: user.emailAddresses[0]?.emailAddress ?? "",
       },
       update: {
         imageUrl: user.imageUrl,
@@ -36,21 +31,12 @@ export default async function SyncUserPage() {
       },
       create: {
         id: user.id,
-        emailAddress: email,
+        emailAddress: user.emailAddresses[0]?.emailAddress ?? "",
         imageUrl: user.imageUrl,
         firstName: user.firstName,
         lastName: user.lastName,
       },
     });
-    console.log("User synced successfully:", email);
-  } catch (error) {
-    console.error("Database sync error:", error);
-    throw new Error(
-      `Failed to sync user with database: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-  }
 
-  redirect("/dashboard");
+  return redirect("/dashboard");
 }

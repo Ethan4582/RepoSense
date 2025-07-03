@@ -8,7 +8,7 @@ import { TRPCReactProvider } from "~/trpc/react";
 export const metadata: Metadata = {
   title: "RepoSense",
   description: "A tool for analyzing code repositories",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  icons: [{ rel: "icon", url: "/public/favicon.ico" }],
 };
 
 const geist = Geist({

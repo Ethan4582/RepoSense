@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "~/components/ui/button"
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "~/components/ui/sidebar"
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "~/components/ui/sidebar"
 import { cn } from "~/lib/utils" 
 
 const items = [
@@ -44,12 +44,19 @@ const projects = [
 
 export function AppSideBar() {
   const pathname = usePathname()
+
+  const {open} =useSidebar()
   return (
     <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader>
         <div className="flex items-center gap-2">
-         {/* <Image src="/logo.png" alt="Logo" width={40} height={40} alt=;logo" /> */}
-          
+         <Image src="/logo.png" alt="Logo" width={40} height={40}  />
+         {open && 
+          <h1 className="text-xl font-semibold text-primary">
+          Reposense
+         </h1>
+         }
+  
         </div>
       </SidebarHeader>
       <SidebarContent>

@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "~/components/ui/button"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "~/components/ui/sidebar"
+import useProject from "~/hooks/use-project"
 import { cn } from "~/lib/utils" 
 
 const items = [
@@ -31,21 +32,13 @@ const items = [
   }
 ]
 
-const projects = [
-  {
-    name: "Project 1",
-    url: "/projects/1"
-  },
-  {
-    name: "Project 2",
-    url: "/projects/2"
-  }
-]
 
 export function AppSideBar() {
   const pathname = usePathname()
 
   const {open} =useSidebar()
+
+  const { projects , projectId, setProjectId } = useProject()
   return (
     <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader>
@@ -93,15 +86,17 @@ export function AppSideBar() {
                </SidebarGroupLabel>
                <SidebarContent>
                    <SidebarMenu>
-                      {projects.map(project =>{
+                      {projects?.map(project =>{
                         return(
                            <SidebarMenuItem key={project.name}>
                               <SidebarMenuButton asChild>
-                                 <div>
+                                 <div onClick={()=>{
+                                  setProjectId(project.id)
+                                 }}>
                                     <div className={cn(
                                        'rounded-sm border size-6 flex items-center justify-center text-sm bg-white text-primary',{
-                                          // 'bg-primary text-white'=== project.name==project.id 
-                                           'bg-primary text-white':true
+                                          'bg-primary text-white': project.id===projectId
+
                                        }
                                     )}>
                                        {project.name[0].toUpperCase()}
@@ -116,8 +111,9 @@ export function AppSideBar() {
                            </SidebarMenuItem>
                         )
                       })}
-                      <div className="mt-2">
-                     <SidebarMenuItem>
+                       <div className="mt-2">
+                      {open &&
+                       <SidebarMenuItem>
                      <Link href="/create">
                      <Button size="sm" variant="outline" className="w-fit">
                         <Plus className="mr-2" />
@@ -126,6 +122,8 @@ export function AppSideBar() {
                      
                      </Link>
                         </SidebarMenuItem>
+                         }
+                      
                       </div>
                      </SidebarMenu>
                   </SidebarContent>

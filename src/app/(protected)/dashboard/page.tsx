@@ -1,13 +1,56 @@
 "use client";
-import { useUser } from "@clerk/nextjs";
+
+import { ExternalLink, GithubIcon } from "lucide-react";
+import Link from "next/link";
+import useProject from "~/hooks/use-project";
 
 
 export default function DashboardPage() {
-   const {user} =useUser();
+   const {project} = useProject();
      return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <h1 className="text-4xl font-bold mb-4">Dashboard</h1>
-      <p className="text-lg">Welcome, {user?.firstName}!</p>  
+   <div>
+    {project?.id}
+     <div className="flex  items-center justify-between flex-wrap gap-4">
+      <div className="w-fit rounded-md bg-primary px-4 py-3">
+        <div className="flex items-center">
+           <GithubIcon className="size-5 text-white" />
+        <div className="ml-2">
+
+          <p className="text-sm font-medium text-white">
+            This project is linked to {}
+            <Link
+              href={project?.repoUrl ?? " "}
+              className="inline-flex items-center gap-1 text-sm font-medium text-white hover:underline"
+            >
+              {project?.repoUrl}
+               <ExternalLink className="ml-1 size-4">
+            </ExternalLink>
+            </Link>
+          </p>
+        </div>
+        </div>
+      </div>
+
+      <div className="h-4"></div>
+      <div className="flex items-center gap-4">
+        Team Members
+        invite buttom 
+        Activation Buttom
+      </div>
+
     </div>
+
+    <div className="mt-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+
+        AskQuestion 
+        Meeting card 
+      </div>
+    </div>
+
+    <div className="mt-8"></div>
+
+    Commit Log 
+   </div>
   );
-}
+}   

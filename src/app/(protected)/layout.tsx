@@ -1,6 +1,6 @@
 import { UserButton } from "@clerk/nextjs"
 import { SidebarProvider } from "~/components/ui/sidebar"
-import { AppSideBar } from "./dashboard/app-sidebar"
+import { AppSideBar } from "../app-sidebar"
 
 
 type Props ={

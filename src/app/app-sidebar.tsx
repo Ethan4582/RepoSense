@@ -99,7 +99,8 @@ export function AppSideBar() {
 
                                        }
                                     )}>
-                                       {project.name[0].toUpperCase()}
+                                      {/* i made a change */}
+                                       {project.name[0]!.toUpperCase()}
 
                                     </div>
 

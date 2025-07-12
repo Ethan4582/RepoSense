@@ -4,6 +4,8 @@ import { Octokit } from 'octokit';
 import type { any } from 'zod';
 import { db } from '~/server/db';
 
+import axios from 'axios';
+import {  aiSummariseCommit } from './gemini';
 
 export const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -47,25 +49,80 @@ export const getCommitsHashes = async (githubUrl:string):Promise<Response[]> => 
 
 // console.log(await getCommitsHashes(githubUrl));
 
+//!pull the commits from the github repo and filter the unprocessed commits
+
+// export const pollCommits = async (projectId: string) => {
+
+//    const {project, repoUrl} = await fetchProjectGithubUrl(projectId);
+//    // Do something with the commits
+
+//    const commits = await getCommitsHashes(repoUrl);
+
+//    // get summary for only the new one answe have already have save the previous commits
+//    const unprocessedCommits = await filterUnprocessedCommits(projectId, commits);
+
+//    console.log('Unprocessed Commits:', unprocessedCommits);
+// }
+
 
 export const pollCommits = async (projectId: string) => {
 
    const [project, githubUrl] = await fetchProjectGithubUrl(projectId);
    // Do something with the commits
 
-   const commits = await getCommitsHashes(githubUrl);
+   const commitHashes= await getCommitsHashes(githubUrl);
 
    // get summary for only the new one answe have already have save the previous commits
-   const unprocessedCommits = await filterUnprocessedCommits(projectId, commits);
+   const unprocessedCommits = await filterUnprocessedCommits(projectId,  commitHashes);
 
-   console.log('Unprocessed Commits:', unprocessedCommits);
+   const summaryResponses = await Promise.allSettled(unprocessedCommits.map(commit=>{
+      return summariseCommit(githubUrl, commit.commitHash);
+   }))
+
+
+   const summarise = summaryResponses.map((response) => {
+      if (response.status === 'fulfilled') {
+         return response.value as string;
+      } 
+      return ""
+   });
+
+   const commits =await db.commit.createMany({
+      data: summarise.map((summary, index) => { 
+
+         console.log(`processing commit ${index + 1} of ${unprocessedCommits.length}`);
+
+
+         return {
+         projectId,
+         commitHash: unprocessedCommits[index]!.commitHash,
+         commitMessage: unprocessedCommits[index]!.commitMessage,
+         commitAuthorName: unprocessedCommits[index]!.commitAuthorName,
+         commitAuthorAvatar: unprocessedCommits[index]!.commitAuthorAvatar,
+         commmitDate: unprocessedCommits[index]!.commmitDate,
+         summary: summary,
+         }
+      })
+   });
+
+  return unprocessedCommits
+
+
 }
 
-
-
+//! the main logic take the url and hash and return the summary
 
 async  function summariseCommit(githubUrl: string, commitHash: string) {
-   
+   //get the diff and the in ai 
+
+   const {data}  = await  axios.get(`${githubUrl}/commit/${commitHash}.diff`, {
+      headers: {
+         'Accept': 'application/vnd.github.v3.diff',
+         'User-Agent': 'genai-stack',
+      }
+   });
+
+   return await  aiSummariseCommit(data) || '';
 }
 
 
@@ -99,4 +156,4 @@ async function filterUnprocessedCommits(projectId: string, commitHashes: Respons
 }
 
 
- pollCommits('cmctv2gx40000hrr8k4kc44z4').then(console.log).catch(console.error);
+//  pollCommits('cmctv2gx40000hrr8k4kc44z4').then(console.log).catch(console.error);

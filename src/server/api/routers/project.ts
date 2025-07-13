@@ -1,6 +1,7 @@
 import { pollCommits } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { z } from "zod";
+import { indexGithubRepo } from "~/lib/github-loader";
 
 export const projectRouter = createTRPCRouter({
   createProject: protectedProcedure.input(
@@ -22,6 +23,8 @@ export const projectRouter = createTRPCRouter({
         }
       }
     });
+    //load all the document whe get the summary generate the mebding theb store in the datbase 
+    await indexGithubRepo(input.repoUrl, input.githubToken ?? "", project.id);
 
      await pollCommits(project.id);
     return project;

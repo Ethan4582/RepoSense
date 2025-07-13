@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { toast } from "sonner"; // or use your preferred toast/alert library
 
+import type { Document } from "@langchain/core/documents";
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({
   model: 'gemini-1.5-flash',
@@ -109,24 +111,24 @@ Please summarise the following diff file: \n\n${diff}`
 
 
 
+//summrise each file in the repo then convert to mebedding  
+
+export async function summarizeCode(doc: Document) {
+  console.log("getting summary for", doc.metadata.source);
+  
+
+  return response.response.text();
+}
 
 
+export async function generateEmbeddings(summary: string) {
+  const embeddingModel = genAI.getGenerativeModel({
+    model: 'embedding-001', // Use the correct embedding model name
+  });
 
-console.log(await aiSummariseCommit(
-  `diff --git a/prisma/schema.prisma b/prisma/schema.prisma
-index 5f4b263..c13c41b 100644
---- a/prisma/schema.prisma
-+++ b/prisma/schema.prisma
-@@ -13,8 +13,8 @@ datasource db {
- model User {
-     id           String  @id @default(cuid())
-     emailAddress String  @unique
--    firstName    String
--    lastName     String
-+    firstName    String?
-+    lastName     String?
-     imageUrl     String?
- 
-     stripeSubscriptionId String?             @unique
-   }`
-));
+  const result = await embeddingModel.embedContent(summary); // Use embedContent instead of generateContent
+  
+  return result.embedding.values; // Return the embedding values array
+}
+
+// console.log(await generateEmbeddings("This is a test summary for embedding generation."));

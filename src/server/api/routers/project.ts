@@ -24,8 +24,13 @@ export const projectRouter = createTRPCRouter({
       }
     });
     //load all the document whe get the summary generate the mebding theb store in the datbase 
-    await indexGithubRepo(input.repoUrl, input.githubToken ?? "", project.id);
-
+    await indexGithubRepo(
+      input.repoUrl,
+      input.githubToken || process.env.GITHUB_TOKEN,
+      project.id
+    );
+    
+    await indexGithubRepo(input.repoUrl, input.githubToken || process.env.GITHUB_TOKEN, project.id);
      await pollCommits(project.id);
     return project;
 

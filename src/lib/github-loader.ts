@@ -19,31 +19,40 @@ function isComplexFile(fileName: string, content: string): boolean {
 }
 
 export const loadGithubRepo = async (repoUrl: string, githubToken?: string) => {
-  const loader = githubToken
-    ? new GithubRepoLoader(repoUrl, {
-        accessToken: githubToken,
-        branch: "main",
-        ignoreFiles: [
-          "packages-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock",
-          "node_modules", ".git", "dist", "build"
-        ],
-        recursive: true,
-        unknown: 'warn',
-        maxConcurrency: 5,
-      })
-    : new GithubRepoLoader(repoUrl, {
-        branch: "main",
-        ignoreFiles: [
-          "packages-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock",
-          "node_modules", ".git", "dist", "build"
-        ],
-        recursive: true,
-        unknown: 'warn',
-        maxConcurrency: 5,
-      });
+  try {
+    // Always try to use a token to avoid rate limits
+    const token = githubToken || process.env.GITHUB_TOKEN;
+    
+    if (!token) {
+      console.warn("⚠️ No GitHub token provided! You will hit rate limits quickly.");
+    }
+    
+    const loader = new GithubRepoLoader(repoUrl, {
+      accessToken: token, // Use the token here
+      branch: "main",
+      ignoreFiles: [
+        "packages-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock",
+        "node_modules", ".git", "dist", "build"
+      ],
+      recursive: true,
+      unknown: 'warn',
+      maxConcurrency: 2, // Lower this to avoid hitting limits
+    });
 
-  const docs = await loader.load();
-  return docs;
+    try {
+      const docs = await loader.load();
+      return docs;
+    } catch (error: any) {
+      // Better error handling for GitHub rate limits
+      if (error.message?.includes('rate limit exceeded')) {
+        throw new Error("GitHub API rate limit exceeded. Please provide a valid GitHub token or try again later.");
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error loading GitHub repo:", error);
+    throw error;
+  }
 };
 
 
@@ -119,7 +128,7 @@ async function summarizeAllFilesSequentially(docs: Document[]) {
       // Try to summarize with retry logic
       let summary = null;
       let attempts = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 5;
       
       while (attempts < maxAttempts) {
         try {

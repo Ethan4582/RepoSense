@@ -1,23 +1,26 @@
+
+
 import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 import type { Document } from "@langchain/core/documents";
 
-// Keep Gemini for embeddings
+// Gemini setup (only for fallback and embeddings)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
-});
+const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-// Keep existing commit summarization function
 export const aiSummariseCommit = async (diff: string) => {
     try {
-        // https://github.com/docker/genact-stack/commit/<commithash>.diff
-        const response = await model.generateContent({
-            contents: [
-                {
-                    role: "user",
-                    parts: [
+        // First try Hugging Face
+        const hfSummary = await summarizeCommitWithHuggingFace(diff);
+        if (hfSummary) return hfSummary;
+        
+        // Fallback to Gemini if Hugging Face fails
+        console.log("Falling back to Gemini for commit summary");
+        const response = await geminiModel.generateContent({
+            contents: [{
+                role: "user",
+                parts: [
                         {
                             text:
 `You are an expert programmer, and you are trying to summarize a git diff.
@@ -54,88 +57,105 @@ It is given only as an example of appropriate comments.
 Please summarise the following diff file: \n\n${diff}`
                         }
                     ]
-                }
-            ]
+            }]
         });
-
         return response.response.text();
     } catch (error: any) {
-        if (error.status === 503) {
-            console.error("Gemini model is overloaded. Please try again in a few seconds.");
-        } else {
-            console.error("Failed to summarize commit.");
-        }
-        return "";
+        console.error("Both summarization methods failed:", error.message);
+        return "Failed to generate summary";
     }
 };
 
-// NEW: Use Hugging Face for code summarization instead of Gemini
+
+
+
+
+
 export async function summarizeCode(doc: Document) {
-  console.log("Getting summary from Hugging Face for", doc.metadata.source);
-  
+  // First try Hugging Face
   try {
-    const code = doc.pageContent.slice(0, 10000); // Limit to 10000 characters
-    const HF_API_KEY = process.env.HUGGING_FACE_API_KEY;
-    
-    if (!HF_API_KEY) {
-      throw new Error("Missing HUGGING_FACE_API_KEY in environment variables");
-    }
-    
-    // Use a model that's good for code summarization
-    const response = await axios({
-      url: 'https://api-inference.huggingface.co/models/facebook/bart-large-cnn',
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${HF_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        inputs: `Summarize this code file (${doc.metadata.source}):\n\n${code}`,
-        parameters: {
-          max_length: 100,
-          min_length: 30,
-          do_sample: false,
-        },
-      },
-      timeout: 30000, // 30 second timeout
+    console.log("Attempting Hugging Face summary for", doc.metadata.source);
+    const hfSummary = await summarizeCodeWithHuggingFace(doc);
+    if (hfSummary) return hfSummary;
+  } catch (error) {
+    console.log("Hugging Face failed:", error.message);
+  }
+
+  // Fallback to Gemini
+  try {
+    console.log("Falling back to Gemini for", doc.metadata.source);
+    const code = doc.pageContent.slice(0, 10000);
+    const response = await geminiModel.generateContent({
+      contents: [{
+        role: "user",
+       parts: [
+            {
+              text: `You are an intelligent senior who specializes in onboarding new developers to the project.
+You are onboarding a new junior developer to the project and explaining to them the purpose of the file: ${doc.metadata.source}.
+Here is the code you need to explain:\n\n${code}
+Please give a concise summary less than 100 words.`
+            }
+          ]
+      }]
     });
-    
-    // Extract summary from response
-    if (response.data && response.data[0] && response.data[0].summary_text) {
-      return response.data[0].summary_text;
-    } else {
-      console.warn("Unexpected response format from Hugging Face:", response.data);
-      return `Code file from ${doc.metadata.source}`;
-    }
+    return response.response.text();
   } catch (error: any) {
-    console.error('Error generating summary with Hugging Face:', error.message);
-    
-    // More comprehensive error handling
-    if (error.response?.status === 400) {
-      console.log(`Bad request for file ${doc.metadata.source}, using fallback summary`);
-      return `Source code from ${doc.metadata.source}`;
-    } else if (error.response?.status === 404) {
-      console.log("Model not found. Using fallback summary method");
-      return `Source code from ${doc.metadata.source}`;
-    } else if (error.response?.status === 429) {
-      // Re-throw rate limit errors for the caller to handle with backoff
-      throw new Error("Hugging Face rate limit exceeded");
-    } else if (error.response?.status === 503) {
-      throw new Error("Hugging Face model is loading"); // Let outer handler deal with retries
-    }
-    
-    // Generic fallback
-    return `Source code from ${doc.metadata.source}`;
+    console.error("Gemini fallback failed:", error.message);
+    return `Failed to summarize: ${doc.metadata.source}`;
   }
 }
 
-// KEEP: Gemini for embeddings (unchanged)
-export async function generateEmbeddings(summary: string) {
-  const embeddingModel = genAI.getGenerativeModel({
-    model: 'embedding-001', // Use the correct embedding model name
-  });
+// Hugging Face implementation (primary)
+async function summarizeCommitWithHuggingFace(diff: string): Promise<string | null> {
+  try {
+    const HF_API_KEY = process.env.HUGGING_FACE_API_KEY;
+    if (!HF_API_KEY) throw new Error("Hugging Face API key missing");
 
-  const result = await embeddingModel.embedContent(summary); // Use embedContent instead of generateContent
-  
-  return result.embedding.values; // Return the embedding values array
+    const response = await axios({
+      url: 'https://api-inference.huggingface.co/models/facebook/bart-large-cnn',
+      method: 'POST',
+      headers: { Authorization: `Bearer ${HF_API_KEY}` },
+      data: {
+        inputs: `Summarize this git diff:\n\n${diff}`,
+        parameters: { max_length: 100, min_length: 30 }
+      },
+      timeout: 10000
+    });
+
+    return response.data?.[0]?.summary_text || null;
+  } catch (error: any) {
+    console.error("Hugging Face commit summary failed:", error.message);
+    return null;
+  }
+}
+
+async function summarizeCodeWithHuggingFace(doc: Document): Promise<string | null> {
+  try {
+    const HF_API_KEY = process.env.HUGGING_FACE_API_KEY;
+    if (!HF_API_KEY) throw new Error("Hugging Face API key missing");
+
+    const code = doc.pageContent.slice(0, 10000);
+    const response = await axios({
+      url: 'https://api-inference.huggingface.co/models/facebook/bart-large-cnn',
+      method: 'POST',
+      headers: { Authorization: `Bearer ${HF_API_KEY}` },
+      data: {
+        inputs: `Summarize this code file (${doc.metadata.source}):\n\n${code}`,
+        parameters: { max_length: 100, min_length: 30 }
+      },
+      timeout: 10000
+    });
+
+    return response.data?.[0]?.summary_text || null;
+  } catch (error: any) {
+    console.error("Hugging Face code summary failed:", error.message);
+    return null;
+  }
+}
+
+// Gemini remains for embeddings only
+export async function generateEmbeddings(summary: string) {
+  const embeddingModel = genAI.getGenerativeModel({ model: 'embedding-001' });
+  const result = await embeddingModel.embedContent(summary);
+  return result.embedding.values;
 }

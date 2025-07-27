@@ -20,6 +20,11 @@
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
+  "overrides": {
+    "@langchain/community": {
+      "ignore": "^7.0.0"
+    }
+  },
   "dependencies": {
     "@ai-sdk/google": "^1.2.22",
     "@clerk/nextjs": "^6.23.2",
@@ -68,7 +73,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
-    "dotenv": "^17.1.0",
+    "dotenv": "^16.6.1",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.3",
     "ignore": "^7.0.5",

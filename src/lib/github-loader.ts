@@ -5,8 +5,6 @@ import { GithubRepoLoader } from '@langchain/community/document_loaders/web/gith
 
 import { Document } from '@langchain/core/documents';
 import { generateEmbeddings, summarizeCode } from './gemini';
-import { SourceCode } from 'eslint';
-import { json } from 'stream/consumers';
 import { db } from '~/server/db';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -78,27 +76,27 @@ export const indexGithubRepo = async (repoUrl: string, githubToken?: string, pro
     // Step 4: Save all data to database sequentially
     console.log("💾 Saving data to database...");
     for (let i = 0; i < embeddingsData.length; i++) {
-      const item = embeddingsData[i];
+      const embedding = embeddingsData[i];
       try {
-        console.log(`Saving data for ${item.fileName} (${i+1}/${embeddingsData.length})`);
+        console.log(`Saving data for ${embedding.fileName} (${i+1}/${embeddingsData.length})`);
         
         const sourceCodeEmbedding = await db.sourceCodeEmbedding.create({
           data: { 
-            summary: item.summary,
+            summary: embedding.summary,
             // Remove embedding from here - it's not in your schema
-            fileName: item.fileName,
-            sourceCode: item.sourceCode,
+            fileName: embedding.fileName,
+            sourceCode: embedding.sourceCode,
             projectId,
           }
         });
         
         // Keep this part which correctly updates the vector field
-        await db.$executeRaw`UPDATE "SourceCodeEmbedding" SET "summaryEmbedding" = ${item.embedding} :: vector WHERE "id" = ${sourceCodeEmbedding.id}`;
+        await db.$executeRaw`UPDATE "SourceCodeEmbedding" SET "summaryEmbedding" = ${embedding.embedding} :: vector WHERE "id" = ${sourceCodeEmbedding.id}`;
         
         // Small delay between DB operations
         await sleep(1000);
       } catch (error) {
-        console.error(`Error saving data for ${item.fileName}:`, error);
+        console.error(`Error saving data for ${embedding.fileName}:`, error);
       }
     }
     

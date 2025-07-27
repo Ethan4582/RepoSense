@@ -1,6 +1,6 @@
 'use client'  
 
-
+import MDeditor from '@uiw/react-md-editor'
 import { DialogTitle } from '@radix-ui/react-dialog'
 import Image from 'next/image'
 import React from 'react'
@@ -9,17 +9,45 @@ import { Card, CardContent, CardTitle } from '~/components/ui/card'
 import { Dialog, DialogContent, DialogHeader } from '~/components/ui/dialog'
 import { Textarea } from '~/components/ui/textarea'
 import useProject from '~/hooks/use-project'
+import { askReposense } from './action'
+import { readStreamableValue } from 'ai/rsc'
+
 
 const AskQuestionCard = () => {
    const {project} =useProject()
+
+   const [loading , setLoading ]= React.useState(false)
 
    const [open, setOpen] = React.useState(false);
 
    const [question, setQuestion] = React.useState("");
 
-   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-     e.preventDefault();
-     setOpen(true);
+   const [answer , setAnswer] =React.useState("")
+
+   const [fileReferences, setFileReferences] = React.useState<{ fileName: string; sourceCode: string; summary: string }[]>([]);
+
+   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+      setAnswer("")
+      setFileReferences([])
+      e.preventDefault();
+      if(!project?.id) return 
+     setLoading(true)
+   
+
+     const {output, fileReferences} = await askReposense(question, project.id);
+     setFileReferences(fileReferences)
+
+     /// after i get some output i will set the answer
+       setOpen(true);
+
+
+     for  await (const delta of readStreamableValue(output)){
+      if(delta){
+         setAnswer(ans=>ans+delta)
+      }
+     }
+
+     setLoading(false)
    }
    
   return (
@@ -31,6 +59,18 @@ const AskQuestionCard = () => {
           <Image src='/logo.png' alt="Reposense" width={24} height={24} />
          </DialogTitle>
       </DialogHeader>
+
+     <MDeditor.Markdown
+        className='max-w-[70vw] !h-full max-h-[40vh] overflow-scroll'
+        source={answer}
+      />
+
+      <Button type='button' onClick={() =>{setOpen(false)} }>Close</Button>
+
+      {/* <h1>File References</h1>
+     { fileReferences.map(file=>{
+      return <span key={file.fileName}>{file.fileName}</span>
+     })} */}
       </DialogContent>
     </Dialog>
 
@@ -48,8 +88,8 @@ const AskQuestionCard = () => {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
-          <Button type="submit" className="mt-2">
-            Ask Reposense 
+          <Button type="submit" disabled={loading} className="mt-2">
+            Ask Reposense
           </Button>
 
         </form>

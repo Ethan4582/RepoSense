@@ -4,13 +4,13 @@ import { ExternalLink, GithubIcon } from "lucide-react";
 import Link from "next/link";
 import useProject from "~/hooks/use-project";
 import CommitLog from "./commit-log";
+import AskQuestionCard from "./ask-question-card";
 
 
 export default function DashboardPage() {
    const {project} = useProject();
      return (
    <div>
-    {project?.id}
      <div className="flex  items-center justify-between flex-wrap gap-4">
       <div className="w-fit rounded-md bg-primary px-4 py-3">
         <div className="flex items-center">
@@ -44,7 +44,7 @@ export default function DashboardPage() {
     <div className="mt-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
 
-        AskQuestion 
+        <AskQuestionCard />
         Meeting card 
       </div>
     </div>

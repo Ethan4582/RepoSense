@@ -71,6 +71,7 @@ Please summarise the following diff file: \n\n${diff}`
 
 
 
+
 export async function summarizeCode(doc: Document) {
   // First try Hugging Face
   try {

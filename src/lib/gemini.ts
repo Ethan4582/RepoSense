@@ -1,5 +1,3 @@
-
-
 import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
@@ -79,7 +77,11 @@ export async function summarizeCode(doc: Document) {
     const hfSummary = await summarizeCodeWithHuggingFace(doc);
     if (hfSummary) return hfSummary;
   } catch (error) {
-    console.log("Hugging Face failed:", error.message);
+    if (error instanceof Error) {
+      console.log("Hugging Face failed:", error.message);
+    } else {
+      console.log("Hugging Face failed:", error);
+    }
   }
 
   // Fallback to Gemini

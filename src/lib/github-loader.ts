@@ -82,13 +82,17 @@ export const indexGithubRepo = async (repoUrl: string, githubToken?: string, pro
       try {
         console.log(`Saving data for ${embedding.fileName} (${i+1}/${embeddingsData.length})`);
 
+        const data: any = {
+          summary: embedding.summary,
+          fileName: embedding.fileName,
+          sourceCode: embedding.sourceCode,
+        };
+        if (projectId !== undefined) {
+          data.projectId = projectId;
+        }
+
         const sourceCodeEmbedding = await db.sourceCodeEmbedding.create({
-          data: { 
-            summary: embedding.summary,
-            fileName: embedding.fileName,
-            sourceCode: embedding.sourceCode,
-            projectId,
-          }
+          data
         });
 
         await db.$executeRaw`UPDATE "SourceCodeEmbedding" SET "summaryEmbedding" = ${embedding.embedding} :: vector WHERE "id" = ${sourceCodeEmbedding.id}`;

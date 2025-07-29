@@ -1,8 +1,8 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
-import { PrismaClient } from "@prisma/client";
-
-export const db = new PrismaClient();
+// import { PrismaClient } from "@prisma/client";
+import { db } from "~/server/db";
+// export const db = new PrismaClient();
 
 export default async function SyncUserPage() {
  

@@ -1,4 +1,3 @@
-
 // 'use client'
 
 // import { motion, AnimatePresence } from 'framer-motion';
@@ -257,15 +256,34 @@
 //                           {fileReferences[activeFileTab].fileName}
 //                         </span>
 //                       </div>
-//                       <button 
-//                         className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
-//                         onClick={() => navigator.clipboard.writeText(fileReferences[activeFileTab].sourceCode)}
-//                       >
-//                         Copy
-//                       </button>
+//                       <div className="flex items-center gap-2">
+//                         <button 
+//                           className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+//                           onClick={() => {
+//                             if (fileReferences[activeFileTab]?.sourceCode) {
+//                               navigator.clipboard.writeText(fileReferences[activeFileTab].sourceCode);
+//                             }
+//                           }}
+//                         >
+//                           Copy
+//                         </button>
+//                         <button 
+//                           className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors flex items-center gap-1"
+//                           onClick={() => setShowSummary(!showSummary)}
+//                         >
+//                           <span>Summary</span>
+//                           <motion.span
+//                             animate={{ rotate: showSummary ? 180 : 0 }}
+//                             transition={{ duration: 0.2 }}
+//                           >
+//                             <ChevronDown className="w-3 h-3" />
+//                           </motion.span>
+//                         </button>
+//                       </div>
 //                     </div>
                     
-//                     {fileReferences[activeFileTab].summary && (
+//                     {/* Summary section (toggle) */}
+//                     {showSummary && fileReferences[activeFileTab].summary && (
 //                       <div className="px-4 py-2 bg-gray-800 text-sm text-gray-300 border-b border-gray-700">
 //                         <div className="font-medium text-blue-400 mb-1">Summary:</div>
 //                         <div>{fileReferences[activeFileTab].summary}</div>
@@ -389,9 +407,6 @@ import { Separator } from '~/components/ui/separator'
 import { Bot, MessageSquare, Loader2, Sparkles, FileText, Code2, ChevronDown, PlusCircle } from 'lucide-react'
 import useProject from '~/hooks/use-project'
 import { askReposense, askFollowUp } from './action' // Updated import
-
-// ... (keep formatAnswer and getCacheKey functions the same)
-
 
 // Helper function to generate cache key
 const getCacheKey = (projectId: string, question: string) => {
@@ -618,15 +633,34 @@ const AskQuestionCard = () => {
                           {fileReferences[activeFileTab].fileName}
                         </span>
                       </div>
-                      <button 
-                        className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
-                        onClick={() => navigator.clipboard.writeText(fileReferences[activeFileTab].sourceCode)}
-                      >
-                        Copy
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+                          onClick={() => {
+                            if (fileReferences[activeFileTab]?.sourceCode) {
+                              navigator.clipboard.writeText(fileReferences[activeFileTab].sourceCode);
+                            }
+                          }}
+                        >
+                          Copy
+                        </button>
+                        <button 
+                          className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                          onClick={() => setShowSummary(!showSummary)}
+                        >
+                          <span>Summary</span>
+                          <motion.span
+                            animate={{ rotate: showSummary ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronDown className="w-3 h-3" />
+                          </motion.span>
+                        </button>
+                      </div>
                     </div>
                     
-                    {fileReferences[activeFileTab].summary && (
+                    {/* Summary section (toggle) */}
+                    {showSummary && fileReferences[activeFileTab].summary && (
                       <div className="px-4 py-2 bg-gray-800 text-sm text-gray-300 border-b border-gray-700">
                         <div className="font-medium text-blue-400 mb-1">Summary:</div>
                         <div>{fileReferences[activeFileTab].summary}</div>

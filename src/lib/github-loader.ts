@@ -77,26 +77,25 @@ export const indexGithubRepo = async (repoUrl: string, githubToken?: string, pro
     console.log("💾 Saving data to database...");
     for (let i = 0; i < embeddingsData.length; i++) {
       const embedding = embeddingsData[i];
+      if (!embedding) continue; // Type guard: skip if undefined
+
       try {
         console.log(`Saving data for ${embedding.fileName} (${i+1}/${embeddingsData.length})`);
-        
+
         const sourceCodeEmbedding = await db.sourceCodeEmbedding.create({
           data: { 
             summary: embedding.summary,
-            // Remove embedding from here - it's not in your schema
             fileName: embedding.fileName,
             sourceCode: embedding.sourceCode,
             projectId,
           }
         });
-        
-        // Keep this part which correctly updates the vector field
+
         await db.$executeRaw`UPDATE "SourceCodeEmbedding" SET "summaryEmbedding" = ${embedding.embedding} :: vector WHERE "id" = ${sourceCodeEmbedding.id}`;
-        
-        // Small delay between DB operations
+
         await sleep(1000);
       } catch (error) {
-        console.error(`Error saving data for ${embedding.fileName}:`, error);
+        console.error(`Error saving data for ${embedding?.fileName ?? "unknown"}:`, error);
       }
     }
     
@@ -119,7 +118,8 @@ async function summarizeAllFilesSequentially(docs: Document[]) {
   
   for (let i = 0; i < totalFiles; i++) {
     const doc = docs[i];
-    const fileName = doc.metadata.source;
+    if (!doc) continue; // Type guard: skip if undefined
+    const fileName = doc.metadata?.source ?? "unknown";
     console.log(`Summarizing file ${i+1}/${totalFiles}: ${fileName}`);
     
     try {
@@ -168,10 +168,8 @@ async function summarizeAllFilesSequentially(docs: Document[]) {
       const baseDelay = isComplexFile(fileName, doc.pageContent) ? 4000 : 2000;
       console.log(`⏳ Waiting ${baseDelay/1000}s before next summarization...`);
       await sleep(baseDelay);
-      
     } catch (error) {
       console.error(`Error processing ${fileName}:`, error);
-      // Continue with next file
     }
   }
   
@@ -196,7 +194,9 @@ async function generateEmbeddingsSequentially(summaries: Array<{fileName: string
   console.log(`Starting embedding generation for ${totalSummaries} summaries`);
   
   for (let i = 0; i < totalSummaries; i++) {
-    const { fileName, summary, sourceCode } = summaries[i];
+    const summaryObj = summaries[i];
+    if (!summaryObj) continue; // Type guard: skip if undefined
+    const { fileName, summary, sourceCode } = summaryObj;
     console.log(`Generating embedding ${i+1}/${totalSummaries}: ${fileName}`);
     
     try {
@@ -243,10 +243,8 @@ async function generateEmbeddingsSequentially(summaries: Array<{fileName: string
       const delay = 2000 + Math.random() * 2000; // 4-6 seconds
       console.log(`⏳ Waiting ${Math.round(delay/1000)}s before next embedding...`);
       await sleep(delay);
-      
     } catch (error) {
       console.error(`Error generating embedding for ${fileName}:`, error);
-      // Continue with next summary
     }
   }
   

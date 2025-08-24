@@ -9,7 +9,7 @@ import { db } from '~/server/db';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper to detect complex files that might need more time
+// Help to detect complex files that might need more time
 function isComplexFile(fileName: string, content: string): boolean {
   return content.length > 20000 || 
          fileName.includes('test') || 

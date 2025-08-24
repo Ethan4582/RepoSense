@@ -191,9 +191,9 @@ const AskQuestionCard = () => {
             </div>
           </DialogHeader>
 
-           {/* Scrollable container for entire content */}
+         
           <div className="flex-1 overflow-auto">
-            {/* Answer Section - Expands to content size */}
+          
             <div className="px-6 py-1">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
@@ -216,10 +216,10 @@ const AskQuestionCard = () => {
               )}
             </div>
 
-            {/* File References Section with Tabs */}
+         
             {fileReferences.length > 0 && (
               <div className="border-t border-gray-200">
-                {/* Header with gradient background */}
+            
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 border-b border-gray-200">
                   <div className="flex items-center gap-2">
                     <Code2 className="w-5 h-5 text-blue-600" />
@@ -233,7 +233,7 @@ const AskQuestionCard = () => {
 
               
                 
-                {/* File Tabs */}
+           
                 <div className="flex overflow-x-auto bg-white border-b border-gray-200">
                   {fileReferences.map((file, index) => (
                     <button
@@ -251,10 +251,10 @@ const AskQuestionCard = () => {
                   ))}
                 </div>
 
-                {/* File Content */}
+              
                 {fileReferences[activeFileTab] && (
                   <div className="bg-gray-900 text-gray-100">
-                    {/* File header with summary */}
+             
                     <div className="px-4 py-3 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-gray-400" />
@@ -287,8 +287,7 @@ const AskQuestionCard = () => {
                         </button>
                       </div>
                     </div>
-                    
-                    {/* Summary section (toggle) */}
+          
                     {showSummary && fileReferences[activeFileTab].summary && (
                       <div className="px-4 py-2 bg-gray-800 text-sm text-gray-300 border-b border-gray-700">
                         <div className="font-medium text-blue-400 mb-1">Summary:</div>
@@ -296,7 +295,7 @@ const AskQuestionCard = () => {
                       </div>
                     )}
                     
-                    {/* Code content */}
+               
                     <div className="p-4 max-h-[300px] overflow-auto">
                       <pre className="text-sm font-mono whitespace-pre-wrap">
                         <code>{fileReferences[activeFileTab].sourceCode}</code>
@@ -308,7 +307,7 @@ const AskQuestionCard = () => {
             )}
           </div>
 
-          {/* Simple Footer */}
+     
           <div className="border-t p-4 flex justify-between items-center bg-gray-50">
             <div className="text-xs text-gray-500 flex items-center gap-1">
               <Sparkles className="w-4 h-4 text-yellow-500" />
@@ -323,11 +322,10 @@ const AskQuestionCard = () => {
               Close
             </Button>
           </div>
-          {/* ... (rest of dialog content) ... */}
+         
         </DialogContent>
       </Dialog>
 
-      {/* Input Card */}
       <Card className='relative col-span-1 sm:col-span-2 lg:col-span-3 shadow-sm hover:shadow-md transition-shadow border border-blue-100'>
         <CardTitle className="px-4 py-1 text-lg font-semibold border-b bg-gradient-to-r from-blue-50 to-indigo-50">
           <div className="flex items-center gap-2">

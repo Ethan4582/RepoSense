@@ -5,8 +5,9 @@ import Link from 'next/link';
 import React from 'react';
 import useProject from '~/hooks/use-project';
 import { cn } from '~/lib/utils';
-import { api } from '~/trpc/react';
+
 import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '~/trpc/react';
 
 const CommitLog = () => {
   const { projectId, project } = useProject();

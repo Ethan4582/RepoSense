@@ -7,22 +7,46 @@ import {useDropzone} from 'react-dropzone'
 import { uploadFile } from '~/lib/cloudinary';
 import { Presentation, Upload } from 'lucide-react';
 import { Button } from '~/components/ui/button';
+import { api } from '~/trpc/react';
+import useProject from '~/hooks/use-project';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 const MeetCard = () => {
+  const project = useProject()
  const [isUploading, setIsUploading] = React.useState(false);
    const [progress, setProgress] = React.useState(0);
+   const router = useRouter();  
+   const uploadMeeeting = api.project.uploadMeeting.useMutation();
+
+
     const {getRootProps, getInputProps} = useDropzone({
       accept:{
         'audio/*':['.mp3', '.wav' , '.m4a']
       },
       multiple :false,
       maxSize:50_000_000,
-      onDrop: async (acceptedFiles)=>{
-         setIsUploading(true);
+      onDrop: async acceptedFiles=>{
+        if (!project.projectId) return;
+        setIsUploading(true);
        console.log(acceptedFiles);
        const file = acceptedFiles[0];
-       const downloadUrl = await  uploadFile(file as File,  setProgress);
-       window.alert(downloadUrl)
+       if(!file) return;
+
+       const downloadUrl = await  uploadFile(file as File,  setProgress) as string;
+      uploadMeeeting.mutate({
+         projectId: project.projectId, 
+        meetingUrl: downloadUrl,
+        name: file.name
+      },{
+        onSuccess: () => {
+         toast.success("Meeting uploaded successfully");
+         router.push('/meetings');
+        },
+        onError: () => {
+           toast.error("Failed to upload meeting");
+        }
+      });
        setIsUploading(false);
       }
     });
@@ -62,6 +86,21 @@ const MeetCard = () => {
             </Button>
           </div>
         </>
+      )}
+      {isUploading && (
+        <div className="mt-4">
+          <CircularProgressbar
+            value={progress}
+            text={`${progress}%`}
+            className='size-20'
+            styles={buildStyles({
+              pathColor:'#2563eb',
+              textColor: '#2563eb',
+              
+            })}
+          />
+          <p className='text-center text-sm text-gray-500 mt-2'>Uploading your meeting...</p>
+        </div>
       )}
     </Card>
   )

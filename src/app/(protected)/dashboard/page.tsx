@@ -39,15 +39,18 @@ export default function DashboardPage() {
         Team Members
         invite buttom 
         <ArchiveButton />
-        <MeetingCard />
+        
       </div>
+      
 
     </div>
 
-   <div className="grid grid-cols-1 gap-4 sm:grid-cols-9">
+   <div className="grid grid-cols-2 gap-4 sm:grid-cols-9">
   <div className="sm:col-span-5"> 
     <AskQuestionCard />
+   
   </div>
+   <MeetingCard />
 </div>
 
     <div className="mt-8"></div>

@@ -1,7 +1,7 @@
 export async function uploadFile(file: File, setProgress?: (progress: number) => void): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = "ml_default"; // Use your unsigned preset name
+    const uploadPreset = "ml_default"; 
      const folder = "reposense";
 
 
@@ -29,9 +29,8 @@ export async function uploadFile(file: File, setProgress?: (progress: number) =>
     xhr.onload = () => {
       if (xhr.status === 200) {
         const response = JSON.parse(xhr.responseText);
-        resolve(response.secure_url);
+        resolve(response.secure_url as string);
       } else {
-        console.error("Cloudinary error:", xhr.responseText); // Add this line
         reject("Failed to upload file");
       }
     };

@@ -8,7 +8,7 @@ import { projectRouter } from "./routers/project";
  */
 export const appRouter = createTRPCRouter({
   post: postRouter,
-   project:projectRouter
+  project: projectRouter,
 });
 
 // export type definition of API

@@ -21,9 +21,9 @@ const items = [
     url: "/qa"
   },
   {
-    title: "Meeting",
+    title: "Meetings",
     icon: Bot,
-    url: "/meeting"
+    url: "/meetings"
   },
 
   {

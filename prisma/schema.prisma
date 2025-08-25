@@ -113,7 +113,7 @@ model Meeting {
 
 enum MeetingStatus {
   PROCESSING
-  CANCELLED
+  COMPLETED
 }
 
 

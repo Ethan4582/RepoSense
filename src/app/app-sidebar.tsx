@@ -22,9 +22,10 @@ const items = [
   },
   {
     title: "Meeting",
-    icon: Presentation,
-    url: "/meetings"
+    icon: Bot,
+    url: "/meeting"
   },
+
   {
     title: "Billing",
     icon: CreditCard,
@@ -55,7 +56,7 @@ export function AppSideBar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>
-            Application
+            {/* Application */}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

@@ -5,6 +5,8 @@ import Link from "next/link";
 import useProject from "~/hooks/use-project";
 import CommitLog from "./commit-log";
 import AskQuestionCard from "./ask-question-card";
+import ArchiveButton from "./archive-buttom";
+import MeetingCard from "./meeting-card";
 
 
 export default function DashboardPage() {
@@ -36,17 +38,16 @@ export default function DashboardPage() {
       <div className="flex items-center gap-4">
         Team Members
         invite buttom 
-        Activation Buttom
+        <ArchiveButton />
+        <MeetingCard />
       </div>
 
     </div>
 
    <div className="grid grid-cols-1 gap-4 sm:grid-cols-9">
-  <div className="sm:col-span-5"> {/* This will make it take 2/3 (~66.67%) of the width */}
+  <div className="sm:col-span-5"> 
     <AskQuestionCard />
   </div>
-  {/* Meeting card or other content */}
-  meeting card
 </div>
 
     <div className="mt-8"></div>

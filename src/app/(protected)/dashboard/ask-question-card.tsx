@@ -15,6 +15,7 @@ import useProject from '~/hooks/use-project'
 import { askReposense, askFollowUp } from './action' // Updated import
 import { api } from '~/trpc/react';
 import { toast } from 'sonner';
+import useRefetch from '~/hooks/use-refetch';
 
 // Helper function to generate cache key
 const getCacheKey = (projectId: string, question: string) => {
@@ -137,6 +138,8 @@ const AskQuestionCard = () => {
     setOpen(false);
   };
 
+  const refetch = useRefetch();
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -156,6 +159,7 @@ const AskQuestionCard = () => {
                     fileReference: fileReferences }, {
                   onSuccess:()=>{
                     toast.success("Answer saved successfully")
+                    refetch();
                   },
                   onError:()=>{
                     toast.error("Failed to save answer")

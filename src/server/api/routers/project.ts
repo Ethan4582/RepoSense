@@ -105,7 +105,26 @@ export const projectRouter = createTRPCRouter({
         createdAt: 'desc'
       }
     });
-  })
+  }),
+
+
+  archiveProject: protectedProcedure.input(
+    z.object({
+      projectId: z.string(),
+    })
+  ).mutation(async ({ ctx, input }) => {
+    // Ensure user exists in the User table
+    return await ctx.db.project.update({
+      where: {
+        id: input.projectId,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+  }),
+
+
 })
 
 

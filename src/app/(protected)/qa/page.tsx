@@ -5,7 +5,7 @@ import useProject from "~/hooks/use-project"
 import { api } from "~/trpc/react"
 import AskQuestionCard from "../dashboard/ask-question-card"
 import React, { useState } from "react"
-import Image from "next/image"
+
 import MDEditor from '@uiw/react-md-editor'
 import CodeReferences from "../dashboard/code-refernces"
 
@@ -15,7 +15,7 @@ export default function QaPage(){
    const {data: questions }=api.project.getQuestion.useQuery({ projectId })
 
     const [questionIndex, setquestionIndex] = useState(0)
-    const questionObj = questions?.[questionIndex]; // <-- get the full object
+    const questionObj = questions?.[questionIndex]; 
     const questionText = questionObj?.question || ""
 
    return (
@@ -44,7 +44,7 @@ export default function QaPage(){
         </div>
 
         {questionObj && (
-          <SheetContent className="sm:max-w-[80vw]">
+          <SheetContent className="sm:max-w-[40vw] sm:max-h-[40vh]">
             <SheetHeader>
               <SheetTitle className="text-lg font-bold">{questionObj.question}</SheetTitle>
             </SheetHeader>

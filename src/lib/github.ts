@@ -1,4 +1,3 @@
-
 // all the function to interact with the GitHub API
 import { Octokit } from 'octokit';
 import type { any } from 'zod';
@@ -10,9 +9,6 @@ import {  aiSummariseCommit } from './gemini';
 export const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
-
-
-const githubUrl= 'https://github.com/docker/genai-stack';
 
 
 type Response = {
@@ -66,11 +62,8 @@ export const getCommitsHashes = async (githubUrl:string):Promise<Response[]> => 
 
 
 export const pollCommits = async (projectId: string) => {
-
-   const [project, githubUrl] = await fetchProjectGithubUrl(projectId);
-   // Do something with the commits
-
-   const commitHashes= await getCommitsHashes(githubUrl);
+   const githubUrl = await fetchProjectGithubUrl(projectId); // <-- Use dynamic URL
+   const commitHashes = await getCommitsHashes(githubUrl);
 
    // get summary for only the new one answe have already have save the previous commits
    const unprocessedCommits = await filterUnprocessedCommits(projectId,  commitHashes);
@@ -127,20 +120,16 @@ async  function summariseCommit(githubUrl: string, commitHash: string) {
 
 
 
-async function fetchProjectGithubUrl(projectId:string) {
+async function fetchProjectGithubUrl(projectId: string) {
    const project = await db.project.findUnique({
-      where: {
-         id: projectId,
-      },
-      select:{
-         repoUrl: true,
-      }
+      where: { id: projectId },
+      select: { repoUrl: true },
    });
 
-   if( !project?.repoUrl) {
+   if (!project?.repoUrl) {
       throw new Error(`Project with ID ${projectId} not found or does not have a Commit.`);
    }
-   return [project ,githubUrl , project.repoUrl];
+   return project.repoUrl; // <-- Only return the dynamic repoUrl
 }
 
 

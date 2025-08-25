@@ -7,6 +7,8 @@ import CommitLog from "./commit-log";
 import AskQuestionCard from "./ask-question-card";
 import ArchiveButton from "./archive-buttom";
 import MeetingCard from "./meeting-card";
+import InviteButton from "./invite-button";
+import TeamMembers from "./team-member";
 
 
 export default function DashboardPage() {
@@ -36,8 +38,8 @@ export default function DashboardPage() {
 
       <div className="h-4"></div>
       <div className="flex items-center gap-4">
-        Team Members
-        invite buttom 
+        <TeamMembers />
+        <InviteButton />
         <ArchiveButton />
         
       </div>

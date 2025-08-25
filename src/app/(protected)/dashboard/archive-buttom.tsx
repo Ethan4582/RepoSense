@@ -15,6 +15,7 @@ const ArchiveButton = () => {
   return (
     <Button 
       disabled={archiveProject.isPending}
+      size="sm"
       className='bg-red-500 hover:bg-red-600 w-[25%] text-white'
       variant="destructive"
       onClick={() => {

@@ -28,7 +28,8 @@
   "dependencies": {
     "@ai-sdk/google": "^1.2.22",
     "@ai-sdk/mistral": "^1.2.8",
-    "@clerk/nextjs": "^6.23.2",
+    "@clerk/clerk-sdk-node": "^5.1.6",
+    "@clerk/nextjs": "^6.31.4",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.1.1",
     "@langchain/community": "^0.3.48",
@@ -98,6 +99,7 @@
     "recharts": "^3.0.2",
     "server-only": "^0.0.1",
     "sonner": "^2.0.5",
+    "stripe": "^18.4.0",
     "superjson": "^2.2.1",
     "tailwind-merge": "^3.3.1",
     "usehooks-ts": "^3.1.1",

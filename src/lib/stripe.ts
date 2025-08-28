@@ -5,8 +5,8 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/dist/server/api-utils';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2022-11-15',
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+ apiVersion: '2025-07-30.basil',
 });
 
 
@@ -32,12 +32,14 @@ export async function createCheckoutSession(credits: number) {
         ],
         customer_creation: 'always',
         mode: 'payment',
-        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/create`,
+        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
+
         client_reference_id: userId.toString(),
         metadata: {
             credits: credits
         }
     })
 
-    return redirect(session.url)
+  return session;
 }

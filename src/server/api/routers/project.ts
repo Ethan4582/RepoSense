@@ -1,7 +1,7 @@
 import { pollCommits } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { z } from "zod";
-import { indexGithubRepo } from "~/lib/github-loader";
+import { checkCredits, indexGithubRepo } from "~/lib/github-loader";
 
 export const projectRouter = createTRPCRouter({
   getProjects: protectedProcedure.query(async ({ ctx }) => {
@@ -24,6 +24,20 @@ export const projectRouter = createTRPCRouter({
       githubToken: z.string().optional(),
     })
   ).mutation(async ({ ctx, input }) => {
+    //backend valiadation for the credits check 
+    const user = await ctx.db.user.findUnique({ where: { id: ctx.user.userId! }, select: { credits: true } })
+
+if (!user) {
+    throw new Error("User not found")
+}
+
+const currentCredits = user.credits || 0
+const fileCount = await checkCredits(input.repoUrl, input.githubToken)
+
+if (currentCredits < fileCount) {
+    throw new Error("Insufficient credits")
+}
+
     const project = await ctx.db.project.create({
       data: {
         name: input.name,
@@ -41,6 +55,12 @@ export const projectRouter = createTRPCRouter({
       project.id
     );
     await pollCommits(project.id);
+ // decrease the file count
+    await ctx.db.user.update({
+      where: { id: ctx.user.userId! },
+      data: { credits: { decrement: fileCount } },
+    });
+
     return project;
   }),
 
@@ -196,8 +216,30 @@ export const projectRouter = createTRPCRouter({
       credits: true
     }
   }); 
-})
+}),
 
-});
+
+ checkCredits: protectedProcedure.input(
+   z.object({
+     githubUrl: z.string(),
+     githubToken: z.string().optional()
+   })
+ ).mutation(async ({ ctx, input }) => {
+   const fileCount = await checkCredits(input.githubUrl, input.githubToken);
+   const userCredits = await ctx.db.user.findUnique({
+     where: {
+       id: ctx.user.userId!
+     },
+     select: {
+       credits: true
+     }
+   })
+   return {
+     fileCount,
+     userCredits: userCredits?.credits || 0
+   };
+ })
+
+})
 
 

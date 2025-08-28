@@ -1,15 +1,63 @@
-// fcuniton that githb url and give all the files in it 
-
 
 import { GithubRepoLoader } from '@langchain/community/document_loaders/web/github';
 
 import { Document } from '@langchain/core/documents';
 import { generateEmbeddings, summarizeCode } from './gemini';
 import { db } from '~/server/db';
+import { Octokit } from 'octokit';
+
+
+// recursive function to check the count of the file 
+const getFileCount = async (path: string, octokit: Octokit, githubOwner: string, githubRepo: string, acc: number = 0) => {
+    const { data } = await octokit.rest.repos.getContent({
+        owner: githubOwner,
+        repo: githubRepo,
+        path
+    })
+    if (!Array.isArray(data) && data.type === 'file') {
+        return acc + 1
+    }
+    if (Array.isArray(data)) {
+        let fileCount = 0
+const directories: string[] = []
+
+for (const item of data) {
+    if (item.type === 'dir') {
+        directories.push(item.path)
+    } else {
+        fileCount++;
+    }
+}
+
+if (directories.length > 0) {
+    const directoryCounts = await Promise.all(
+        directories.map(dirPath => getFileCount(dirPath, octokit, githubOwner, githubRepo, 0))
+    )
+    fileCount += directoryCounts.reduce((acc, count) => acc + count, 0)
+}
+ return acc=fileCount;
+    }
+    return acc
+   
+}
+
+export const checkCredits = async (githubUrl: string, githubToken?: string) => {
+    // find out how many files are in the repo
+    const octokit = new Octokit({ auth: githubToken })
+    const githubOwner = githubUrl.split('/')[3]
+    const githubRepo = githubUrl.split('/')[4]
+    if (!githubOwner || !githubRepo) {
+        return 0
+    }
+
+    const fileCount= await getFileCount('', octokit, githubOwner, githubRepo, 0)
+    return fileCount
+}
+
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Help to detect complex files that might need more time
+
 function isComplexFile(fileName: string, content: string): boolean {
   return content.length > 20000 || 
          fileName.includes('test') || 
@@ -26,12 +74,121 @@ export const loadGithubRepo = async (repoUrl: string, githubToken?: string) => {
     }
     
     const loader = new GithubRepoLoader(repoUrl, {
-      accessToken: token, // Use the token here
+      accessToken: token, 
       branch: "main",
       ignoreFiles: [
-        "packages-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock",
-        "node_modules", ".git", "dist", "build"
-      ],
+    // Dependency lock files
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lock",
+    "shrinkwrap.yaml",
+    
+    // Dependency directories
+    "node_modules",
+    ".yarn",
+    ".pnp",
+    ".yarn/cache",
+    ".yarn/unplugged",
+    ".yarn/install-state.gz",
+    
+    // Build outputs
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    ".output",
+    "out",
+    "public/build",
+    "target",
+    "bin",
+    "obj",
+    "*.tsbuildinfo",
+    
+    // Cache directories
+    ".cache",
+    ".parcel-cache",
+    ".svelte-kit",
+    ".turbo",
+    ".eslintcache",
+    ".stylelintcache",
+    
+    // Runtime files
+    "*.log",
+    "logs",
+    "npm-debug.log*",
+    "yarn-debug.log*",
+    "yarn-error.log*",
+    
+    // Environment files
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.test",
+    ".env.production",
+    ".env.*.local",
+    
+    // IDE/Editor files
+    ".vscode",
+    ".idea",
+    "*.swp",
+    "*.swo",
+    "*~",
+    
+    // OS metadata
+    ".DS_Store",
+    "Thumbs.db",
+    "Desktop.ini",
+    "$RECYCLE.BIN",
+    
+    // Coverage reports
+    "coverage",
+    ".nyc_output",
+    "*.lcov",
+    
+    // Temporary files
+    ".tmp",
+    ".temp",
+    "temp",
+    "tmp",
+    "*.tmp",
+    "*.temp",
+    
+    // Version control
+    ".git",
+    ".svn",
+    ".hg",
+    
+    // Documentation
+    "CHANGES.md",
+    "CHANGELOG.md",
+    "LICENSE.md",
+    "LICENSE.txt",
+    
+    // Config overrides
+    ".eslintignore",
+    ".prettierignore",
+    ".stylelintignore",
+    
+    // Miscellaneous
+    ".yarnrc.yml",
+    ".yarnrc",
+    ".npmrc",
+    ".prettierrc",
+    ".eslintrc.js",
+    ".stylelintrc.js",
+    "jest.config.js",
+    "webpack.config.js",
+    "vite.config.js",
+    "tsconfig.json",
+    "jsconfig.json",
+    ".dockerignore",
+    ".gitattributes",
+    ".gitignore",
+    ".editorconfig",
+    ".babelrc",
+    ".commitlintrc.js"
+  ],
       recursive: true,
       unknown: 'warn',
       maxConcurrency: 2, // Lower this to avoid hitting limits

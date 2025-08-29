@@ -41,7 +41,6 @@ export default function DashboardPage() {
         <TeamMembers />
         <InviteButton />
         <ArchiveButton />
-        
       </div>
       
 
@@ -55,7 +54,7 @@ export default function DashboardPage() {
    <MeetingCard />
 </div>
 
-    <div className="mt-8"></div>
+    <div className="mt-8 -ml-4"></div>
 
     <CommitLog />
    </div>

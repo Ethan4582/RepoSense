@@ -1,4 +1,3 @@
-
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -256,19 +255,24 @@ const AskQuestionCard = () => {
                 </div>
 
               
-                {fileReferences[activeFileTab] && (
-                  <div className="bg-gray-900 text-gray-100">
-             
-                    <div className="px-4 py-3 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+              {fileReferences[activeFileTab] && (
+                <motion.div
+                  className="flex-1 min-h-0 overflow-auto"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3, duration: 0.3 }}
+                >
+                  <div className="bg-gray-50 text-gray-900 rounded-b-lg">
+                    <div className="px-4 py-3 bg-white border-b border-gray-200 flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm font-mono text-gray-300">
+                        <FileText className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-mono text-gray-700">
                           {fileReferences[activeFileTab].fileName}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button 
-                          className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+                        <button
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition-colors"
                           onClick={() => {
                             if (fileReferences[activeFileTab]?.sourceCode) {
                               navigator.clipboard.writeText(fileReferences[activeFileTab].sourceCode);
@@ -277,8 +281,8 @@ const AskQuestionCard = () => {
                         >
                           Copy
                         </button>
-                        <button 
-                          className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                        <button
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition-colors flex items-center gap-1"
                           onClick={() => setShowSummary(!showSummary)}
                         >
                           <span>Summary</span>
@@ -291,22 +295,25 @@ const AskQuestionCard = () => {
                         </button>
                       </div>
                     </div>
-          
+
                     {showSummary && fileReferences[activeFileTab].summary && (
-                      <div className="px-4 py-2 bg-gray-800 text-sm text-gray-300 border-b border-gray-700">
-                        <div className="font-medium text-blue-400 mb-1">Summary:</div>
+                      <div className="px-4 py-2 bg-white text-sm text-gray-700 border-b border-gray-200">
+                        <div className="font-medium text-blue-600 mb-1">Summary:</div>
                         <div>{fileReferences[activeFileTab].summary}</div>
                       </div>
                     )}
                     
-               
-                    <div className="p-4 max-h-[300px] overflow-auto">
-                      <pre className="text-sm font-mono whitespace-pre-wrap">
-                        <code>{fileReferences[activeFileTab].sourceCode}</code>
+                    <div className="bg-gray-800 text-gray-300 p-4 max-h-[300px] overflow-auto rounded-b-lg">
+                      <pre className="text-sm font-mono leading-6">
+                        <code className="text-gray-300">{fileReferences[activeFileTab].sourceCode}</code>
                       </pre>
                     </div>
                   </div>
-                )}
+                </motion.div>
+)}
+
+
+
               </div>
             )}
           </div>
@@ -342,19 +349,21 @@ const AskQuestionCard = () => {
           </div>
         </CardTitle>
         
+        
         <CardContent className="">
           <form onSubmit={onSubmit}>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
+             <label className="text-sm   font-medium text-gray-700">
                 {isFollowUp ? 'What would you like to know more about?' : 'What would you like to know about your codebase?'}
               </label>
+            <div>
+             
               <Textarea
                 placeholder={
                   isFollowUp 
                     ? "e.g., Can you explain that in more detail?" 
                     : "e.g., Which file should I edit to change the home page?"
                 }
-                className="w-full h-20 p-3 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full h-20 p-2 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 disabled={loading}

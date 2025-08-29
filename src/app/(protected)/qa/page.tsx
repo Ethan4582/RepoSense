@@ -32,7 +32,7 @@ export default function QaPage(){
                   <img className="rounded-full border border-gray-200" height={36} width={36} src={q.user.imageUrl ?? ""} />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-gray-800 font-semibold text-base line-clamp-1">{q.question}</p>
+                      <p className="text-gray-800 font-semibold  line-clamp-1">{q.question}</p>
                       <span className="text-xs text-gray-400">{new Date(q.createdAt).toLocaleString()}</span>
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2 mt-1">{q.answers}</p>
@@ -44,7 +44,7 @@ export default function QaPage(){
         </div>
 
         {questionObj && (
-          <SheetContent className="sm:max-w-[75vw] p-0 bg-gradient-to-br from-blue-50 to-white">
+          <SheetContent className="sm:max-w-[55vw] p-0 bg-gradient-to-br from-blue-50 to-white">
             <div className="h-full flex flex-col">
               {/* Header */}
               <SheetHeader className="px-6 py-4 bg-white border-b border-blue-100 shadow-sm">

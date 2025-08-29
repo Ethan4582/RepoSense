@@ -44,20 +44,54 @@ export default function QaPage(){
         </div>
 
         {questionObj && (
-          <SheetContent className="sm:max-w-[40vw] sm:max-h-[40vh]">
-            <SheetHeader>
-              <SheetTitle className="text-lg font-bold">{questionObj.question}</SheetTitle>
-            </SheetHeader>
-            <div className="mb-4">
-              <MDEditor.Markdown source={questionObj.answers} />
+          <SheetContent className="sm:max-w-[75vw] p-0 bg-gradient-to-br from-blue-50 to-white">
+            <div className="h-full flex flex-col">
+              {/* Header */}
+              <SheetHeader className="px-6 py-4 bg-white border-b border-blue-100 shadow-sm">
+                <SheetTitle className="text-xl font-bold text-gray-900 text-left">
+                  {questionObj.question}
+                </SheetTitle>
+              </SheetHeader>
+
+              {/* Content Area */}
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Answer Section - 50% height */}
+                <div className="flex-1 min-h-0 bg-white border-b border-blue-100">
+                  <div className="h-full flex flex-col">
+                    <div className="px-6 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                      <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wide">
+                        Answer
+                      </h3>
+                    </div>
+                   <div className="flex-1 overflow-auto px-2 py-2">
+                  <div className="prose prose-blue max-w-none rounded-lg shadow-sm border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-3 ">
+                    <MDEditor.Markdown source={questionObj.answers} />
+                  </div>
+                </div>
+                  </div>
+                </div>
+
+                {/* Code References Section - 50% height */}
+                <div className="flex-1 min-h-0 bg-gradient-to-br from-gray-50 to-blue-50">
+                  <div className="h-full flex flex-col">
+                    <div className="px-6 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                      <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wide">
+                        Code References
+                      </h3>
+                    </div>
+                    <div className="flex-1 overflow-auto p-6">
+                      <CodeReferences
+                        fileReferences={
+                          Array.isArray(questionObj.fileReference)
+                            ? questionObj.fileReference as { fileName: string; sourceCode: string; summary: string }[]
+                            : undefined
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <CodeReferences
-              fileReferences={
-                Array.isArray(questionObj.fileReference)
-                  ? questionObj.fileReference as { fileName: string; sourceCode: string; summary: string }[]
-                  : undefined
-              }
-            />
           </SheetContent>
         )}
 

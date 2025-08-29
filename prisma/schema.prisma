@@ -145,6 +145,6 @@ model  StripeTransactions{
   updatedAt   DateTime @updatedAt
   userId      String
   amount      Int
-  credit Int
+  credit      Int
   user        User     @relation(fields: [userId], references: [id])
 }

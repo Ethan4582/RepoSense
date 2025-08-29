@@ -129,7 +129,7 @@ async function fetchProjectGithubUrl(projectId: string) {
    if (!project?.repoUrl) {
       throw new Error(`Project with ID ${projectId} not found or does not have a Commit.`);
    }
-   return project.repoUrl; // <-- Only return the dynamic repoUrl
+   return project.repoUrl; 
 }
 
 
@@ -143,6 +143,3 @@ async function filterUnprocessedCommits(projectId: string, commitHashes: Respons
     });
     return unprocessedCommits;
 }
-
-
-//  pollCommits('cmctv2gx40000hrr8k4kc44z4').then(console.log).catch(console.error);

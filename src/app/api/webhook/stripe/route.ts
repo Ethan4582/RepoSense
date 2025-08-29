@@ -20,29 +20,33 @@ export async function POST(request: Request) {
 
     const session = event.data.object as Stripe.Checkout.Session
     console.log('Event Type', event.type)
+    console.log('Stripe webhook event:', event.type, session);
+
     if (event.type === 'checkout.session.completed') {
-    const credits = Number(session.metadata?.['credits'])
-    const userId = session.client_reference_id
-    if (!userId || !credits) {
-        return NextResponse.json({ error: 'Missing userId or credits' }, { status: 400 })
-    }
+        const credits = Number(session.metadata?.['credits']);
+        const userId = session.client_reference_id;
+        console.log('Webhook received for user:', userId, 'credits:', credits);
+        const amount = session.amount_total ? Math.round(session.amount_total) : 0; // Stripe sends amount in cents
 
-    await db.stripeTransaction.create({ data: { userId, credits } })
-
-    await db.user.update({
-        where: { id: userId }, 
-        data: {
-            credits: {
-                increment: credits // increase the current user by +x 
-            }
+        if (!userId || !credits) {
+            console.error('Missing userId or credits in webhook');
+            return NextResponse.json({ error: 'Missing userId or credits' }, { status: 400 });
         }
-    });
-      return NextResponse.json({ message: 'Credits added successfully' } , {status: 200})
-}
+
+      await db.stripeTransactions.create({ data: { userId, credit: credits, amount } })
+
+        await db.user.update({
+            where: { id: userId }, 
+            data: {
+                credits: {
+                    increment: credits // increase the current user by +x 
+                }
+            }
+        });
+          return NextResponse.json({ message: 'Credits added successfully' } , {status: 200})
+    }
 
 
     return NextResponse.json({ message: 'Hello, world!' })
     
 }
-
-//  stripe listen --forward-to localhost:3000/api/webhook/stripe

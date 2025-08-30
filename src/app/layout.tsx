@@ -9,7 +9,6 @@ import { Toaster } from "~/components/ui/sonner";
 export const metadata: Metadata = {
   title: "RepoSense",
   description: "A tool for analyzing code repositories",
-  icons: [{ rel: "icon", url: "/public/favicon.ico" }],
 };
 
 const geist = Geist({

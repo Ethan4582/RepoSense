@@ -2,7 +2,11 @@
 
 **Chat with your GitHub repositories using AI-powered analysis and summarization**
 
-[![Demo Video](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+<img src="public/img3.png" alt="RepoSense Demo Cover" style="width:100%;max-width:600px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" />
+
+<br/>
+
+[![Demo Video](public/img2.png)](https://www.youtube.com/watch?v=PQqPkdpA0V0)
 
 RepoSense transforms GitHub repositories into intelligent, searchable knowledge bases. Upload your repository, and our AI will analyze, summarize, and create a conversational interface for your codebase.
 

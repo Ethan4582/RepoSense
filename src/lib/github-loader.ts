@@ -370,7 +370,7 @@ async function generateEmbeddingsSequentially(summaries: Array<{fileName: string
         try {
           embedding = await generateEmbeddings(summary);
           console.log(`✓ Successfully generated embedding for ${fileName}`);
-          break; // Success, exit retry loop
+          break; 
         } catch (error: any) {
           attempts++;
           console.error(`Attempt ${attempts}/${maxAttempts} failed for ${fileName}:`, error.message);
@@ -401,7 +401,7 @@ async function generateEmbeddingsSequentially(summaries: Array<{fileName: string
       }
 
       // Fixed delay between API calls (4-6 seconds)
-      const delay = 2000 + Math.random() * 2000; // 4-6 seconds
+      const delay = 2000 + Math.random() * 2000; 
       console.log(`⏳ Waiting ${Math.round(delay/1000)}s before next embedding...`);
       await sleep(delay);
     } catch (error) {

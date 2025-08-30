@@ -1,29 +1,122 @@
-# Create T3 App
+# RepoSense
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+**Chat with your GitHub repositories using AI-powered analysis and summarization**
 
-## What's next? How do I make an app with this?
+[![Demo Video](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+RepoSense transforms GitHub repositories into intelligent, searchable knowledge bases. Upload your repository, and our AI will analyze, summarize, and create a conversational interface for your codebase.
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## Key Features
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+### 🔍 **Repository Analysis**
+- Automatic extraction and analysis of important files
+- AI-powered file summarization using Gemini
+- Commit history visualization with intelligent summaries
 
-## Learn More
+### 💬 **Intelligent Q&A**
+- Chat with your repository using natural language
+- Context-aware responses powered by RAG (Retrieval-Augmented Generation)
+- Reference tracking showing which files informed each answer
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+### 📝 **Meeting Integration**
+- Upload meeting recordings for automatic transcription
+- AI-generated meeting summaries with key issues and timestamps
+- Convert discussions into actionable insights
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+### 👥 **Collaboration**
+- Invite team members to collaborate on projects
+- Shared access to repository insights and Q&A history
+- Saved questions and answers for team knowledge sharing
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+## Technology Stack
 
-## How do I deploy this?
+- **Frontend**: Next.js
+- **AI/ML**: Gemini AI, LangChain, Hugging Face
+- **Database**: PostgreSQL (Neon) with vector embeddings
+- **Storage**: Cloudinary
+- **Audio Processing**: Assembly.AI
+- **Payment**: Stripe integration
+- **ORM**: Prisma
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database
+- GitHub personal access token
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/reposense.git
+   cd reposense
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Set up environment variables**
+   ```bash
+   cp .env.example .env.local
+   ```
+   
+   Configure the following variables:
+   ```env
+   DATABASE_URL=your_postgresql_connection_string
+   GEMINI_API_KEY=your_gemini_api_key
+   GITHUB_TOKEN=your_github_token
+   CLOUDINARY_URL=your_cloudinary_url
+   ASSEMBLY_AI_KEY=your_assembly_ai_key
+   STRIPE_SECRET_KEY=your_stripe_secret_key
+   ```
+
+4. **Set up the database**
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
+
+5. **Run the development server**
+   ```bash
+   npm run dev
+   ```
+
+## Usage
+
+### Analyzing a Repository
+
+1. **Add Repository**: Paste your GitHub repository URL
+2. **Processing**: AI analyzes and summarizes important files
+3. **Explore**: View commit summaries and file insights
+4. **Chat**: Ask questions about your codebase
+
+### Meeting Analysis
+
+1. **Upload Audio**: Add meeting recordings (supported formats: MP3, WAV, MP4)
+2. **Processing**: Automatic transcription and AI analysis
+3. **Review**: Access timestamped summaries and key issues
+
+## Pricing
+
+- **Free Tier**: 150 credits included
+- **Additional Credits**: $0.20 per 10 credits
+- **Usage**: 1 credit per file summary
+
+## API Rate Limits
+
+⚠️ **Important**: This project uses Gemini's free tier API, which may hit rate limits for larger repositories. For production use, consider upgrading to a paid API plan.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

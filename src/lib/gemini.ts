@@ -3,7 +3,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 import type { Document } from "@langchain/core/documents";
 
-// Gemini setup (only for fallback and embeddings)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 

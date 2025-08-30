@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
         const { meetingUrl, meetingId, projectId } = bodyParser.parse(body)
-        console.log("Calling AssemblyAI with:", meetingUrl);
+       
         const { summaries } = await processMeeting(meetingUrl);
-        console.log("AssemblyAI response:", summaries);
+        
         
         await db.issue.createMany({
             data: summaries.map((summary:any) => ({

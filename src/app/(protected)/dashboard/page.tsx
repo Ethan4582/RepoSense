@@ -7,8 +7,10 @@ import CommitLog from "./commit-log";
 import AskQuestionCard from "./ask-question-card";
 import ArchiveButton from "./archive-buttom";
 import MeetingCard from "./meeting-card";
-import InviteButton from "./invite-button";
+// import InviteButton from "./invite-button";
+const InviteButton= dynamic(() => import('./invite-button'), { ssr: false });
 import TeamMembers from "./team-member";
+import dynamic from "next/dynamic";
 
 
 export default function DashboardPage() {

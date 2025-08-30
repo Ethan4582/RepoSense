@@ -6,7 +6,10 @@
 
 <br/>
 
+# Demo Video
+
 [![Demo Video](public/img2.png)](https://www.youtube.com/watch?v=PQqPkdpA0V0)
+
 
 RepoSense transforms GitHub repositories into intelligent, searchable knowledge bases. Upload your repository, and our AI will analyze, summarize, and create a conversational interface for your codebase.
 

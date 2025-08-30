@@ -190,57 +190,12 @@ const CodeReferences = ({ fileReferences }: Props) => {
                 >
                   {/* File Header */}
                   <div className="border-b border-gray-200 bg-white px-4 py-3 flex-shrink-0">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1, duration: 0.3 }}
-                      className="flex items-center justify-between mb-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-1.5 bg-blue-50 rounded-md">
-                          {getFileIcon(getFileExtension(file.fileName))}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-medium text-gray-800 truncate">
-                              {file.fileName.split('/').pop()}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {file.sourceCode.split('\n').length} lines
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(file.sourceCode, file.fileName)}
-                          className="text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-1.5 h-8 text-xs border-gray-300"
-                        >
-                          {copiedFile === file.fileName ? (
-                            <>
-                              <Check className="h-3 w-3 mr-1.5" />
-                              Copied
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-3 w-3 mr-1.5" />
-                              Copy
-                            </>
-                          )}
-                        </Button>
-                      </motion.div>
-                    </motion.div>
+                   
                     
                     {/* Collapsible Summary */}
                     {file.summary && (
                       <motion.div 
-                        className="bg-blue-50 rounded-lg border border-blue-200 overflow-hidden"
+                        className="bg-blue-50 rounded-lg border -mt-3 border-blue-200 overflow-hidden"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2, duration: 0.3 }}
@@ -252,7 +207,7 @@ const CodeReferences = ({ fileReferences }: Props) => {
                           whileTap={{ scale: 0.98 }}
                         >
                           <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            <FileText className="h- w-4 text-blue-600 flex-shrink-0" />
                             <span className="font-medium text-gray-700 text-sm">Summary</span>
                           </div>
                           <motion.div 

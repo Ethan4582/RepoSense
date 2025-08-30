@@ -79,7 +79,7 @@ export default function QaPage(){
                         Code References
                       </h3>
                     </div>
-                    <div className="flex-1 overflow-auto p-6">
+                    <div className="flex-1 min-h-0 overflow-auto p-1">
                       <CodeReferences
                         fileReferences={
                           Array.isArray(questionObj.fileReference)

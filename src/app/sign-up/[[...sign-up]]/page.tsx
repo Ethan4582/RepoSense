@@ -1,7 +1,12 @@
-import { SignUp } from '@clerk/nextjs'
+import { SignUp } from '@clerk/nextjs';
 
 export default function Page() {
-  return <div className='flex min-h-screen items-center justify-center p-4'>
-   <SignUp afterSignUpUrl="/sync-user" />
-  </div>
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <SignUp
+        forceRedirectUrl="/sync-user"
+        fallbackRedirectUrl="/dashboard"
+      />
+    </div>
+  );
 }

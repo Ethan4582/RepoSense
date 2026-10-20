@@ -7,8 +7,9 @@ generator client {
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+    provider   = "postgresql"
+    url        = env("DATABASE_URL")
+    directUrl  = env("DIRECT_URL")
     extensions = [vector]
 }
 
@@ -36,120 +37,154 @@ enum EmbeddingProvider {
 }
 
 enum JobStep {
+  CLONING
   LOADING_REPO
   SUMMARIZING
   EMBEDDING
-  STORING
   COMMITS
   DONE
 }
 
 enum JobStatus {
-  QUEUED
+  PENDING
   RUNNING
   COMPLETED
   FAILED
 }
 
 model User {
-  id                       String             @id @default(cuid())
-  emailAddress             String             @unique
-  firstName                String?
-  lastName                 String?
-  imageUrl                 String?
-  defaultChatProvider      Provider?
-  defaultChatModel         String?
-  defaultEmbeddingProvider EmbeddingProvider?
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
-  userToProjects           UserToProject[]
-  questionsAsked           Question[]
-  apiKeys                  ApiKey[]
+  id                    String              @id @default(cuid())
+  emailAddress          String              @unique
+  firstName             String?
+  lastName              String?
+  imageUrl              String?
+  defaultChatProvider   Provider?
+  defaultChatModel      String?
+  defaultEmbeddingProvider EmbeddingProvider? @default(GEMINI)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  userToProjects        UserToProject[]
+  questionsAsked        Question[]
+  apiKeys               ApiKey[]
 }
 
 model ApiKey {
-  id             String    @id @default(cuid())
-  userId         String
-  provider       Provider
-  encryptedKey   String
-  iv             String
-  keyLast4       String
-  label          String?
-  status         KeyStatus @default(UNVERIFIED)
-  lastVerifiedAt DateTime?
-  lastUsedAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        Provider
+  encryptedKey    String
+  iv              String
+  keyLast4        String
+  label           String?
+  status          KeyStatus   @default(UNVERIFIED)
+  lastVerifiedAt  DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@unique([userId, provider])
   @@index([userId])
 }
 
 model Project {
-  id                   String                @id @default(cuid())
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  name                 String
-  repoUrl              String
-  deletedAt            DateTime?
-  gitHubToken          String?
-  chatProvider         Provider?
-  chatModel            String?
-  embeddingProvider    EmbeddingProvider     @default(GEMINI)
-  embeddingModel       String                @default("gemini-embedding-001")
-  embeddingDimensions  Int                   @default(768)
-  userToProjects       UserToProject[]
-  commits              Commit[]
-  sourceCodeEmbeddings SourceCodeEmbedding[]
-  indexingJobs         IndexingJob[]
-
-  savedQuestions       Question[] 
-  meetings             Meeting[]
+  id                  String             @id @default(cuid())
+  name                String
+  repoUrl             String
+  gitHubToken         String?
+  chatProvider        Provider?
+  chatModel           String?
+  embeddingProvider   EmbeddingProvider  @default(GEMINI)
+  embeddingModel      String             @default("gemini-embedding-001")
+  embeddingDimensions Int                @default(768)
+  deletedAt           DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  userToProjects      UserToProject[]
+  commits             Commit[]
+  sourceCodeEmbedding SourceCodeEmbedding[]
+  savedQuestion       Question[]
+  meetings            Meeting[]
+  indexingJobs        IndexingJob[]
 }
 
 model IndexingJob {
-  id             String    @id @default(cuid())
+  id             String     @id @default(cuid())
   projectId      String
-  status         JobStatus @default(QUEUED)
-  currentStep    JobStep   @default(LOADING_REPO)
-  totalFiles     Int       @default(0)
-  processedFiles Int       @default(0)
+  project        Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status         JobStatus  @default(PENDING)
+  currentStep    JobStep    @default(CLONING)
+  totalFiles     Int        @default(0)
+  processedFiles Int        @default(0)
   errorMessage   String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, createdAt])
+  @@index([projectId])
 }
 
 model UserToProject {
   id        String   @id @default(cuid())
-  userId    String
-  projectId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+  userId    String
+  projectId String
   user      User     @relation(fields: [userId], references: [id])
   project   Project  @relation(fields: [projectId], references: [id])
 
   @@unique([userId, projectId])
 }
 
+model SourceCodeEmbedding {
+  id                     String                       @id @default(cuid())
+  summaryEmbeddingOpenAI Unsupported("vector(1536)")?
+  summaryEmbeddingGemini Unsupported("vector(768)")?
+  sourceCode             String
+  fileName               String
+  summary                String
+  projectId              String
+  project                Project                      @relation(fields: [projectId], references: [id])
+}
+
+model Meeting {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  name       String
+  meetingUrl String // cloudinary url
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id])
+  status     MeetingStatus @default(PROCESSING)
+  issues     Issue[]
+}
+
+enum MeetingStatus {
+  PROCESSING
+  COMPLETED
+}
+
+model Issue {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  gist      String
+  headline  String
+  summary   String
+  start     String
+  end       String
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id])
+}
+
 model Question {
   id            String   @id @default(cuid())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
- 
   question      String
   answers       String
   fileReference Json?
-
   projectId     String
   project       Project  @relation(fields: [projectId], references: [id])
-
   userId        String
   user          User     @relation(fields: [userId], references: [id])
 }
@@ -165,53 +200,5 @@ model Commit {
   commitAuthorName   String
   commitAuthorAvatar String
   commmitDate        DateTime
-  summary            String
-}
-
-model SourceCodeEmbedding {
-  id                     String                    @id @default(cuid())
-  summaryEmbeddingOpenAI Unsupported("vector(1536)")?
-  summaryEmbeddingGemini Unsupported("vector(768)")?
-  summary                String
-  sourceCode             String
-  fileName               String
-  projectId              String
-  project                Project                   @relation(fields: [projectId], references: [id])
-}
-
-model Meeting {
-  id         String        @id @default(cuid())
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  meetingUrl String? // cloudinary URL
-  projectId  String
-  name       String
-  project    Project       @relation(fields: [projectId], references: [id])
-  status     MeetingStatus @default(PROCESSING)
-  issues     Issue[]
-}
-
-enum MeetingStatus {
-  PROCESSING
-  COMPLETED
-}
-
-model Issue {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  start     String 
-  end       String 
-  gist      String
-  headline  String
-  summary   String
-  meetingId String
-  meeting   Meeting  @relation(fields: [meetingId], references: [id])
-}
-
-enum IssueStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
+  summary            String // summary generated from ai
 }

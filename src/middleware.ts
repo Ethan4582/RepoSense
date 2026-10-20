@@ -4,8 +4,6 @@ import { NextResponse } from "next/server";
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
-  './api/webhook/stripe(.*)'
-  // '/sync-user(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
@@ -23,18 +21,6 @@ export default clerkMiddleware(async (auth, req) => {
   return NextResponse.next();
 
 })
-
-// export function middleware(request: Request) {
-//   const url = new URL(request.url);
-
-//   // Redirect ONLY if the user is on the root path "/"
-//   if (url.pathname === "/") {
-//     return NextResponse.redirect("https://reposense.framer.website/");
-//   }
-
-//   // Allow all other routes
-//   return NextResponse.next();
-// }
 
 export const config = {
   matcher: [

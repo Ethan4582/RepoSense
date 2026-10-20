@@ -1,8 +1,4 @@
-
-
-
-
-'use server'
+'use server';
 
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
@@ -23,12 +19,12 @@ export async function askReposense(question: string, projectId: string) {
   const queryVector = await generateEmbeddings(question);
   const vectorQuery = `[${queryVector.join(",")}]`;
 
-  // Execute the query to get most relevant files
+  // Execute the query to get most relevant files using dual vectors
   const result = await db.$queryRaw`
     SELECT "fileName", "sourceCode", "summary",
-    1 - ("summaryEmbedding" <=> ${vectorQuery}::vector) AS similarity
+    1 - (COALESCE("summaryEmbeddingGemini", "summaryEmbeddingOpenAI") <=> ${vectorQuery}::vector) AS similarity
     FROM "SourceCodeEmbedding"
-    WHERE 1 - ("summaryEmbedding" <=> ${vectorQuery}::vector) > 0.5
+    WHERE 1 - (COALESCE("summaryEmbeddingGemini", "summaryEmbeddingOpenAI") <=> ${vectorQuery}::vector) > 0.5
     AND "projectId" = ${projectId}
     ORDER BY similarity DESC
     LIMIT 12;
@@ -53,16 +49,9 @@ export async function askReposense(question: string, projectId: string) {
 }
 
 export async function askFollowUp(question: string, previousAnswer: string) {
- 
   const { text } = await generateText({
     model: google('gemini-2.5-flash'),
-    prompt: `Previous conversation context:
-${previousAnswer}
-
-New follow-up question:
-${question}
-
-Please answer the follow-up question based on the previous context. If you need additional information from the codebase, please say so.`
+    prompt: `Previous conversation context:\n${previousAnswer}\n\nNew follow-up question:\n${question}\n\nPlease answer the follow-up question based on the previous context. If you need additional information from the codebase, please say so.`
   });
 
   return {

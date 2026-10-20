@@ -7,3 +7,4 @@ allowBuilds:
   prisma: true
   protobufjs: true
   unrs-resolver: true
+  workerd: true

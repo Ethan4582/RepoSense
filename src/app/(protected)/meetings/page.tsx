@@ -1,4 +1,3 @@
-
 "use client"
 import React from 'react'
 import useProject from '~/hooks/use-project';
@@ -13,8 +12,10 @@ import useRefetch from '~/hooks/use-refetch';
 const MeetingsPage = () => {
    const {projectId} = useProject();
 
-
-    const { data: meetings, isLoading } = api.project.getMeetings.useQuery({ projectId }, { refetchInterval: 5000 });
+    const { data: meetings, isLoading } = api.project.getMeetings.useQuery(
+      { projectId: projectId ?? '' },
+      { refetchInterval: 5000, enabled: !!projectId }
+    );
     const deleteMeeting = api.project.deleteMeeting.useMutation();
 
     const refetch = useRefetch();
@@ -61,21 +62,17 @@ const MeetingsPage = () => {
                         View Meeting
                      </Button>
                   </Link>
-                    <Button disabled={deleteMeeting.isPending} variant="destructive" onClick={() => {
-                       deleteMeeting.mutate({ meetingId: meeting.id },{
-                        onSuccess: () => {
-                           toast.success("Meeting deleted successfully");
-                           refetch()
-                        },
-                        onError: () => {
-                           toast.error("Failed to delete meeting");
-                        }
-                       });
-                    }}>
-                        Delete Meeting
-                     </Button>
-                  </div>
-            </li> 
+                  <Button disabled={deleteMeeting.isPending} size="sm" variant="destructive" onClick={() => deleteMeeting.mutate({ meetingId: meeting.id }, {
+                     onSuccess: () => {
+                        toast.success("Meeting deleted successfully");
+                        refetch();
+                     }
+                  })}>
+                     Delete Meeting
+                  </Button>
+               </div>
+
+            </li>
          ))}
       </ul>
     </div>

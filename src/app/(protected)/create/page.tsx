@@ -1,6 +1,6 @@
 'use client';
 
-import { Info } from "lucide-react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,7 +25,6 @@ const loadingSteps = [
 
 export default function CreatePage() {
   const { register, handleSubmit, reset } = useForm<FormInput>();
-  const checkCredits = api.project.checkCredits.useMutation();
   const createProject = api.project.createProject.useMutation();
   const refetch = useRefetch();
   const [currentStep, setCurrentStep] = useState(0);
@@ -44,34 +43,24 @@ export default function CreatePage() {
   }, [isCreating]);
 
   function onSubmit(data: FormInput) {
-    if(!!checkCredits.data){
-      setIsCreating(true);
-      createProject.mutate({
+    setIsCreating(true);
+    createProject.mutate({
       name: data.projectName,
       repoUrl: data.repoUrl,
       githubToken: data.githubToken,
     }, {  
-      onSuccess:() => {
+      onSuccess: () => {
         setIsCreating(false);
         toast.success('Project created successfully!');
-        refetch();
+        void refetch();
         reset();
       },
-      onError: (error:any) => {
+      onError: (error) => {
         setIsCreating(false);
         toast.error(`Error creating project: ${error.message}`);
       },
-    })
-
-    }else{
-       checkCredits.mutate({
-         githubUrl: data.repoUrl,
-         githubToken: data.githubToken
-       })
-    }
+    });
   }
-
-  const hasEnoughCredits = checkCredits.data?.userCredits ? checkCredits.data?.fileCount <= checkCredits.data?.userCredits : true;
 
   return (
     <div className="flex items-center justify-center h-full gap-4">
@@ -131,7 +120,7 @@ export default function CreatePage() {
             exit={{ opacity: 0, x: 20 }}
             className="flex items-center justify-center gap-4"
           >
-            <img src="/undraw_github.svg" className="h-52 w-auto" />
+            <Image src="/undraw_github.svg" alt="GitHub Illustration" width={220} height={208} className="h-52 w-auto" />
             <div>
               <div>
                 <h1 className="text-2xl font-semibold mb-4">Link your GitHub Repository</h1>
@@ -168,28 +157,12 @@ export default function CreatePage() {
                       Create a GitHub personal access token
                     </a>
                   </p>
-                  <div className="h-1"></div> 
-
-                   {checkCredits.data && (
-                     <>
-                      <div className=" mt-1 bg-orange-50 px-4 py-2 rounded-md border border-orange-200 text-orange-700">
-                        <div className="flex item-center gap-2">
-                          <Info className="size-4" />
-                          <p className="text-sm">You will be charged <strong>
-                            {checkCredits.data.fileCount} credits for this repository</strong></p>
-                        </div>
-                        <p className="text-sm text-blue-600 ml-6">
-                          You have {checkCredits.data.userCredits} credits remaining.
-                        </p>
-                      </div>
-                     </>
-                   ) }
-                   <div className="h-2"></div>
+                  <div className="h-2"></div>
                   <Button
                     type="submit"
-                    disabled={createProject.isPending || checkCredits.isPending}
+                    disabled={createProject.isPending}
                   > 
-                    {!!checkCredits.data ? 'Create Project': 'Check Credits'}
+                    Create Project
                   </Button>
                 </form>
               </div>

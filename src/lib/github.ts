@@ -13,6 +13,8 @@ export type CommitResponse = {
   commitAuthorName: string;
   commitAuthorAvatar: string;
   commmitDate: Date;
+  id?: string;
+  summary?: string;
 };
 
 export type PullRequestResponse = {
@@ -28,6 +30,8 @@ export type PullRequestResponse = {
   htmlUrl: string;
   branchName: string;
   baseBranch: string;
+  body?: string | null;
+  commits?: CommitResponse[];
 };
 
 export const getCommitsHashes = async (githubUrl: string): Promise<CommitResponse[]> => {
@@ -82,6 +86,8 @@ export const getPullRequests = async (githubUrl: string): Promise<PullRequestRes
     htmlUrl: pr.html_url,
     branchName: pr.head?.ref ?? 'unknown',
     baseBranch: pr.base?.ref ?? 'main',
+    body: pr.body ?? null,
+    commits: [],
   }));
 };
 
@@ -151,14 +157,14 @@ async function summariseCommit(githubUrl: string, commitHash: string) {
     });
 
     if (!res.ok) {
-      return '';
+      return `Commit ${commitHash.slice(0, 7)}: No summary available`;
     }
 
-    const diffText = await res.text();
-    return (await aiSummariseCommit(diffText)) || '';
-  } catch (err) {
-    console.error(`Failed to summarise commit ${commitHash}:`, err);
-    return '';
+    const diff = await res.text();
+    return (await aiSummariseCommit(diff)) || '';
+  } catch (error) {
+    console.error(`Failed to summarise commit ${commitHash}:`, error);
+    return `Commit ${commitHash.slice(0, 7)}: Summary generation failed`;
   }
 }
 
@@ -167,8 +173,8 @@ async function filterUnprocessedCommits(projectId: string, commitHashes: CommitR
     where: { projectId },
   });
 
-  const unprocessedCommits = commitHashes.filter((commit) => {
-    return !processedCommits.some((processed) => processed.commitHash === commit.commitHash);
-  });
+  const unprocessedCommits = commitHashes.filter(
+    (commit) => !processedCommits.some((processedCommit) => processedCommit.commitHash === commit.commitHash)
+  );
   return unprocessedCommits;
 }

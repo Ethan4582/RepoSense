@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { embed, generateText } from "ai";
@@ -10,9 +10,154 @@ const getEncryptionSecret = (): string => {
   return process.env.ENCRYPTION_KEY || "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 };
 
+export async function executeChatPipeline(opts: {
+  c: Context<AuthContext>;
+  projectId: string;
+  userId: string;
+  question: string;
+  overrideProvider?: ProviderId;
+  overrideModel?: string;
+  mode?: "rag" | "simple";
+}) {
+  const { c, projectId, userId, question, overrideProvider, overrideModel, mode = "rag" } = opts;
+  const db = c.get("db");
+
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    return c.json({ error: "Project not found" }, 404);
+  }
+
+  const provider = (overrideProvider || project.chatProvider || "GEMINI") as ProviderId;
+  const modelId = overrideModel || project.chatModel || "gemini-2.5-flash";
+
+  // Fetch user's decrypted API key for this provider
+  const keyRecord = await db.apiKey.findUnique({
+    where: {
+      userId_provider: {
+        userId,
+        provider,
+      },
+    },
+  });
+
+  let apiKey = "";
+  if (keyRecord) {
+    const secret = getEncryptionSecret();
+    apiKey = await decryptKey({ encryptedKey: keyRecord.encryptedKey, iv: keyRecord.iv }, secret);
+  } else if (provider === "GEMINI" && process.env.GEMINI_API_KEY) {
+    apiKey = process.env.GEMINI_API_KEY;
+  }
+
+  if (!apiKey) {
+    return c.json(
+      {
+        error: `No API key configured for ${provider}. Please add a key in Settings.`,
+        code: "KEY_MISSING",
+      },
+      400
+    );
+  }
+
+  // If Simple Chat Mode is selected, skip vector search
+  if (mode === "simple") {
+    const prompt = `You are an expert AI software engineer assisting a developer with general programming questions.\n\nQUESTION:\n${question}\n\nAnswer concisely and accurately using Markdown syntax with code blocks when relevant.`;
+    const chatModel = getModel(provider, modelId, apiKey);
+    const { text } = await generateText({
+      model: chatModel as any,
+      prompt,
+    });
+
+    if (keyRecord) {
+      db.apiKey.update({
+        where: { id: keyRecord.id },
+        data: { lastUsedAt: new Date() },
+      }).catch(console.error);
+    }
+
+    return c.json({
+      answer: text,
+      fileReferences: [] as any[],
+    });
+  }
+
+  // RAG Mode: Generate embedding for query using project's embedding provider
+  const embProvider = project.embeddingProvider === "OPENAI" ? "OPENAI" : "GEMINI";
+  let embKey = apiKey;
+
+  if (embProvider !== provider) {
+    const embKeyRecord = await db.apiKey.findUnique({
+      where: {
+        userId_provider: {
+          userId,
+          provider: embProvider,
+        },
+      },
+    });
+    if (embKeyRecord) {
+      const secret = getEncryptionSecret();
+      embKey = await decryptKey({ encryptedKey: embKeyRecord.encryptedKey, iv: embKeyRecord.iv }, secret);
+    } else if (embProvider === "GEMINI" && process.env.GEMINI_API_KEY) {
+      embKey = process.env.GEMINI_API_KEY;
+    }
+  }
+
+  const embeddingModel = getEmbeddingModel(embProvider, project.embeddingModel, embKey);
+  const { embedding } = await embed({
+    model: embeddingModel as any,
+    value: question,
+  });
+  const vectorQuery = `[${embedding.join(",")}]`;
+
+  // Dual vector similarity search
+  const vectorColumn = embProvider === "OPENAI" ? "summaryEmbeddingOpenAI" : "summaryEmbeddingGemini";
+
+  const matchedDocs = (await db.$queryRawUnsafe(
+    `
+    SELECT "fileName", "sourceCode", "summary",
+    1 - ("${vectorColumn}" <=> $1::vector) AS similarity
+    FROM "SourceCodeEmbedding"
+    WHERE 1 - ("${vectorColumn}" <=> $1::vector) > 0.5
+    AND "projectId" = $2
+    ORDER BY similarity DESC
+    LIMIT 10;
+    `,
+    vectorQuery,
+    projectId
+  )) as Array<{ fileName: string; sourceCode: string; summary: string; similarity: number }>;
+
+  let context = "";
+  for (const doc of matchedDocs) {
+    context += `File: ${doc.fileName}\nSummary: ${doc.summary}\nCode:\n${doc.sourceCode}\n\n---\n\n`;
+  }
+
+  const prompt = `You are an AI code assistant who answers questions about the codebase.\nSTART CONTEXT BLOCK\n${context}\nEND OF CONTEXT BLOCK\n\nSTART QUESTION\n${question}\nEND OF QUESTION\n\nAnswer the question clearly using Markdown syntax with code blocks when relevant. If the context does not provide sufficient info, state what is missing.`;
+
+  const chatModel = getModel(provider, modelId, apiKey);
+  const { text } = await generateText({
+    model: chatModel as any,
+    prompt,
+  });
+
+  // Update key lastUsedAt
+  if (keyRecord) {
+    db.apiKey.update({
+      where: { id: keyRecord.id },
+      data: { lastUsedAt: new Date() },
+    }).catch(console.error);
+  }
+
+  return c.json({
+    answer: text,
+    fileReferences: matchedDocs.slice(0, 5),
+  });
+}
+
 export const questionsRoutes = new Hono<AuthContext>()
   .get("/:id/questions", async (c) => {
-    const projectId = c.req.param("id");
+    const projectId = c.req.param("id")!;
     const db = c.get("db");
 
     const questions = await db.question.findMany({
@@ -43,7 +188,7 @@ export const questionsRoutes = new Hono<AuthContext>()
       })
     ),
     async (c) => {
-      const projectId = c.req.param("id");
+      const projectId = c.req.param("id")!;
       const userId = c.get("userId");
       const db = c.get("db");
       const { question, answers, fileReference } = c.req.valid("json");
@@ -62,6 +207,32 @@ export const questionsRoutes = new Hono<AuthContext>()
     }
   )
   .post(
+    "/:id/chat",
+    zValidator(
+      "json",
+      z.object({
+        query: z.string().min(1),
+        chatProvider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).optional(),
+        chatModel: z.string().optional(),
+        mode: z.enum(["rag", "simple"]).optional().default("rag"),
+      })
+    ),
+    async (c) => {
+      const projectId = c.req.param("id")!;
+      const userId = c.get("userId");
+      const { query, chatProvider, chatModel, mode } = c.req.valid("json");
+      return await executeChatPipeline({
+        c,
+        projectId,
+        userId,
+        question: query,
+        overrideProvider: chatProvider,
+        overrideModel: chatModel,
+        mode,
+      });
+    }
+  )
+  .post(
     "/:id/questions/ask",
     zValidator(
       "json",
@@ -73,143 +244,17 @@ export const questionsRoutes = new Hono<AuthContext>()
       })
     ),
     async (c) => {
-      const projectId = c.req.param("id");
+      const projectId = c.req.param("id")!;
       const userId = c.get("userId");
-      const db = c.get("db");
-      const { question, provider: overrideProvider, modelId: overrideModel, mode } = c.req.valid("json");
-
-      const project = await db.project.findUnique({
-        where: { id: projectId },
-      });
-
-      if (!project) {
-        return c.json({ error: "Project not found" }, 404);
-      }
-
-      const provider = (overrideProvider || project.chatProvider || "GEMINI");
-      const modelId = overrideModel || project.chatModel || "gemini-2.5-flash";
-
-      // Fetch user's decrypted API key for this provider
-      const keyRecord = await db.apiKey.findUnique({
-        where: {
-          userId_provider: {
-            userId,
-            provider,
-          },
-        },
-      });
-
-      let apiKey = "";
-      if (keyRecord) {
-        const secret = getEncryptionSecret();
-        apiKey = await decryptKey({ encryptedKey: keyRecord.encryptedKey, iv: keyRecord.iv }, secret);
-      } else if (provider === "GEMINI" && process.env.GEMINI_API_KEY) {
-        apiKey = process.env.GEMINI_API_KEY;
-      }
-
-      if (!apiKey) {
-        return c.json(
-          {
-            error: `No API key configured for ${provider}. Please add a key in Settings.`,
-            code: "KEY_MISSING",
-          },
-          400
-        );
-      }
-
-      // If Simple Chat Mode is selected, skip vector search
-      if (mode === "simple") {
-        const prompt = `You are an expert AI software engineer assisting a developer with general programming questions.\n\nQUESTION:\n${question}\n\nAnswer concisely and accurately using Markdown syntax with code blocks when relevant.`;
-        const chatModel = getModel(provider, modelId, apiKey);
-        const { text } = await generateText({
-          model: chatModel as any,
-          prompt,
-        });
-
-        if (keyRecord) {
-          db.apiKey.update({
-            where: { id: keyRecord.id },
-            data: { lastUsedAt: new Date() },
-          }).catch(console.error);
-        }
-
-        return c.json({
-          answer: text,
-          fileReferences: [],
-        });
-      }
-
-      // RAG Mode: Generate embedding for query using project's embedding provider
-      const embProvider = project.embeddingProvider === "OPENAI" ? "OPENAI" : "GEMINI";
-      let embKey = apiKey;
-
-      if (embProvider !== provider) {
-        const embKeyRecord = await db.apiKey.findUnique({
-          where: {
-            userId_provider: {
-              userId,
-              provider: embProvider,
-            },
-          },
-        });
-        if (embKeyRecord) {
-          const secret = getEncryptionSecret();
-          embKey = await decryptKey({ encryptedKey: embKeyRecord.encryptedKey, iv: embKeyRecord.iv }, secret);
-        } else if (embProvider === "GEMINI" && process.env.GEMINI_API_KEY) {
-          embKey = process.env.GEMINI_API_KEY;
-        }
-      }
-
-      const embeddingModel = getEmbeddingModel(embProvider, project.embeddingModel, embKey);
-      const { embedding } = await embed({
-        model: embeddingModel as any,
-        value: question,
-      });
-      const vectorQuery = `[${embedding.join(",")}]`;
-
-      // Dual vector similarity search
-      const vectorColumn = embProvider === "OPENAI" ? "summaryEmbeddingOpenAI" : "summaryEmbeddingGemini";
-
-      const matchedDocs = await db.$queryRawUnsafe<
-        Array<{ fileName: string; sourceCode: string; summary: string; similarity: number }>
-      >(
-        `
-        SELECT "fileName", "sourceCode", "summary",
-        1 - ("${vectorColumn}" <=> $1::vector) AS similarity
-        FROM "SourceCodeEmbedding"
-        WHERE 1 - ("${vectorColumn}" <=> $1::vector) > 0.5
-        AND "projectId" = $2
-        ORDER BY similarity DESC
-        LIMIT 10;
-        `,
-        vectorQuery,
-        projectId
-      );
-
-      let context = "";
-      for (const doc of matchedDocs) {
-        context += `File: ${doc.fileName}\nSummary: ${doc.summary}\nCode:\n${doc.sourceCode}\n\n---\n\n`;
-      }
-
-      const prompt = `You are an AI code assistant who answers questions about the codebase.\nSTART CONTEXT BLOCK\n${context}\nEND OF CONTEXT BLOCK\n\nSTART QUESTION\n${question}\nEND OF QUESTION\n\nAnswer the question clearly using Markdown syntax with code blocks when relevant. If the context does not provide sufficient info, state what is missing.`;
-
-      const chatModel = getModel(provider, modelId, apiKey);
-      const { text } = await generateText({
-        model: chatModel as any,
-        prompt,
-      });
-
-      // Update key lastUsedAt
-      if (keyRecord) {
-        db.apiKey.update({
-          where: { id: keyRecord.id },
-          data: { lastUsedAt: new Date() },
-        }).catch(console.error);
-      }
-
-      return c.json({
-        answer: text,
-        fileReferences: matchedDocs.slice(0, 5),
+      const { question, provider, modelId, mode } = c.req.valid("json");
+      return await executeChatPipeline({
+        c,
+        projectId,
+        userId,
+        question,
+        overrideProvider: provider,
+        overrideModel: modelId,
+        mode,
       });
     }
   );

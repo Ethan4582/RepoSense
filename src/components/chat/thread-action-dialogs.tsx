@@ -32,6 +32,7 @@ interface RenameModalProps {
   threadId: string;
   initialTitle: string;
   onSuccess?: () => void;
+  onRenamed?: () => void;
 }
 
 export function RenameThreadDialog({
@@ -40,6 +41,7 @@ export function RenameThreadDialog({
   threadId,
   initialTitle,
   onSuccess,
+  onRenamed,
 }: RenameModalProps) {
   const [title, setTitle] = React.useState(initialTitle);
 
@@ -52,6 +54,7 @@ export function RenameThreadDialog({
       toast.success('Thread renamed');
       onOpenChange(false);
       onSuccess?.();
+      onRenamed?.();
     },
     onError: (err) => {
       toast.error(err.message || 'Failed to rename thread');
@@ -110,7 +113,7 @@ export function RenameThreadDialog({
               size="sm"
               disabled={renameMutation.isPending || !title.trim()}
             >
-              {renameMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {renameMutation.isPending ? 'Saving...' : 'Save Changes'}\
             </Button>
           </DialogFooter>
         </form>
@@ -125,7 +128,8 @@ interface FolderModalProps {
   threadId: string;
   currentFolder?: string;
   existingFolders: string[];
-  onAssign: (threadId: string, folder: string) => void;
+  onAssign?: (threadId: string, folder: string) => void;
+  onFolderAssigned?: (folder: string) => void;
 }
 
 export function FolderThreadDialog({
@@ -135,6 +139,7 @@ export function FolderThreadDialog({
   currentFolder = '',
   existingFolders,
   onAssign,
+  onFolderAssigned,
 }: FolderModalProps) {
   const [folderName, setFolderName] = React.useState(currentFolder);
 
@@ -144,10 +149,16 @@ export function FolderThreadDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAssign(threadId, folderName.trim());
+    const trimmed = folderName.trim();
+    if (onAssign) {
+      onAssign(threadId, trimmed);
+    }
+    if (onFolderAssigned) {
+      onFolderAssigned(trimmed);
+    }
     toast.success(
-      folderName.trim()
-        ? `Thread moved to "${folderName.trim()}"`
+      trimmed
+        ? `Thread moved to "${trimmed}"`
         : 'Thread removed from folder'
     );
     onOpenChange(false);
@@ -228,6 +239,7 @@ interface DeleteModalProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isPending?: boolean;
+  threadTitle?: string;
 }
 
 export function DeleteThreadDialog({
@@ -235,6 +247,7 @@ export function DeleteThreadDialog({
   onOpenChange,
   onConfirm,
   isPending,
+  threadTitle,
 }: DeleteModalProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -242,7 +255,7 @@ export function DeleteThreadDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2 text-base text-destructive">
             <Trash2 className="size-4" />
-            Delete Thread
+            Delete Thread {threadTitle ? `"${threadTitle}"` : ''}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-xs">
             Are you sure you want to delete this thread? This will permanently remove its conversation history and cannot be undone.

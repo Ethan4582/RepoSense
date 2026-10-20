@@ -106,7 +106,7 @@ export default function SettingsPage() {
   // Remove confirmation
   const [removeConfirmProvider, setRemoveConfirmProvider] = React.useState<ProviderId | null>(null);
 
-  // Defaults state - switched default pre-selected options from Gemini to OpenAI
+  // Defaults state - default pre-selected options
   const [defaultChatProvider, setDefaultChatProvider] = React.useState<ProviderId>('OPENAI');
   const [defaultChatModel, setDefaultChatModel] = React.useState<string>('gpt-4o');
   const [defaultEmbeddingProvider, setDefaultEmbeddingProvider] = React.useState<'GEMINI' | 'OPENAI'>('OPENAI');
@@ -115,7 +115,8 @@ export default function SettingsPage() {
   const fetchKeysAndMe = React.useCallback(async () => {
     try {
       setLoadingKeys(true);
-      const [keysRes, meRes] = await Promise.all([\n        client.keys.$get(),
+      const [keysRes, meRes] = await Promise.all([
+        client.keys.$get(),
         client.me.$get(),
       ]);
 
@@ -210,7 +211,6 @@ export default function SettingsPage() {
       setInputKey('');
       setDialogOpen(false);
 
-      // Embedding Guard: Trigger toast if user adds a key from Anthropic, Meta, DeepSeek, xAI, or Groq while lacking an active OpenAI or Gemini key
       if (NON_EMBEDDING_PROVIDERS.includes(targetProvider) && !hasActiveEmbeddingKey) {
         toast.warning('Please add an OpenAI or Gemini API key to enable code embeddings and RAG.', {
           duration: 6000,
@@ -315,7 +315,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <KeyRound className="size-5 text-primary" />
-          API Keys 
+          API Keys
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
           Manage your AI provider keys and model preferences.
@@ -348,8 +348,8 @@ export default function SettingsPage() {
               <TableRow>
                 <TableHead className="text-xs font-medium">Provider</TableHead>
                 <TableHead className="text-xs font-medium">Status</TableHead>
-                <TableHead className="text-xs font-medium">Stored Key</TableHead>
-                <TableHead className="text-right text-xs font-medium">Actions</TableHead>
+                <TableHead className="text-xs font-medium">Key</TableHead>
+                <TableHead className="text-xs font-medium text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -358,4 +358,313 @@ export default function SettingsPage() {
                 const existing = keys.find((k) => k.provider === provider);
                 const isTesting = testingProvider === provider;
 
-                return (\n                  <TableRow key={provider} className=\"hover:bg-muted/40\">\n                    <TableCell className=\"py-2.5\">\n                      <div className=\"flex items-center gap-2.5\">\n                        <div className=\"relative size-5 shrink-0\">\n                          <Image\n                            src={meta.logoAsset}\n                            alt={meta.displayName}\n                            fill\n                            className=\"object-contain\"\n                          />\n                        </div>\n                        <span className=\"font-medium text-xs text-foreground\">\n                          {meta.displayName}\n                        </span>\n                      </div>\n                    </TableCell>\n\n                    <TableCell className=\"py-2.5\">\n                      {existing ? (\n                        existing.status === 'VALID' ? (\n                          <Badge variant=\"outline\" className=\"gap-1 text-[11px] font-normal border-emerald-500/20 bg-emerald-500/10 text-emerald-600\">\n                            <CheckCircle2 className=\"size-3\" />\n                            Connected\n                          </Badge>\n                        ) : existing.status === 'INVALID' ? (\n                          <Badge variant=\"outline\" className=\"gap-1 text-[11px] font-normal border-destructive/20 bg-destructive/10 text-destructive\">\n                            <XCircle className=\"size-3\" />\n                            Invalid Key\n                          </Badge>\n                        ) : existing.status === 'QUOTA_EXHAUSTED' ? (\n                          <Badge variant=\"outline\" className=\"gap-1 text-[11px] font-normal border-amber-500/20 bg-amber-500/10 text-amber-600\">\n                            <AlertCircle className=\"size-3\" />\n                            Quota Exhausted\n                          </Badge>\n                        ) : (\n                          <Badge variant=\"secondary\" className=\"text-[11px] font-normal\">\n                            Unverified\n                          </Badge>\n                        )\n                      ) : (\n                        <span className=\"text-xs text-muted-foreground/70\">Not configured</span>\n                      )}\n                    </TableCell>\n\n                    <TableCell className=\"py-2.5 font-mono text-xs text-muted-foreground\">\n                      {existing ? `••••••••${existing.keyLast4}` : '—'}\n                    </TableCell>\n\n                    <TableCell className=\"py-2.5 text-right\">\n                      <div className=\"flex items-center justify-end gap-1.5\">\n                        {existing ? (\n                          <>\n                            <Button\n                              variant=\"ghost\"\n                              size=\"sm\"\n                              onClick={() => handleTestKey(provider)}\n                              disabled={isTesting}\n                              className=\"h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground\"\n                              title=\"Verify key validity\"\n                            >\n                              <RefreshCw className={`size-3 ${isTesting ? 'animate-spin' : ''}`} />\n                              <span>{isTesting ? 'Testing...' : 'Test'}</span>\n                            </Button>\n                            <Button\n                              variant=\"ghost\"\n                              size=\"sm\"\n                              onClick={() => handleOpenAddKey(provider)}\n                              className=\"h-7 px-2 text-xs text-muted-foreground hover:text-foreground\"\n                            >\n                              Replace\n                            </Button>\n                            <Button\n                              variant=\"ghost\"\n                              size=\"icon\"\n                              onClick={() => setRemoveConfirmProvider(provider)}\n                              className=\"size-7 text-muted-foreground hover:text-destructive\"\n                              title=\"Remove Key\"\n                            >\n                              <Trash2 className=\"size-3.5\" />\n                            </Button>\n                          </>\n                        ) : (\n                          <Button\n                            variant=\"outline\"\n                            size=\"sm\"\n                            onClick={() => handleOpenAddKey(provider)}\n                            className=\"h-7 text-xs gap-1\"\n                          >\n                            <Plus className=\"size-3\" />\n                            Add Key\n                          </Button>\n                        )}\n                      </div>\n                    </TableCell>\n                  </TableRow>\n                );\n              })}\n            </TableBody>\n          </Table>\n        </CardContent>\n      </Card>\n\n      {/* Default Model Preferences Card */}\n      <Card className=\"shadow-xs\">\n        <CardHeader className=\"py-3 px-4 border-b bg-muted/20\">\n          <CardTitle className=\"text-sm font-semibold\">Default Model Preferences</CardTitle>\n          <CardDescription className=\"text-xs mt-0.5\">\n            Choose your preferred chat and embedding models across all new projects.\n          </CardDescription>\n        </CardHeader>\n        <CardContent className=\"p-4 space-y-4\">\n          <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n            {/* Default Chat Provider */}\n            <div className=\"space-y-1.5\">\n              <Label className=\"text-xs font-semibold\">Default Chat Provider</Label>\n              <Select\n                value={defaultChatProvider}\n                onValueChange={(val: ProviderId) => {\n                  setDefaultChatProvider(val);\n                  const models = getModelsByProvider(val);\n                  if (models[0]) {\n                    setDefaultChatModel(models[0].id);\n                  }\n                }}\n              >\n                <SelectTrigger className=\"h-8 text-xs\">\n                  <SelectValue placeholder=\"Select Provider\" />\n                </SelectTrigger>\n                <SelectContent>\n                  {ALL_PROVIDERS.map((p) => (\n                    <SelectItem key={p} value={p} className=\"text-xs\">\n                      {PROVIDER_METADATA[p].displayName}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            {/* Default Chat Model */}\n            <div className=\"space-y-1.5\">\n              <Label className=\"text-xs font-semibold\">Default Chat Model</Label>\n              <Select\n                value={defaultChatModel}\n                onValueChange={(val: string) => setDefaultChatModel(val)}\n              >\n                <SelectTrigger className=\"h-8 text-xs\">\n                  <SelectValue placeholder=\"Select Model\" />\n                </SelectTrigger>\n                <SelectContent>\n                  {availableModelsForProvider.map((m) => (\n                    <SelectItem key={m.id} value={m.id} className=\"text-xs\">\n                      {m.name}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            {/* Default Embedding Provider */}\n            <div className=\"space-y-1.5\">\n              <Label className=\"text-xs font-semibold\">Default Embedding Provider</Label>\n              <Select\n                value={defaultEmbeddingProvider}\n                onValueChange={(val: 'GEMINI' | 'OPENAI') => setDefaultEmbeddingProvider(val)}\n              >\n                <SelectTrigger className=\"h-8 text-xs\">\n                  <SelectValue placeholder=\"Select Embedding Provider\" />\n                </SelectTrigger>\n                <SelectContent>\n                  <SelectItem value=\"OPENAI\" className=\"text-xs\">\n                    OpenAI (text-embedding-3-small · 1536 dim)\n                  </SelectItem>\n                  <SelectItem value=\"GEMINI\" className=\"text-xs\">\n                    Google Gemini (gemini-embedding-001 · 768 dim)\n                  </SelectItem>\n                </SelectContent>\n              </Select>\n            </div>\n          </div>\n\n          <div className=\"pt-2 flex justify-end\">\n            <Button\n              size=\"sm\"\n              onClick={handleSaveDefaults}\n              disabled={savingDefaults}\n              className=\"h-8 text-xs\"\n            >\n              {savingDefaults ? 'Saving...' : 'Save Preferences'}\n            </Button>\n          </div>\n        </CardContent>\n      </Card>\n\n      {/* Modal: Add or Replace API Key */}\n      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>\n        <DialogContent className=\"sm:max-w-md\">\n          <DialogHeader>\n            <DialogTitle className=\"text-base font-semibold flex items-center gap-2\">\n              <KeyRound className=\"size-4 text-primary\" />\n              Configure {PROVIDER_METADATA[targetProvider]?.displayName ?? 'API'} Key\n            </DialogTitle>\n            <DialogDescription className=\"text-xs text-muted-foreground\">\n              Keys are encrypted at rest with AES-GCM and probed directly with {PROVIDER_METADATA[targetProvider]?.displayName}.\n            </DialogDescription>\n          </DialogHeader>\n\n          <div className=\"space-y-3 py-2\">\n            <div className=\"space-y-1.5\">\n              <Label className=\"text-xs font-semibold\">Provider</Label>\n              <Select\n                value={targetProvider}\n                onValueChange={(val: ProviderId) => setTargetProvider(val)}\n              >\n                <SelectTrigger className=\"h-8 text-xs\">\n                  <SelectValue placeholder=\"Select Provider\" />\n                </SelectTrigger>\n                <SelectContent>\n                  {ALL_PROVIDERS.map((p) => (\n                    <SelectItem key={p} value={p} className=\"text-xs\">\n                      {PROVIDER_METADATA[p].displayName}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            <div className=\"space-y-1.5\">\n              <Label className=\"text-xs font-semibold\">API Key</Label>\n              <Input\n                type=\"password\"\n                placeholder=\"sk-... or paste your key here\"\n                value={inputKey}\n                onChange={(e) => setInputKey(e.target.value)}\n                className=\"text-xs font-mono\"\n                autoFocus\n              />\n            </div>\n\n            {/* Embedding Guard Warning Inside Dialog */}\n            {NON_EMBEDDING_PROVIDERS.includes(targetProvider) && !hasActiveEmbeddingKey && (\n              <div className=\"p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300 space-y-1\">\n                <div className=\"flex items-center gap-1.5 font-medium\">\n                  <AlertCircle className=\"size-3.5 shrink-0\" />\n                  <span>Embedding Provider Required</span>\n                </div>\n                <p className=\"text-[11px] leading-relaxed\">\n                  Please add an OpenAI or Gemini API key to enable code embeddings and RAG.\n                </p>\n              </div>\n            )}\n          </div>\n\n          <DialogFooter>\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setDialogOpen(false)}\n              disabled={savingKey}\n              className=\"h-8 text-xs\"\n            >\n              Cancel\n            </Button>\n            <Button\n              size=\"sm\"\n              onClick={handleSaveKey}\n              disabled={savingKey || !inputKey.trim()}\n              className=\"h-8 text-xs gap-1.5\"\n            >\n              {savingKey ? (\n                <>\n                  <Loader2 className=\"size-3 animate-spin\" />\n                  <span>Verifying & Saving...</span>\n                </>\n              ) : (\n                'Save Key'\n              )}\n            </Button>\n          </DialogFooter>\n        </DialogContent>\n      </Dialog>\n\n      {/* Remove Key Confirmation */}\n      <AlertDialog\n        open={!!removeConfirmProvider}\n        onOpenChange={(open) => !open && setRemoveConfirmProvider(null)}\n      >\n        <AlertDialogContent>\n          <AlertDialogHeader>\n            <AlertDialogTitle className=\"text-base font-semibold\">\n              Remove {removeConfirmProvider && PROVIDER_METADATA[removeConfirmProvider].displayName} Key?\n            </AlertDialogTitle>\n            <AlertDialogDescription className=\"text-xs text-muted-foreground\">\n              Projects relying on this provider will not be able to generate responses until a new key is added.\n            </AlertDialogDescription>\n          </AlertDialogHeader>\n          <AlertDialogFooter>\n            <AlertDialogCancel className=\"h-8 text-xs\">Cancel</AlertDialogCancel>\n            <AlertDialogAction\n              onClick={() => removeConfirmProvider && handleRemoveKey(removeConfirmProvider)}\n              className=\"h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90\"\n            >\n              Remove Key\n            </AlertDialogAction>\n          </AlertDialogFooter>\n        </AlertDialogContent>\n      </AlertDialog>\n    </div>\n  );\n}\n
+                return (
+                  <TableRow key={provider} className="hover:bg-muted/40">
+                    <TableCell className="py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative size-5 shrink-0">
+                          <Image
+                            src={meta.logoAsset}
+                            alt={meta.displayName}
+                            fill
+                            className="object-contain"
+                          />
+                        </div>
+                        <span className="font-medium text-xs text-foreground">
+                          {meta.displayName}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="py-2.5">
+                      {existing ? (
+                        existing.status === 'VALID' ? (
+                          <Badge variant="outline" className="gap-1 text-[11px] font-normal border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+                            <CheckCircle2 className="size-3" />
+                            Connected
+                          </Badge>
+                        ) : existing.status === 'INVALID' ? (
+                          <Badge variant="outline" className="gap-1 text-[11px] font-normal border-destructive/20 bg-destructive/10 text-destructive">
+                            <XCircle className="size-3" />
+                            Invalid Key
+                          </Badge>
+                        ) : existing.status === 'QUOTA_EXHAUSTED' ? (
+                          <Badge variant="outline" className="gap-1 text-[11px] font-normal border-amber-500/20 bg-amber-500/10 text-amber-600">
+                            <AlertCircle className="size-3" />
+                            Quota Exhausted
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[11px] font-normal">
+                            Unverified
+                          </Badge>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground/70">Not configured</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="py-2.5 font-mono text-xs text-muted-foreground">
+                      {existing ? `••••••••${existing.keyLast4}` : '—'}
+                    </TableCell>
+
+                    <TableCell className="py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {existing ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleTestKey(provider)}
+                              disabled={isTesting}
+                              className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                              title="Verify key validity"
+                            >
+                              <RefreshCw className={`size-3 ${isTesting ? 'animate-spin' : ''}`} />
+                              <span>{isTesting ? 'Testing...' : 'Test'}</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenAddKey(provider)}
+                              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              Replace
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setRemoveConfirmProvider(provider)}
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              title="Remove Key"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenAddKey(provider)}
+                            className="h-7 text-xs gap-1"
+                          >
+                            <Plus className="size-3" />
+                            Add Key
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Default Model Preferences Card */}
+      <Card className="shadow-xs">
+        <CardHeader className="py-3 px-4 border-b bg-muted/20">
+          <CardTitle className="text-sm font-semibold">Default Model Preferences</CardTitle>
+          <CardDescription className="text-xs mt-0.5">
+            Choose your preferred chat and embedding models across all new projects.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Default Chat Provider */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Default Chat Provider</Label>
+              <Select
+                value={defaultChatProvider}
+                onValueChange={(val: ProviderId) => {
+                  setDefaultChatProvider(val);
+                  const models = getModelsByProvider(val);
+                  if (models[0]) {
+                    setDefaultChatModel(models[0].id);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Select Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_PROVIDERS.map((p) => (
+                    <SelectItem key={p} value={p} className="text-xs">
+                      {PROVIDER_METADATA[p].displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Default Chat Model */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Default Chat Model</Label>
+              <Select
+                value={defaultChatModel}
+                onValueChange={(val: string) => setDefaultChatModel(val)}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Select Model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableModelsForProvider.map((m) => (
+                    <SelectItem key={m.id} value={m.id} className="text-xs">
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Default Embedding Provider */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Default Embedding Provider</Label>
+              <Select
+                value={defaultEmbeddingProvider}
+                onValueChange={(val: 'GEMINI' | 'OPENAI') => setDefaultEmbeddingProvider(val)}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Select Embedding Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OPENAI" className="text-xs">
+                    OpenAI (text-embedding-3-small · 1536 dim)
+                  </SelectItem>
+                  <SelectItem value="GEMINI" className="text-xs">
+                    Google Gemini (gemini-embedding-001 · 768 dim)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <Button
+              size="sm"
+              onClick={handleSaveDefaults}
+              disabled={savingDefaults}
+              className="h-8 text-xs"
+            >
+              {savingDefaults ? 'Saving...' : 'Save Preferences'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Modal: Add or Replace API Key */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2">
+              <KeyRound className="size-4 text-primary" />
+              Configure {PROVIDER_METADATA[targetProvider]?.displayName ?? 'API'} Key
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Keys are encrypted at rest with AES-GCM and probed directly with {PROVIDER_METADATA[targetProvider]?.displayName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Provider</Label>
+              <Select
+                value={targetProvider}
+                onValueChange={(val: ProviderId) => setTargetProvider(val)}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Select Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_PROVIDERS.map((p) => (
+                    <SelectItem key={p} value={p} className="text-xs">
+                      {PROVIDER_METADATA[p].displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">API Key</Label>
+              <Input
+                type="password"
+                placeholder="sk-... or paste your key here"
+                value={inputKey}
+                onChange={(e) => setInputKey(e.target.value)}
+                className="text-xs font-mono"
+                autoFocus
+              />
+            </div>
+
+            {/* Embedding Guard Warning Inside Dialog */}
+            {NON_EMBEDDING_PROVIDERS.includes(targetProvider) && !hasActiveEmbeddingKey && (
+              <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <AlertCircle className="size-3.5 shrink-0" />
+                  <span>Embedding Provider Required</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Please add an OpenAI or Gemini API key to enable code embeddings and RAG.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+              disabled={savingKey}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveKey}
+              disabled={savingKey || !inputKey.trim()}
+              className="h-8 text-xs gap-1.5"
+            >
+              {savingKey ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" />
+                  <span>Verifying & Saving...</span>
+                </>
+              ) : (
+                'Save Key'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Key Confirmation */}
+      <AlertDialog
+        open={!!removeConfirmProvider}
+        onOpenChange={(open) => !open && setRemoveConfirmProvider(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-semibold">
+              Remove {removeConfirmProvider && PROVIDER_METADATA[removeConfirmProvider].displayName} Key?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Projects relying on this provider will not be able to generate responses until a new key is added.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => removeConfirmProvider && handleRemoveKey(removeConfirmProvider)}
+              className="h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove Key
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

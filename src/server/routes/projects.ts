@@ -6,8 +6,8 @@ import { indexGithubRepo } from "~/lib/github-loader";
 import { pollCommits } from "~/lib/github";
 import { indexingRoutes } from "./indexing";
 import { commitsRoutes } from "./commits";
-import { questionsRoutes } from "./questions";
 import { estimateRoutes } from "./estimate";
+import { executeChatPipeline } from "./questions";
 
 export const projectsRoutes = new Hono<AuthContext>()
   .get("/", async (c) => {
@@ -137,7 +137,82 @@ export const projectsRoutes = new Hono<AuthContext>()
 
     return c.json({ members });
   })
+  .get("/:id/questions", async (c) => {
+    const projectId = c.req.param("id");
+    const db = c.get("db");
+
+    const questions = await db.question.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return c.json({ questions });
+  })
+  .post(
+    "/:id/questions",
+    zValidator(
+      "json",
+      z.object({
+        question: z.string().min(1),
+        answers: z.string().min(1),
+        fileReference: z.any().optional(),
+      })
+    ),
+    async (c) => {
+      const projectId = c.req.param("id");
+      const userId = c.get("userId");
+      const db = c.get("db");
+      const { question, answers, fileReference } = c.req.valid("json");
+
+      const saved = await db.question.create({
+        data: {
+          question,
+          answers,
+          fileReference: fileReference ?? null,
+          projectId,
+          userId,
+        },
+      });
+
+      return c.json({ question: saved });
+    }
+  )
+  .post(
+    "/:id/chat",
+    zValidator(
+      "json",
+      z.object({
+        query: z.string().min(1),
+        chatProvider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).optional(),
+        chatModel: z.string().optional(),
+        mode: z.enum(["rag", "simple"]).optional().default("rag"),
+      })
+    ),
+    async (c) => {
+      const projectId = c.req.param("id");
+      const userId = c.get("userId");
+      const { query, chatProvider, chatModel, mode } = c.req.valid("json");
+      return await executeChatPipeline({
+        c,
+        projectId,
+        userId,
+        question: query,
+        overrideProvider: chatProvider,
+        overrideModel: chatModel,
+        mode,
+      });
+    }
+  )
   .route("/estimate", estimateRoutes)
   .route("/", commitsRoutes)
-  .route("/", questionsRoutes)
   .route("/", indexingRoutes);

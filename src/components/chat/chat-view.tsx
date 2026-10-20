@@ -3,7 +3,6 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Send,
   Sparkles,
@@ -18,8 +17,6 @@ import {
   AtSign,
   Layers,
   MessageSquare,
-  ArrowRight,
-  FolderGit2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import MDEditor from '@uiw/react-md-editor';
@@ -60,65 +57,68 @@ export interface ChatMessage {
   }>;
 }
 
-interface ChatViewProps {
+export interface ChatViewProps {
   projectId: string;
-  projectName: string;
+  projectName?: string;
   chatProvider?: ProviderId;
   chatModel?: string;
-  initialQuestions?: Array<{
-    id: string;
-    question: string;
-    answers: string;
-    fileReference: unknown;
-    isPinned?: boolean;
-    isBookmarked?: boolean;
-    createdAt: Date | string;
-  }>;
+  defaultProvider?: ProviderId;
+  defaultModel?: string;
+  initialQuestions?: any[];
+  initialThreadId?: string | null;
   activeThreadId?: string | null;
 }
 
 export function ChatView({
   projectId,
-  projectName,
-  chatProvider = 'GEMINI',
-  chatModel = 'gemini-2.5-flash',
+  projectName = 'Repository',
+  chatProvider,
+  chatModel,
+  defaultProvider = 'OPENAI',
+  defaultModel = 'gpt-4o',
   initialQuestions = [],
+  initialThreadId,
   activeThreadId,
 }: ChatViewProps) {
-  const router = useRouter();
   const { project } = useProject();
+  const utils = api.useUtils();
+  const effectiveThreadId = activeThreadId ?? initialThreadId;
 
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
-    if (activeThreadId && initialQuestions && initialQuestions.length > 0) {
-      const matched = initialQuestions.find((q) => q.id === activeThreadId);
-      if (matched) {
-        return [
-          {
-            id: `u-${matched.id}`,
-            role: 'user',
-            content: matched.question,
-            createdAt: new Date(matched.createdAt),
-          },
-          {
-            id: `a-${matched.id}`,
-            dbQuestionId: matched.id,
-            role: 'assistant',
-            content: matched.answers,
-            createdAt: new Date(matched.createdAt),
-            isBookmarked: matched.isBookmarked ?? false,
-            fileReferences: Array.isArray(matched.fileReference)
-              ? (matched.fileReference as ChatMessage['fileReferences'])
-              : [],
-          },
-        ];
-      }
+    if (initialQuestions && initialQuestions.length > 0) {
+      const list: ChatMessage[] = [];
+      const questionsToLoad = effectiveThreadId
+        ? initialQuestions.filter((q: any) => q.id === effectiveThreadId)
+        : [];
+
+      questionsToLoad.forEach((q: any) => {
+        list.push({
+          id: `u-${q.id}`,
+          role: 'user',
+          content: q.question,
+          createdAt: new Date(q.createdAt),
+        });
+        list.push({
+          id: `a-${q.id}`,
+          dbQuestionId: q.id,
+          role: 'assistant',
+          content: q.answers,
+          createdAt: new Date(q.createdAt),
+          isBookmarked: q.isBookmarked ?? false,
+          fileReferences: Array.isArray(q.fileReference)
+            ? (q.fileReference as ChatMessage['fileReferences'])
+            : [],
+        });
+      });
+      return list;
     }
     return [];
   });
 
+  // Sync thread when effectiveThreadId or initialQuestions change
   React.useEffect(() => {
-    if (activeThreadId && initialQuestions.length > 0) {
-      const matched = initialQuestions.find((q) => q.id === activeThreadId);
+    if (effectiveThreadId && initialQuestions && initialQuestions.length > 0) {
+      const matched = initialQuestions.find((q: any) => q.id === effectiveThreadId);
       if (matched) {
         setMessages([
           {
@@ -141,38 +141,110 @@ export function ChatView({
         ]);
         return;
       }
+    } else if (!effectiveThreadId) {
+      setMessages([]);
     }
-    // Clean canvas when starting a new chat or no thread selected
-    setMessages([]);
-  }, [activeThreadId, initialQuestions]);
+  }, [effectiveThreadId, initialQuestions]);
+
+  // Fallback load thread from API if not yet in initialQuestions
+  React.useEffect(() => {
+    if (!effectiveThreadId) return;
+
+    const loadThread = async () => {
+      try {
+        const res = await client.projects[':id'].questions.$get({
+          param: { id: projectId },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if ('questions' in data && Array.isArray(data.questions)) {
+            const match = data.questions.find((q: any) => q.id === effectiveThreadId);
+            if (match) {
+              setMessages([
+                {
+                  id: `u-${match.id}`,
+                  role: 'user',
+                  content: match.question,
+                  createdAt: new Date(match.createdAt),
+                },
+                {
+                  id: `a-${match.id}`,
+                  dbQuestionId: match.id,
+                  role: 'assistant',
+                  content: match.answers,
+                  createdAt: new Date(match.createdAt),
+                  isBookmarked: match.isBookmarked ?? false,
+                  fileReferences: Array.isArray(match.fileReference)
+                    ? (match.fileReference as ChatMessage['fileReferences'])
+                    : [],
+                },
+              ]);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load thread:', e);
+      }
+    };
+
+    void loadThread();
+  }, [effectiveThreadId, projectId]);
 
   const [input, setInput] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [chatMode, setChatMode] = React.useState<'rag' | 'simple'>('rag');
-  const [selectedProvider, setSelectedProvider] = React.useState<ProviderId>(chatProvider);
-  const [selectedModel, setSelectedModel] = React.useState<string>(chatModel);
-  const [validProviders, setValidProviders] = React.useState<ProviderId[]>(['GEMINI']);
+  const [selectedProvider, setSelectedProvider] = React.useState<ProviderId>(
+    chatProvider ?? defaultProvider
+  );
+  const [selectedModel, setSelectedModel] = React.useState<string>(
+    chatModel ?? defaultModel
+  );
+  const [validProviders, setValidProviders] = React.useState<ProviderId[]>([
+    'GEMINI',
+    'OPENAI',
+    'ANTHROPIC',
+    'META',
+    'DEEPSEEK',
+    'XAI',
+    'GROQ',
+  ]);
 
-  // File Reference Inspector Slide-over State
   const [inspectorOpen, setInspectorOpen] = React.useState(false);
-  const [inspectorFiles, setInspectorFiles] = React.useState<
-    Array<{ fileName: string; sourceCode: string; summary: string }>
-  >([]);
+  const [inspectorFiles, setInspectorFiles] = React.useState<Array<{
+    fileName: string;
+    sourceCode: string;
+    summary: string;
+  }>>([]);
   const [activeFileIndex, setActiveFileIndex] = React.useState(0);
 
-  // Load configured keys to pass to selector
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  React.useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  // Load configured keys to update valid providers
   React.useEffect(() => {
     async function loadKeys() {
       try {
         const res = await client.keys.$get();
         if (res.ok) {
           const data = await res.json();
-          if ('keys' in data && Array.isArray(data.keys)) {
-            const configured = data.keys
-              .filter((k: any) => k.status === 'VALID' || k.status === 'UNVERIFIED')
-              .map((k: any) => k.provider as ProviderId);
+          if (data && 'keys' in data && Array.isArray(data.keys)) {
+            const configured = (data.keys as Array<{ status?: string; provider?: string }>)
+              .filter((k) => k.status === 'VALID' || k.status === 'UNVERIFIED')
+              .map((k) => k.provider as ProviderId)
+              .filter(Boolean);
             if (configured.length > 0) {
               setValidProviders(configured);
+              if (!configured.includes(selectedProvider)) {
+                setSelectedProvider(configured[0]!);
+              }
             }
           }
         }
@@ -181,43 +253,40 @@ export function ChatView({
       }
     }
     void loadKeys();
-  }, []);
+  }, [selectedProvider]);
 
   const toggleBookmarkMutation = api.project.toggleBookmarkQuestion.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (data) => {
       setMessages((prev) =>
         prev.map((m) =>
-          m.dbQuestionId === variables.questionId
-            ? { ...m, isBookmarked: !m.isBookmarked }
-            : m
+          m.dbQuestionId === data.id ? { ...m, isBookmarked: data.isBookmarked } : m
         )
       );
-      toast.success('Bookmark updated');
+      toast.success(data.isBookmarked ? 'Saved to QA Bookmarks' : 'Removed from QA Bookmarks');
     },
     onError: () => toast.error('Failed to update bookmark'),
   });
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-
-    const userText = input.trim();
-    setInput('');
+    const query = input.trim();
+    if (!query || isLoading) return;
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
-      content: userText,
+      content: query,
       createdAt: new Date(),
     };
 
     setMessages((prev) => [...prev, userMsg]);
+    setInput('');
     setIsLoading(true);
 
     try {
-      const res = await client.projects[':id'].chat.$post({
+      const res = await (client.projects[':id'] as any).chat.$post({
         param: { id: projectId },
         json: {
-          query: userText,
+          query,
           chatProvider: selectedProvider,
           chatModel: selectedModel,
           mode: chatMode,
@@ -249,7 +318,7 @@ export function ChatView({
           const saveRes = await client.projects[':id'].questions.$post({
             param: { id: projectId },
             json: {
-              question: userText,
+              question: query,
               answers: data.answer,
               fileReference: fileRefs,
             },
@@ -258,6 +327,7 @@ export function ChatView({
             const savedData = await saveRes.json();
             if ('question' in savedData && savedData.question) {
               savedQuestionId = savedData.question.id;
+              void utils.project.getQuestions.invalidate();
             }
           }
         } catch (e) {
@@ -276,15 +346,21 @@ export function ChatView({
           isBookmarked: false,
           fileReferences: fileRefs,
         };
-        setMessages((prev) => [...prev, assistantMsg]);
 
-        // If this was a new chat without an activeThreadId, update route to the saved thread
-        if (!activeThreadId && savedQuestionId) {
-          router.push(`/dashboard?threadId=${savedQuestionId}`);
-        }
+        setMessages((prev) => [...prev, assistantMsg]);
       }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Something went wrong');
+    } catch (err: any) {
+      console.error('Chat error:', err);
+      toast.error(err?.message || 'Failed to submit query');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          role: 'assistant',
+          content: '⚠️ Failed to connect to AI server. Please check your network and API keys.',
+          createdAt: new Date(),
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -306,85 +382,35 @@ export function ChatView({
   const activeInspectorFile = inspectorFiles[activeFileIndex] ?? null;
 
   return (
-    <div className="flex flex-col flex-1 h-full min-h-0 relative select-none">
-      {/* Messages Canvas */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 max-w-4xl w-full mx-auto pb-28">
+    <div className="flex flex-col flex-1 min-h-full w-full relative">
+      {/* Messages Canvas - naturally scrolls in the main viewport with pb-36 */}
+      <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 md:px-8 pb-36 space-y-6">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 max-w-xl mx-auto space-y-6 pt-4">
-            <div>
-              <div className="relative size-10 mb-3 mx-auto opacity-90">
-                <Image src="/logo.png" alt="RepoSense" fill className="object-contain" priority />
-              </div>
-              <h2 className="text-base sm:text-lg font-medium text-foreground tracking-tight">
-                How can I help with {projectName}?
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                Ask architectural questions, request code analysis, or link a new repository URL to RepoSense.
-              </p>
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
+            <div className="relative size-10 mb-3 opacity-90">
+              <Image src="/logo.png" alt="RepoSense" width={40} height={40} className="object-contain" priority />
             </div>
-
-            {/* Quick Prompt Suggestions & Link New Repository Card */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left">
-              <button
-                type="button"
-                onClick={() => {
-                  setInput('Provide an architectural overview of this repository.');
-                }}
-                className="p-3 rounded-xl border bg-card/60 hover:bg-card hover:border-primary/40 text-xs transition-all shadow-xs group"
-              >
-                <div className="font-medium text-foreground flex items-center justify-between">
-                  <span>Architecture Overview</span>
-                  <ArrowRight className="size-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                  Summarize key components, patterns, and entry points.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setInput('Explain how authentication and authorization work in this codebase.');
-                }}
-                className="p-3 rounded-xl border bg-card/60 hover:bg-card hover:border-primary/40 text-xs transition-all shadow-xs group"
-              >
-                <div className="font-medium text-foreground flex items-center justify-between">
-                  <span>Authentication Flow</span>
-                  <ArrowRight className="size-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                  Trace auth lifecycle, middleware, and user context.
-                </p>
-              </button>
-
-              <Link
-                href="/pull-requests"
-                className="p-3 rounded-xl border bg-card/60 hover:bg-card hover:border-primary/40 text-xs transition-all shadow-xs group block"
-              >
-                <div className="font-medium text-foreground flex items-center justify-between">
-                  <span>Inspect Pull Requests</span>
-                  <ArrowRight className="size-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                  Review open PRs, commit velocity, and change summaries.
-                </p>
-              </Link>
-
-              <Link
-                href="/create"
-                className="p-3 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 text-xs transition-all shadow-xs group block"
-              >
-                <div className="font-medium text-foreground flex items-center justify-between">
-                  <span className="text-primary font-semibold flex items-center gap-1.5">
-                    <FolderGit2 className="size-3.5" />
-                    Link Another Repository
-                  </span>
-                  <ArrowRight className="size-3 text-primary group-hover:translate-x-0.5 transition-transform" />
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                  Connect a new GitHub repository URL to your RepoSense workspace.
-                </p>
-              </Link>
+            <h2 className="text-base sm:text-lg font-medium text-foreground tracking-tight">
+              How can I help with {projectName}?
+            </h2>
+            <p className="text-xs text-muted-foreground max-w-md mt-1 mb-6">
+              Ask anything about architecture, dependencies, algorithms, or debug specific files.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+              {[
+                'How does authentication work in this repo?',
+                'Where are database queries handled?',
+                'Explain the main background job queue.',
+                'What external APIs does this project depend on?',
+              ].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => setInput(suggestion)}
+                  className="text-left p-2.5 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-xs text-foreground/80 hover:text-foreground shadow-2xs"
+                >
+                  "{suggestion}"
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -436,7 +462,10 @@ export function ChatView({
                     <div className="rounded-xl border bg-card p-4 text-foreground shadow-xs space-y-4">
                       {/* Markdown Answer */}
                       <div className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed">
-                        <MDEditor.Markdown source={message.content} />
+                        <MDEditor.Markdown
+                          source={message.content}
+                          style={{ backgroundColor: 'transparent', color: 'inherit' }}
+                        />
                       </div>
 
                       {/* File Citation Strip */}
@@ -444,32 +473,25 @@ export function ChatView({
                         <div className="pt-2 border-t border-border/60 space-y-2">
                           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                             <FileCode className="size-3.5 text-primary" />
-                            <span>Grounded Context Citations ({message.fileReferences.length})</span>
+                            <span>Context ({message.fileReferences.slice(0, 5).length} files)</span>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {message.fileReferences.map((ref, idx) => (
+                          <div className="flex flex-wrap gap-1.5">
+                            {message.fileReferences.slice(0, 5).map((ref, idx) => (
                               <button
-                                key={`${ref.fileName}-${idx}`}
-                                type="button"
-                                onClick={() => openInspector(message.fileReferences!, idx)}
-                                className="group flex items-center gap-1.5 rounded-lg border bg-muted/40 hover:bg-muted px-2.5 py-1 text-xs font-mono transition-colors border-border/70"
+                                key={idx}
+                                onClick={() => openInspector(message.fileReferences ?? [], idx)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border bg-muted/30 hover:bg-muted text-xs font-mono text-foreground hover:text-primary transition-colors group cursor-pointer"
                               >
-                                <Code2 className="size-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                                <span className="text-foreground font-medium truncate max-w-[200px]">
-                                  {ref.fileName}
-                                </span>
-                                {ref.similarity && (
-                                  <span className="text-[10px] text-muted-foreground/80 bg-background/80 px-1 rounded">
-                                    {(ref.similarity * 100).toFixed(0)}%
-                                  </span>
-                                )}
+                                <Code2 className="size-3 text-muted-foreground group-hover:text-primary" />
+                                <span className="truncate max-w-[180px]">{ref.fileName}</span>
+                                <ChevronRight className="size-3 text-muted-foreground opacity-60" />
                               </button>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Footer Utilities */}
+                      {/* Answer Action Bar */}
                       <div className="pt-2 flex items-center justify-between border-t border-border/40 text-xs">
                         <div className="flex items-center gap-2">
                           <Button
@@ -544,11 +566,13 @@ export function ChatView({
               </div>
             </div>
           )}
+
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Compact Docked Floating Chat Input Bar (Claude-style) */}
-      <div className="absolute bottom-3 left-0 right-0 px-4 md:px-8 z-10 pointer-events-none">
+      {/* Docked Floating Chat Input Bar */}
+      <div className="sticky bottom-4 left-0 right-0 px-4 md:px-8 z-20 pointer-events-none mt-auto">
         <div className="max-w-3xl mx-auto pointer-events-auto">
           <div className="rounded-2xl border border-border/80 bg-background/95 backdrop-blur-md shadow-lg transition-all focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/50 overflow-hidden">
             {/* Auto-expanding Compact Textarea */}
@@ -557,7 +581,7 @@ export function ChatView({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={`Write a message or ask about ${projectName}...`}
-              className="min-h-[42px] max-h-[160px] resize-none border-0 bg-transparent px-3.5 py-2.5 text-sm focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60 leading-snug"
+              className="min-h-[46px] max-h-[160px] resize-none border-0 bg-transparent px-3.5 py-2.5 text-sm focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60 leading-snug"
               rows={1}
             />
 
@@ -657,88 +681,86 @@ export function ChatView({
         </div>
       </div>
 
-      {/* Slide-over File Reference Inspector (Gemini Reference UI) */}
+      {/* Slide-Over Code Inspector (Sheet with File Switcher Tabs) */}
       <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-6 space-y-5 select-none">
+        <SheetContent className="sm:max-w-2xl w-full p-0 flex flex-col h-full bg-card">
+          <SheetHeader className="px-6 py-4 border-b">
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-sm font-semibold flex items-center gap-2 font-mono truncate">
+                <FileCode className="size-4 text-primary shrink-0" />
+                <span className="truncate">{activeInspectorFile?.fileName ?? 'File Inspector'}</span>
+              </SheetTitle>
+
+              {project?.repoUrl && activeInspectorFile && (
+                <Link
+                  href={`${project.repoUrl}/blob/main/${activeInspectorFile.fileName}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                >
+                  <span>Open on GitHub</span>
+                  <ExternalLink className="size-3" />
+                </Link>
+              )}
+            </div>
+
+            {/* File Switcher Tabs for cited files */}
+            {inspectorFiles.length > 1 && (
+              <div className="flex items-center gap-1 pt-2 overflow-x-auto pb-1 scrollbar-none">
+                {inspectorFiles.map((f, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveFileIndex(idx)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-mono truncate max-w-[150px] transition-colors ${
+                      idx === activeFileIndex
+                        ? 'bg-primary text-primary-foreground font-semibold'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {f.fileName.split('/').pop()}
+                  </button>
+                ))}
+              </div>
+            )}
+          </SheetHeader>
+
           {activeInspectorFile && (
-            <>
-              <SheetHeader className="space-y-2 border-b pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-                    <FileCode className="size-4 text-primary shrink-0" />
-                    <span className="font-semibold text-foreground truncate max-w-sm">
-                      {activeInspectorFile.fileName}
-                    </span>
-                  </div>
-                  {project?.repoUrl && (
-                    <Link
-                      href={`${project.repoUrl}/blob/main/${activeInspectorFile.fileName}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                      <span>GitHub</span>
-                      <ExternalLink className="size-3" />
-                    </Link>
-                  )}
-                </div>
-                <SheetTitle className="text-sm font-semibold text-foreground">
-                  File Context & Grounded Excerpt
-                </SheetTitle>
-              </SheetHeader>
-
-              {/* File Multi-tabs if multiple files attached */}
-              {inspectorFiles.length > 1 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-1 border-b border-border/40">
-                  {inspectorFiles.map((f, idx) => (
-                    <button
-                      key={`${f.fileName}-${idx}`}
-                      type="button"
-                      onClick={() => setActiveFileIndex(idx)}
-                      className={`text-xs font-mono px-2 py-1 rounded-md transition-colors truncate max-w-[160px] ${
-                        idx === activeFileIndex
-                          ? 'bg-primary text-primary-foreground font-semibold shadow-2xs'
-                          : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }`}
-                    >
-                      {f.fileName.split('/').pop()}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* AI Summary of File */}
-              {activeInspectorFile.summary && (
-                <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-                  <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider block">
-                    File Summary
-                  </span>
-                  <p className="leading-relaxed">{activeInspectorFile.summary}</p>
-                </div>
-              )}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* AI Summary Callout */}
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-1.5">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-primary" />
+                  AI File Summary
+                </h4>
+                <p className="text-xs text-foreground leading-relaxed">
+                  {activeInspectorFile.summary}
+                </p>
+              </div>
 
               {/* Source Code Viewer */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="font-medium">Indexed Code Content</span>
+              <div className="rounded-lg border bg-muted/20 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Source Code
+                  </h4>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[11px] gap-1"
+                    className="h-7 text-xs gap-1"
                     onClick={() => {
                       void navigator.clipboard.writeText(activeInspectorFile.sourceCode);
-                      toast.success('Source code copied to clipboard');
+                      toast.success('Code copied to clipboard');
                     }}
                   >
                     <Copy className="size-3" />
-                    <span>Copy</span>
+                    Copy
                   </Button>
                 </div>
-                <pre className="rounded-lg border bg-muted/60 p-3 text-xs font-mono overflow-x-auto max-h-[500px] leading-relaxed text-foreground select-text">
+                <pre className="max-h-[500px] overflow-auto rounded-md bg-muted p-3 text-xs font-mono text-foreground leading-relaxed whitespace-pre">
                   <code>{activeInspectorFile.sourceCode}</code>
                 </pre>
               </div>
-            </>
+            </div>
           )}
         </SheetContent>
       </Sheet>

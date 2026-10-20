@@ -37,7 +37,7 @@ const MeetCard = () => {
     },
   });
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       'audio/*': ['.mp3', '.wav', '.m4a'],
     },
@@ -80,36 +80,46 @@ const MeetCard = () => {
 
   return (
     <Card
-      className="col-span-4 flex flex-col justify-center items-center py-8 min-h-[270px] max-h-[270px] overflow-hidden"
+      className={`flex flex-col justify-center items-center py-8 px-4 border border-dashed rounded-xl transition-all cursor-pointer ${
+        isDragActive ? 'border-primary bg-primary/5' : 'border-border/80 hover:border-primary/50 bg-card'
+      }`}
       {...getRootProps()}
     >
       {isUploading ? (
-        <div className="w-full h-full flex flex-col justify-center items-center">
+        <div className="w-full h-full py-4 flex flex-col justify-center items-center">
           <CircularProgressbar
             value={progress}
             text={`${progress}%`}
             className="size-20"
             styles={buildStyles({
-              pathColor: '#2563eb',
-              textColor: '#2563eb',
+              pathColor: 'hsl(var(--primary))',
+              textColor: 'hsl(var(--foreground))',
+              trailColor: 'hsl(var(--muted))',
             })}
           />
+          <p className="mt-3 text-xs text-muted-foreground animate-pulse font-medium">
+            Uploading & processing recording...
+          </p>
         </div>
       ) : (
-        <>
-          <Presentation className="w-10 h-10 -mb-6 text-blue-500" />
-          <h3 className="mt-2 text-lg font-semibold text-gray-900">Create a New Meeting</h3>
-          <p className="-mt-3 text-center text-sm text-gray-500">
-            Analyse your meeting related to a project with Reposense.<br />
-            <span>Powered by AssemblyAI</span>
+        <div className="flex flex-col items-center text-center space-y-2">
+          <div className="size-12 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+            <Presentation className="size-6 text-primary" />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">Upload Audio Recording</h3>
+          <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+            Drag and drop an MP3, WAV, or M4A file here, or click to browse.
+            <br />
+            <span className="text-[11px] opacity-75">Transcribed & summarized with AssemblyAI</span>
           </p>
-          <div className="mt-4">
-            <Button className="px-6 py-3">
-              <Upload className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" /> Upload Meeting
+          <div className="pt-2">
+            <Button size="sm" type="button" className="text-xs gap-1.5 shadow-xs">
+              <Upload className="size-3.5" />
+              <span>Choose Audio File</span>
               <input className="hidden" {...getInputProps()} />
             </Button>
           </div>
-        </>
+        </div>
       )}
     </Card>
   );

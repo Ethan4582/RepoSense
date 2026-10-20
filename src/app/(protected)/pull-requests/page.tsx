@@ -53,11 +53,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
 
 type PullRequest = NonNullable<RouterOutputs['project']['getPullRequests']>[number];
 
 export default function PullRequestsPage() {
-  const { projectId, project } = useProject();
+  const { projectId, project, projects, setProjectId } = useProject();
   const [filterState, setFilterState] = React.useState<'all' | 'open' | 'closed'>('all');
   const [search, setSearch] = React.useState('');
   const [selectedPr, setSelectedPr] = React.useState<PullRequest | null>(null);
@@ -145,15 +152,34 @@ export default function PullRequestsPage() {
         </div>
         <h2 className="text-xl font-semibold text-foreground">No Project Selected</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          Select a project from the sidebar to review repository-scoped pull requests and commit activity.
+          Select a repository to review pull requests and commit activity.
         </p>
+        {projects && projects.length > 0 && (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <span className="text-xs text-muted-foreground">Choose an active repository:</span>
+            <div className="flex flex-wrap gap-2 justify-center max-w-md">
+              {projects.map((p) => (
+                <Button
+                  key={p.id}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setProjectId(p.id)}
+                  className="text-xs gap-1.5"
+                >
+                  <FolderGit2 className="size-3.5 text-primary" />
+                  <span>{p.name}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full w-full max-w-6xl mx-auto px-4 py-6 md:px-8 space-y-6">
-      {/* Header Bar: Repository Context & Actions */}
+      {/* Header Bar: Repository Filter & Context Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -166,16 +192,43 @@ export default function PullRequestsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Repository Switcher / Filter replacing static View on GitHub URL */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Repository:</span>
+            <Select
+              value={projectId ?? ''}
+              onValueChange={(val) => {
+                if (val) setProjectId(val);
+              }}
+            >
+              <SelectTrigger className="h-8 min-w-[200px] max-w-[280px] text-xs gap-2 border-border/80 bg-background">
+                <FolderGit2 className="size-3.5 text-primary shrink-0" />
+                <SelectValue placeholder="Select repository" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {projects?.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                    <span className="font-medium truncate">{p.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {project.repoUrl && (
             <Link
               href={`${project.repoUrl}/pulls`}
               target="_blank"
               rel="noreferrer"
             >
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                <span>View on GitHub</span>
-                <ExternalLink className="size-3" />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 text-xs shrink-0"
+                title={`View ${project.name} on GitHub`}
+              >
+                <ExternalLink className="size-3.5 text-muted-foreground hover:text-foreground" />
               </Button>
             </Link>
           )}
@@ -222,9 +275,9 @@ export default function PullRequestsPage() {
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
                   <defs>
-                    <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.0} />
+                    <linearGradient id="commitGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary, #6366f1)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="var(--primary, #6366f1)" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
@@ -232,161 +285,131 @@ export default function PullRequestsPage() {
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.6 }}
+                    fontSize={11}
+                    tickMargin={8}
+                    stroke="#888888"
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
+                    fontSize={11}
+                    stroke="#888888"
                     allowDecimals={false}
-                    tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.6 }}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
+                      backgroundColor: 'hsl(var(--card))',
                       borderColor: 'hsl(var(--border))',
                       borderRadius: '8px',
                       fontSize: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                     }}
-                    labelStyle={{ fontWeight: 'bold' }}
                   />
                   <Area
                     type="monotone"
                     dataKey="commits"
-                    name="Commits"
-                    stroke="hsl(var(--primary))"
+                    stroke="var(--primary, #6366f1)"
                     strokeWidth={2}
                     fillOpacity={1}
-                    fill="url(#colorCommits)"
+                    fill="url(#commitGrad)"
                   />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-32 flex flex-col items-center justify-center text-xs text-muted-foreground border border-dashed rounded-lg bg-muted/10">
-              {isCommitsLoading ? (
-                <div className="flex items-center gap-2">
-                  <Sparkles className="size-4 animate-spin text-primary" />
-                  <span>Loading commit velocity data...</span>
-                </div>
-              ) : (
-                <span>No commit timeline records found for this repository yet.</span>
-              )}
+            <div className="h-28 flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-lg">
+              {isCommitsLoading ? 'Aggregating commit history...' : 'No commit history available for this repository'}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Filter Pills & Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Filter Pills: All | Open | Closed */}
-        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border w-fit">
-          <button
-            type="button"
+      {/* Controls & Filter Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={filterState === 'all' ? 'secondary' : 'ghost'}
+            size="sm"
             onClick={() => setFilterState('all')}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              filterState === 'all'
-                ? 'bg-background text-foreground shadow-xs font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="text-xs h-8"
           >
             All ({counts.all})
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant={filterState === 'open' ? 'secondary' : 'ghost'}
+            size="sm"
             onClick={() => setFilterState('open')}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              filterState === 'open'
-                ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="text-xs h-8"
           >
             Open ({counts.open})
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant={filterState === 'closed' ? 'secondary' : 'ghost'}
+            size="sm"
             onClick={() => setFilterState('closed')}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              filterState === 'closed'
-                ? 'bg-background text-purple-600 dark:text-purple-400 shadow-xs font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="text-xs h-8"
           >
             Closed ({counts.closed})
-          </button>
+          </Button>
         </div>
 
-        {/* Search Input */}
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-64">
           <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search by title, author, or branch..."
+            placeholder="Filter by title, author, branch, #..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-xs bg-muted/20"
+            className="pl-8 h-8 text-xs"
           />
         </div>
       </div>
 
-      {/* PULL REQUESTS TABLE WITH EXPANDABLE ROWS (Phase 15 specification) */}
-      <div className="rounded-xl border bg-card overflow-hidden shadow-xs">
-        {isPrsLoading ? (
-          <div className="p-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
-            <Sparkles className="size-5 text-primary animate-spin" />
-            <span>Fetching pull requests from GitHub repository...</span>
-          </div>
-        ) : filteredPrs.length === 0 ? (
-          <div className="p-12 text-center text-xs text-muted-foreground space-y-2">
-            <GitPullRequest className="size-8 mx-auto text-muted-foreground/40" />
-            <p className="font-medium text-foreground">
-              {search
-                ? 'No matching pull requests found.'
-                : 'No pull requests found for this repository.'}
-            </p>
-            {project.repoUrl && (
-              <p className="text-[11px]">
-                You can create one directly at{' '}
-                <Link
-                  href={`${project.repoUrl}/compare`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  GitHub Compare ↗
-                </Link>
-              </p>
-            )}
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="text-xs bg-muted/30">
-                <TableHead className="w-8"></TableHead>
-                <TableHead className="min-w-[200px]">Title & Identifier</TableHead>
-                <TableHead className="w-24">Status</TableHead>
-                <TableHead className="min-w-[140px]">Author</TableHead>
-                <TableHead className="min-w-[160px]">Branch</TableHead>
-                <TableHead className="w-32">Date</TableHead>
-                <TableHead className="text-right w-28">Actions</TableHead>
+      {/* Pull Requests Table */}
+      <Card className="shadow-xs overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="w-8 px-2"></TableHead>
+              <TableHead className="text-xs font-semibold">PR Title</TableHead>
+              <TableHead className="text-xs font-semibold w-24">Status</TableHead>
+              <TableHead className="text-xs font-semibold w-40">Author</TableHead>
+              <TableHead className="text-xs font-semibold w-48">Branch</TableHead>
+              <TableHead className="text-xs font-semibold w-28">Date</TableHead>
+              <TableHead className="text-right text-xs font-semibold w-28">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isPrsLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground">
+                  Fetching repository pull requests from GitHub...
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPrs.map((pr) => {
+            ) : filteredPrs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground">
+                  {search
+                    ? 'No pull requests match your search criteria.'
+                    : 'No pull requests found for this repository.'}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredPrs.map((pr) => {
                 const isOpen = pr.state === 'open';
                 const isExpanded = expandedPrIds.has(pr.id);
 
                 return (
                   <React.Fragment key={pr.id}>
-                    {/* Main Row */}
                     <TableRow
+                      className="hover:bg-muted/40 cursor-pointer group text-xs transition-colors"
                       onClick={() => toggleExpand(pr.id)}
-                      className="cursor-pointer hover:bg-muted/40 transition-colors text-xs"
                     >
-                      {/* Expand Toggle */}
-                      <TableCell className="p-2 text-center" onClick={(e) => toggleExpand(pr.id, e)}>
+                      {/* Expansion Chevron */}
+                      <TableCell className="px-2 text-muted-foreground">
                         <button
                           type="button"
-                          className="size-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                          aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
+                          onClick={(e) => toggleExpand(pr.id, e)}
+                          className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                         >
                           {isExpanded ? (
                             <ChevronDown className="size-3.5" />
@@ -396,7 +419,7 @@ export default function PullRequestsPage() {
                         </button>
                       </TableCell>
 
-                      {/* Title & Number */}
+                      {/* PR Title & Number */}
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-muted-foreground font-semibold">
@@ -498,216 +521,160 @@ export default function PullRequestsPage() {
                                 className="text-primary hover:underline text-[11px] flex items-center gap-1"
                               >
                                 <span>View all branch commits on GitHub</span>
-                                <ExternalLink className="size-2.5" />
+                                <ExternalLink className="size-3" />
                               </Link>
                             </div>
 
-                            {/* Render Commits Log for this PR / Project */}
-                            {commits && commits.length > 0 ? (
-                              <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                                {commits.slice(0, 5).map((commit) => (
+                            {pr.commits && pr.commits.length > 0 ? (
+                              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                                {pr.commits.map((c) => (
                                   <div
-                                    key={commit.id}
-                                    className="p-2.5 rounded-lg border bg-background text-xs space-y-1.5 shadow-2xs"
+                                    key={c.id}
+                                    className="rounded-md border bg-card p-2.5 text-xs space-y-1"
                                   >
                                     <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 truncate">
-                                        <Avatar className="size-4 shrink-0">
-                                          <AvatarImage src={commit.commitAuthorAvatar} />
-                                          <AvatarFallback className="text-[8px]">
-                                            {commit.commitAuthorName[0] ?? 'C'}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <span className="font-semibold text-foreground truncate">
-                                          {commit.commitAuthorName}
+                                      <div className="flex items-center gap-2 truncate font-mono text-[11px]">
+                                        <span className="text-primary font-bold">
+                                          {c.commitHash.slice(0, 7)}
                                         </span>
-                                        <Link
-                                          href={`${project.repoUrl}/commit/${commit.commitHash}`}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="font-mono text-[10px] text-muted-foreground hover:text-primary transition-colors bg-muted px-1.5 py-0.5 rounded"
-                                        >
-                                          {commit.commitHash.slice(0, 7)}
-                                        </Link>
+                                        <span className="text-muted-foreground truncate">
+                                          by {c.commitAuthorName}
+                                        </span>
                                       </div>
                                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                        {new Date(commit.commmitDate).toLocaleDateString([], {
+                                        {new Date(c.commmitDate).toLocaleDateString([], {
                                           month: 'short',
                                           day: 'numeric',
                                         })}
                                       </span>
                                     </div>
-                                    <p className="font-medium text-foreground text-[11px]">
-                                      {commit.commitMessage}
+                                    <p className="text-foreground font-medium line-clamp-1">
+                                      {c.commitMessage}
                                     </p>
-                                    {commit.summary && (
-                                      <p className="text-[10px] text-muted-foreground line-clamp-2 bg-muted/30 p-1.5 rounded">
-                                        {commit.summary}
+                                    {c.summary && (
+                                      <p className="text-muted-foreground text-[11px] bg-muted/40 p-1.5 rounded leading-relaxed border-l-2 border-primary/50">
+                                        {c.summary}
                                       </p>
                                     )}
                                   </div>
                                 ))}
                               </div>
                             ) : (
-                              <div className="text-xs text-muted-foreground italic py-2">
-                                No direct commit messages parsed for this pull request yet.
+                              <div className="text-xs text-muted-foreground py-2 italic">
+                                No specific commit breakdown stored for this PR.
                               </div>
                             )}
-
-                            <div className="flex items-center gap-2 pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setSelectedPr(pr)}
-                                className="h-7 text-xs gap-1.5"
-                              >
-                                <Sparkles className="size-3 text-primary" />
-                                <span>Inspect Full AI Diff Analysis</span>
-                              </Button>
-                            </div>
                           </div>
                         </TableCell>
                       </TableRow>
                     )}
                   </React.Fragment>
                 );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </div>
+              })
+            )}
+          </TableBody>
+        </Table>
+      </Card>
 
-      {/* Slide-Over PR Inspector (Sheet) */}
+      {/* Slide-over Inspection Sheet */}
       <Sheet open={!!selectedPr} onOpenChange={(open) => !open && setSelectedPr(null)}>
-        {selectedPr && (
-          <SheetContent className="sm:max-w-xl w-full p-0 flex flex-col h-full bg-card">
-            <SheetHeader className="px-6 py-4 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-6 space-y-5 select-none">
+          {selectedPr && (
+            <>
+              <SheetHeader className="space-y-2 border-b pb-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="font-mono font-semibold text-primary">#{selectedPr.number}</span>
+                  <span>•</span>
+                  <span>{selectedPr.branchName} → {selectedPr.baseBranch}</span>
+                </div>
+                <SheetTitle className="text-base font-bold leading-snug text-foreground">
+                  {selectedPr.title}
+                </SheetTitle>
+                <div className="flex items-center gap-2 pt-1">
                   <Badge
                     variant="outline"
-                    className={
+                    className={`text-[10px] px-1.5 py-0.5 font-semibold ${
                       selectedPr.state === 'open'
                         ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                         : 'border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                    }
+                    }`}
                   >
-                    {selectedPr.state.toUpperCase()}
+                    {selectedPr.state === 'open' ? 'Open' : 'Closed'}
                   </Badge>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    #{selectedPr.number}
+                  <span className="text-xs text-muted-foreground">
+                    by <strong className="text-foreground">{selectedPr.authorName}</strong>
                   </span>
                 </div>
+              </SheetHeader>
 
-                <Link
-                  href={selectedPr.htmlUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                >
-                  <span>Open on GitHub</span>
-                  <ExternalLink className="size-3" />
-                </Link>
-              </div>
-
-              <SheetTitle className="text-base font-bold text-foreground text-left mt-2">
-                {selectedPr.title}
-              </SheetTitle>
-
-              <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                <Avatar className="size-5 shrink-0">
-                  <AvatarImage src={selectedPr.authorAvatar} />
-                  <AvatarFallback className="text-[9px]">
-                    {selectedPr.authorName[0]?.toUpperCase() ?? 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <span>
-                  Opened by <strong className="text-foreground">{selectedPr.authorName}</strong>
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="size-3" />
-                  {new Date(selectedPr.createdAt).toLocaleDateString([], {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </span>
-              </div>
-            </SheetHeader>
-
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 text-xs">
-              {/* Branch Routing Info */}
-              <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                <div className="font-semibold text-foreground flex items-center gap-1.5">
-                  <GitMerge className="size-3.5 text-primary" />
-                  Branch Routing
-                </div>
-                <div className="flex items-center gap-2 font-mono text-[11px]">
-                  <span className="bg-background px-2 py-1 rounded border">
-                    {selectedPr.branchName}
-                  </span>
-                  <span>→</span>
-                  <span className="bg-background px-2 py-1 rounded border font-semibold">
-                    {selectedPr.baseBranch}
-                  </span>
-                </div>
-              </div>
-
-              {/* AI Code Diff & PR Insights */}
+              {/* AI Summary / Context */}
               <div className="space-y-2">
-                <div className="font-semibold text-foreground flex items-center gap-1.5 text-sm">
-                  <Sparkles className="size-4 text-primary" />
-                  AI Pull Request Analysis
-                </div>
-                <div className="rounded-lg border bg-muted/10 p-4 space-y-3 leading-relaxed text-muted-foreground">
-                  <p>
-                    This pull request introduces changes from branch{' '}
-                    <code className="text-foreground font-mono bg-muted px-1 rounded">
-                      {selectedPr.branchName}
-                    </code>{' '}
-                    targeting{' '}
-                    <code className="text-foreground font-mono bg-muted px-1 rounded">
-                      {selectedPr.baseBranch}
-                    </code>
-                    .
-                  </p>
-                  <p>
-                    Repository vector embeddings confirm integration with{' '}
-                    <strong className="text-foreground">{project.name}</strong>. You can query
-                    this pull request and its affected files directly from the dashboard chat.
-                  </p>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Sparkles className="size-3 text-primary" />
+                  PR Summary & Context
+                </h4>
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed text-foreground">
+                  {selectedPr.body ? (
+                    <div className="whitespace-pre-wrap font-sans text-xs">
+                      {selectedPr.body}
+                    </div>
+                  ) : (
+                    <p className="italic text-muted-foreground">
+                      No description body provided on GitHub for this pull request.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="pt-2 flex items-center gap-2">
-                <Link
-                  href={`${project.repoUrl}/pull/${selectedPr.number}/files`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1"
-                >
-                  <Button variant="outline" className="w-full text-xs h-8 gap-1.5">
-                    <span>View Diff on GitHub</span>
-                    <ExternalLink className="size-3" />
-                  </Button>
-                </Link>
-                <Link
-                  href={`/dashboard?query=${encodeURIComponent(
-                    `Explain the impact and changes introduced in PR #${selectedPr.number}: ${selectedPr.title}`
-                  )}`}
-                  className="flex-1"
-                >
-                  <Button className="w-full text-xs h-8 gap-1.5">
-                    <Sparkles className="size-3" />
-                    <span>Ask RepoSense AI</span>
+              {/* Linked Commits in this PR */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <GitCommit className="size-3 text-primary" />
+                  Included Commits ({selectedPr.commits?.length ?? 0})
+                </h4>
+                {selectedPr.commits && selectedPr.commits.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedPr.commits.map((c) => (
+                      <div
+                        key={c.id}
+                        className="rounded-md border bg-card p-2.5 text-xs space-y-1 shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between font-mono text-[11px]">
+                          <span className="font-bold text-primary">{c.commitHash.slice(0, 7)}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(c.commmitDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="font-medium text-foreground text-xs line-clamp-2">
+                          {c.commitMessage}
+                        </p>
+                        {c.summary && (
+                          <p className="text-[11px] text-muted-foreground bg-muted/40 p-1.5 rounded">
+                            {c.summary}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    No indexed commits attached to this pull request.
+                  </p>
+                )}
+              </div>
+
+              {/* View on GitHub Button */}
+              <div className="pt-3 border-t">
+                <Link href={selectedPr.htmlUrl} target="_blank" rel="noreferrer" className="w-full block">
+                  <Button className="w-full gap-2 text-xs" variant="default">
+                    <span>Open PR on GitHub</span>
+                    <ExternalLink className="size-3.5" />
                   </Button>
                 </Link>
               </div>
-            </div>
-          </SheetContent>
-        )}
+            </>
+          )}
+        </SheetContent>
       </Sheet>
     </div>
   );

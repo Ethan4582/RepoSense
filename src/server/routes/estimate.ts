@@ -5,12 +5,14 @@ import { Octokit } from "octokit";
 import type { AuthContext } from "../auth";
 import { estimateProjectCost, estimateRepoTokensFromTree } from "~/lib/estimate";
 
+const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
+
 export const estimateRoutes = new Hono<AuthContext>().post(
   "/",
   zValidator(
     "json",
     z.object({
-      repoUrl: z.string().url(),
+      repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid, public GitHub repository URL."),
       githubToken: z.string().optional(),
       modelId: z.string().optional().default("gemini-2.5-flash"),
       embeddingModelId: z.string().optional().default("gemini-embedding-001"),
@@ -20,25 +22,35 @@ export const estimateRoutes = new Hono<AuthContext>().post(
     const { repoUrl, githubToken, modelId, embeddingModelId } = c.req.valid("json");
 
     try {
-      const parts = repoUrl.replace(/\.git$/, "").split("/");
-      const owner = parts[parts.length - 2];
-      const repo = parts[parts.length - 1];
-
-      if (!owner || !repo) {
-        return c.json({ error: "Invalid repository URL format" }, 400);
+      const match = repoUrl.trim().match(GITHUB_REPO_REGEX);
+      if (!match || !match[1] || !match[2]) {
+        return c.json({ error: "Please provide a valid, public GitHub repository URL." }, 400);
       }
+
+      const owner = match[1];
+      const repo = match[2];
 
       const token = githubToken || process.env.GITHUB_TOKEN;
       const octokit = new Octokit({ auth: token });
+
+      // Check reachability of the public/accessible repository
+      let defaultBranch = "main";
+      try {
+        const repoData = await octokit.rest.repos.get({ owner, repo });
+        defaultBranch = repoData.data.default_branch || "main";
+      } catch (repoErr) {
+        // Block estimation on invalid or unreachable repository
+        return c.json(
+          { error: "Please provide a valid, public GitHub repository URL." },
+          400
+        );
+      }
 
       // Fetch repository tree (recursive)
       let fileCount = 0;
       let treeEntries: Array<{ path?: string; size?: number }> = [];
 
       try {
-        const repoData = await octokit.rest.repos.get({ owner, repo });
-        const defaultBranch = repoData.data.default_branch || "main";
-
         const treeData = await octokit.rest.git.getTree({
           owner,
           repo,
@@ -53,7 +65,7 @@ export const estimateRoutes = new Hono<AuthContext>().post(
           fileCount = treeEntries.length;
         }
       } catch {
-        // Fallback: estimate conservatively with 50 files if tree API hits rate limit
+        // Fallback file count if tree endpoint hits rate limits
         fileCount = 50;
       }
 

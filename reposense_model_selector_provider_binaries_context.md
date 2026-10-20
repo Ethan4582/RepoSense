@@ -1,60 +1,72 @@
-# Task: Upgrade RepoSense Pull Requests Page with Essential T3 Code Filters & Notion Minimalism
-
-## Context & Current State
-The Pull Requests page currently displays basic status pills (`All (0)`, `Open (0)`, `Closed (0)`) and a simple search bar. When users work with multiple repositories or multiple threads across projects, they need clean, focused filters inspired by T3 Code—without unnecessary clutter.
-
-The visual style must blend **T3 Code ergonomics** (fast keyboard-friendly filters, quick pill toggles, slide-over PR inspector) with **Notion-style minimalism** (borderless or subtle 1px dividers, zero bulky box-in-box cards, clean typographic hierarchy).
+# Implementation Plan: T3 Code Main Chat & Adaptive Right Surface
 
 ---
 
-## Key Requirements
+## 1. Top Header Bar
 
-### 1. Essential Filter Bar (T3 Code-Inspired)
-Replace the rigid filter row with a flexible, compact toolbar:
-
-1. **Repository Selector Dropdown:**
-   - Option: `All Linked Repositories` or select a specific project/repo (e.g., `Ethan4582/RepoSense`, `user/repo-b`).
-   - Essential for users managing multiple repositories across threads.
-2. **Status Pills (with Live Counts):**
-   - `All (count)` · `Open (count)` (emerald accent) · `Merged (count)` (purple accent) · `Draft (count)` (zinc accent) · `Closed (count)` (neutral).
-3. **Quick Attribute Filters (Dropdowns or Compact Pills):**
-   - **Author / Scope:** `All Authors` vs. `Created by Me` (or current user session).
-   - **Sort By:** `Recently Updated` (default) · `Newest` · `Oldest`.
-4. **Instant Search Input:**
-   - Real-time search across PR title, PR `#ID`, branch name, and author handle.
-   - Shows a clear `(x)` reset button and active match indicator.
+- **Breadcrumb:** `[Logo] RepoSense / [Repository Name]` (no "main" branch label).
+- **Actions:**
+  - `[🔀 Pull Requests]`: Direct router push to `/pull-requests`.
+  - `[📁 5 Reference Files ▾]`: Dropdown showing the 5 files used for the latest question. Updates dynamically per prompt. Clicking any file opens it immediately in the Right Surface.
+  - `[◨ Toggle Surface]`: Expands or collapses the Right Surface pane.
 
 ---
 
-### 2. Upgraded PR List Item Anatomy (T3 + Notion Style)
-Eliminate nested card containers. Render PR items as clean, high-density interactive rows or minimal document blocks:
-- **Left Column:** 
-  - Status Icon: Git PR icon colored by state (Green = Open, Purple = Merged, Gray = Draft/Closed).
-  - Title & PR Number: `#142 Refactor embedding pipeline to Cloudflare Workers`.
-  - Branch Flow: `feature/vector-edge` → `main`.
-  - Author avatar + username + relative timestamp (`updated 2h ago`).
-- **Right Column:**
-  - Diff stats badge: `+248 / -32`.
-  - Repository badge (when `All Repositories` is selected): `Ethan4582/RepoSense`.
-  - Quick Actions: `Open in GitHub ↗` and `Inspect AI Summary`.
+## 2. Main Chat Surface (Streamed & Cardless)
+
+- **Zero Box Containers:** Remove outer card wrappers, inner scrollboxes, and robotic "You Agent" headers.
+- **User Messages:** Clean right-aligned dark bubble (T3 Code style).
+- **AI Response:** Raw streamed markdown text rendering directly on the canvas in real-time.
+- **Subtle Footnote:** At the bottom of each AI response:
+  > *"All reference files are in the right column."* (with a click trigger to open the right pane).
 
 ---
 
-### 3. T3-Style Slide-Over Drawer (On Row Click)
-Clicking any PR row opens a sleek slide-over panel on the right:
-- **Header:** PR title, GitHub status badge, branch comparison, and direct link to GitHub.
-- **AI Summary Callout:** High-level bullet points summarizing the changes and impacted modules.
-- **Changed Files List:** Tree or compact list of touched files with addition/deletion bars.
+## 3. Adaptable Floating Composer (Glassmorphism)
+
+- **Auto-Expanding Height:** Textarea expands upward as user types multi-line prompts (with a max-height cap and smooth internal scroll).
+- **T3 Backdrop Blur Effect:** Floating bottom container with `backdrop-blur-md bg-zinc-950/80 border border-zinc-800/60`. Chat messages smoothly blur underneath while scrolling.
+- **Controls Inside:**
+  - Mode toggle: `[RAG (5 Files)]` / `[Simple Chat]`
+  - Model selector pill: `[DeepSeek V3 ▾]`
+  - `Get Tips 💡` button
+  - Circular Send/Stop button
 
 ---
 
-### 4. Technical & Cloudflare Safety Constraints
-- **Cloudflare Runtime Compatibility:** Ensure all backend queries use native Web `fetch` (via Octokit/REST API) with zero Node-only C++ dependencies or Axios.
-- **Backend tRPC Procedure:** Extend `project.getPullRequests` to accept:
-  ```ts
-  input: z.object({
-    projectId: z.string().optional(), // optional to allow fetching across user's repos
-    state: z.enum(['all', 'open', 'closed', 'merged']).default('all'),
-    author: z.string().optional(),
-    search: z.string().optional(),
-  })
+## 4. Adaptive Right Surface Pane
+
+### State A: Idle / Before Question Asked (or Surface Open)
+
+Clean launcher view with only:
+
+- `🔀 Pull Requests` (routes directly to PR page)
+- `📁 Browse Repository Files`
+  - `file1.tsx`
+  - `file2.tsx`
+  - `file3.tsx`
+  - `file4.tsx`
+  - `file5.tsx`
+
+### State B: When a Specific File is Clicked (e.g. `org.ts`)
+
+Only opens that single clicked file in full view:
+
+- **Header:** File name (`org.ts`), `Copy Code`, `Open on GitHub ↗`, and `[✕ Close]`.
+- **Two Sub-Tabs:**
+  1. **`[📁 Source Code]`**: Syntax-highlighted code with line numbers.
+  2. **`[💡 Layman Summary]`**: Plain-English explanation of what this file does and why it was referenced.
+- **Responsive Layout:** When the right surface opens, the main chat smoothly compresses to 50–55% width, maintaining full responsiveness.
+
+---
+
+## 5. Files to Update / Create
+
+1. `src/app/(protected)/dashboard/page.tsx` & `src/components/chat/chat-view.tsx`
+   - Remove nested card boxes, apply cardless markdown stream, and integrate the floating blur composer.
+2. `src/components/chat/right-surface.tsx` (New/Refactored)
+   - Implement the idle state (`Pull Requests`, `Browse Repository Files` list) and single-file inspection state with `[Source Code]` / `[Layman Summary]` tabs.
+3. `src/components/chat/composer-bar.tsx`
+   - Auto-growing textarea with T3 backdrop blur styling.
+4. `src/components/chat/chat-header.tsx`
+   - Clean header with `[🔀 Pull Requests]` route button and dynamic `[📁 5 Reference Files]` pill.

@@ -14,19 +14,64 @@ export interface HttpValidateOptions {
 }
 
 /**
- * Parses response body or message to identify quota exhaustion vs transient rate limits.
+ * Parses response body or message to accurately identify quota/credit exhaustion
+ * vs transient rate limits (concurrency, RPM, TPM).
  */
 function isQuotaExhausted(status: number, bodyText: string): boolean {
   if (status === 402) return true;
+
+  try {
+    const json = JSON.parse(bodyText);
+    const err = json?.error ?? json;
+
+    const errCode = typeof err === 'object' ? (err?.code || err?.type || err?.status || '') : '';
+    const errMessage = typeof err === 'object' ? (err?.message || '') : (typeof err === 'string' ? err : '');
+    const combined = `${errCode} ${errMessage}`.toLowerCase();
+
+    // Explicit quota / balance exhaustion identifiers
+    if (
+      errCode === 'insufficient_quota' ||
+      errCode === 'credit_balance_too_low' ||
+      errCode === 'quota_exceeded' ||
+      errCode === 'RESOURCE_EXHAUSTED' ||
+      combined.includes('insufficient_quota') ||
+      combined.includes('credit_balance_too_low') ||
+      combined.includes('exceeded your current quota') ||
+      combined.includes('check your plan and billing') ||
+      combined.includes('billing account') ||
+      combined.includes('purchase credits') ||
+      combined.includes('zero credit') ||
+      combined.includes('balance is depleted')
+    ) {
+      return true;
+    }
+
+    // If it is explicitly a concurrency or rate limit with available quota, not exhausted
+    if (
+      errCode === 'rate_limit_exceeded' ||
+      errCode === 'requests' ||
+      combined.includes('requests per min') ||
+      combined.includes('tokens per min') ||
+      combined.includes('try again in') ||
+      combined.includes('concurrency')
+    ) {
+      return false;
+    }
+  } catch {
+    // If not JSON, fall back to string inspection
+  }
+
   const lower = bodyText.toLowerCase();
-  return (
-    lower.includes('quota') ||
+  if (
     lower.includes('insufficient_quota') ||
     lower.includes('credit_balance_too_low') ||
-    lower.includes('billing') ||
     lower.includes('exceeded your current quota') ||
-    lower.includes('usage limit')
-  );
+    lower.includes('check your plan and billing details')
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -52,7 +97,7 @@ export function mapHttpError(
       message = `Account quota or billing credits exhausted for ${providerName}.`;
     } else {
       code = 'RATE_LIMITED';
-      message = `Rate limit exceeded on ${providerName}. Please retry shortly.`;
+      message = `Rate limit exceeded on ${providerName}. Transient concurrency limit reached; please retry shortly.`;
     }
   } else if (status === 402) {
     code = 'QUOTA_EXHAUSTED';

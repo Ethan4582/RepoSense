@@ -47,14 +47,16 @@ type ProviderId =
   | 'XAI'
   | 'META';
 
-function extractRepoName(url: string): string {
-  try {
-    const clean = url.trim().replace(/\.git$/, '').replace(/\/$/, '');
-    const parts = clean.split('/').filter(Boolean);
-    return parts.pop() ?? '';
-  } catch {
-    return '';
-  }
+const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
+
+function parseGitHubRepo(url: string): { owner: string; repo: string; fullName: string } | null {
+  const match = url.trim().match(GITHUB_REPO_REGEX);
+  if (!match || !match[1] || !match[2]) return null;
+  return {
+    owner: match[1],
+    repo: match[2],
+    fullName: `${match[1]}/${match[2]}`,
+  };
 }
 
 export default function CreateProjectPage() {
@@ -66,10 +68,9 @@ export default function CreateProjectPage() {
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
 
   // Form Fields
-  const [projectName, setProjectName] = React.useState('');
   const [repoUrl, setRepoUrl] = React.useState('');
   const [githubToken, setGithubToken] = React.useState('');
-  const [autoDetectedName, setAutoDetectedName] = React.useState('');
+  const [urlError, setUrlError] = React.useState<string | null>(null);
 
   // Models Selection
   const [chatProvider, setChatProvider] = React.useState<ProviderId>('GEMINI');
@@ -85,6 +86,8 @@ export default function CreateProjectPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const createProject = api.project.createProject.useMutation();
+
+  const parsedRepo = React.useMemo(() => parseGitHubRepo(repoUrl), [repoUrl]);
 
   // Load configured keys and user defaults
   React.useEffect(() => {
@@ -131,24 +134,24 @@ export default function CreateProjectPage() {
   const handleRepoUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setRepoUrl(val);
-    const extracted = extractRepoName(val);
-    if (extracted && (!projectName || projectName === autoDetectedName)) {
-      setProjectName(extracted);
-      setAutoDetectedName(extracted);
+    if (urlError) {
+      setUrlError(null);
     }
   };
 
   const handleEstimate = async () => {
-    if (!projectName.trim() || !repoUrl.trim()) {
-      toast.error('Project Name and GitHub Repo URL are required.');
+    const trimmed = repoUrl.trim();
+    if (!trimmed || !parsedRepo) {
+      setUrlError('Please provide a valid, public GitHub repository URL.');
       return;
     }
 
     try {
       setIsEstimating(true);
+      setUrlError(null);
       const res = await client.projects.estimate.$post({
         json: {
-          repoUrl: repoUrl.trim(),
+          repoUrl: trimmed,
           githubToken: githubToken.trim() || undefined,
           modelId: chatModel,
           embeddingModelId: embeddingProvider === 'OPENAI' ? 'text-embedding-3-small' : 'gemini-embedding-001',
@@ -156,8 +159,10 @@ export default function CreateProjectPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        toast.error((err as any)?.error || 'Failed to estimate repo tokens');
+        const err = await res.json().catch(() => null);
+        const errMsg = (err as any)?.error || 'Please provide a valid, public GitHub repository URL.';
+        setUrlError(errMsg);
+        toast.error(errMsg);
         return;
       }
 
@@ -167,13 +172,21 @@ export default function CreateProjectPage() {
         setStep(2);
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to estimate');
+      const errMsg = 'Please provide a valid, public GitHub repository URL.';
+      setUrlError(errMsg);
+      toast.error(errMsg);
     } finally {
       setIsEstimating(false);
     }
   };
 
   const handleFinish = async () => {
+    if (!parsedRepo) {
+      setUrlError('Please provide a valid, public GitHub repository URL.');
+      setStep(1);
+      return;
+    }
+
     if (!validProviders.includes(embeddingProvider)) {
       toast.error(`You must configure an API key for ${embeddingProvider} in Settings to generate code embeddings.`);
       return;
@@ -183,7 +196,7 @@ export default function CreateProjectPage() {
       setIsSubmitting(true);
       createProject.mutate(
         {
-          name: projectName.trim(),
+          name: parsedRepo.fullName,
           repoUrl: repoUrl.trim(),
           githubToken: githubToken.trim() || undefined,
         },
@@ -198,13 +211,19 @@ export default function CreateProjectPage() {
           },
           onError: (err: any) => {
             setIsSubmitting(false);
-            toast.error(err?.message || 'Failed to create project');
+            const msg = err?.message || 'Please provide a valid, public GitHub repository URL.';
+            setUrlError(msg);
+            setStep(1);
+            toast.error(msg);
           },
         }
       );
     } catch (err: any) {
       setIsSubmitting(false);
-      toast.error(err?.message || 'Error creating project');
+      const msg = err?.message || 'Please provide a valid, public GitHub repository URL.';
+      setUrlError(msg);
+      setStep(1);
+      toast.error(msg);
     }
   };
 
@@ -249,7 +268,7 @@ export default function CreateProjectPage() {
               Repository Information
             </CardTitle>
             <CardDescription className="text-xs">
-              Enter your GitHub repository URL. The repository name is automatically extracted.
+              Enter your public GitHub repository URL. The repository name is automatically derived.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -259,20 +278,31 @@ export default function CreateProjectPage() {
                 placeholder="https://github.com/owner/repository"
                 value={repoUrl}
                 onChange={handleRepoUrlChange}
-                className="text-xs font-mono"
+                className={`text-xs font-mono ${urlError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                autoFocus
               />
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Repository Name</Label>
-              <Input
-                placeholder="Auto-inferred from GitHub repo (e.g. reposense)"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                className="text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                By default, this matches your GitHub repository name.
+              {/* Inline Error Display */}
+              {urlError && (
+                <div className="flex items-center gap-1.5 text-xs text-destructive font-medium mt-1">
+                  <AlertCircle className="size-3.5 shrink-0" />
+                  <span>{urlError}</span>
+                </div>
+              )}
+
+              {/* Auto-derived Repository Indicator */}
+              {parsedRepo && !urlError && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1.5">
+                  <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
+                  <span>
+                    Detected repository:{' '}
+                    <strong className="text-foreground font-mono">{parsedRepo.fullName}</strong>
+                  </span>
+                </div>
+              )}
+
+              <p className="text-[11px] text-muted-foreground pt-0.5">
+                Must be a valid, public GitHub repository URL (e.g. <code className="font-mono">https://github.com/facebook/react</code>).
               </p>
             </div>
 
@@ -293,7 +323,7 @@ export default function CreateProjectPage() {
             <div className="pt-2 flex justify-end">
               <Button
                 onClick={handleEstimate}
-                disabled={isEstimating || !projectName.trim() || !repoUrl.trim()}
+                disabled={isEstimating || !repoUrl.trim() || !parsedRepo}
                 className="gap-2 text-xs"
               >
                 {isEstimating ? (

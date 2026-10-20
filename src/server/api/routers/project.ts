@@ -1,7 +1,11 @@
 import { pollCommits, getPullRequestsForProject } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { Octokit } from "octokit";
 import { indexGithubRepo } from "~/lib/github-loader";
+
+const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
 
 export const projectRouter = createTRPCRouter({
   getProjects: protectedProcedure.query(async ({ ctx }) => {
@@ -19,15 +23,40 @@ export const projectRouter = createTRPCRouter({
 
   createProject: protectedProcedure.input(
     z.object({
-      name: z.string().min(1, "Project name is required"),
-      repoUrl: z.string().url("Invalid URL format").min(1, "Repository URL is required"),
+      name: z.string().optional(),
+      repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid, public GitHub repository URL."),
       githubToken: z.string().optional(),
     })
   ).mutation(async ({ ctx, input }) => {
+    const match = input.repoUrl.trim().match(GITHUB_REPO_REGEX);
+    if (!match || !match[1] || !match[2]) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Please provide a valid, public GitHub repository URL.",
+      });
+    }
+
+    const owner = match[1];
+    const repo = match[2];
+    const token = input.githubToken || process.env.GITHUB_TOKEN;
+    const octokit = new Octokit({ auth: token });
+
+    // Verify repository reachability before creating project and indexing
+    try {
+      await octokit.rest.repos.get({ owner, repo });
+    } catch {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Please provide a valid, public GitHub repository URL.",
+      });
+    }
+
+    const derivedProjectName = input.name?.trim() || `${owner}/${repo}`;
+
     const project = await ctx.db.project.create({
       data: {
-        name: input.name,
-        repoUrl: input.repoUrl,
+        name: derivedProjectName,
+        repoUrl: input.repoUrl.trim(),
         userToProjects: {
           create: {
             userId: ctx.user.userId!,
@@ -35,8 +64,9 @@ export const projectRouter = createTRPCRouter({
         }
       }
     });
+
     await indexGithubRepo(
-      input.repoUrl,
+      input.repoUrl.trim(),
       input.githubToken ?? process.env.GITHUB_TOKEN,
       project.id
     );
@@ -179,91 +209,17 @@ export const projectRouter = createTRPCRouter({
       where: {
         projectId: input.projectId,
         isBookmarked: true,
-        ...(input.query?.trim()
+        ...(input.query
           ? {
-              OR: [
-                { question: { contains: input.query, mode: "insensitive" } },
-                { answers: { contains: input.query, mode: "insensitive" } },
-              ],
+              question: {
+                contains: input.query,
+                mode: "insensitive",
+              },
             }
           : {}),
       },
-      include: {
-        user: true,
-      },
       orderBy: {
         createdAt: "desc",
-      },
-    });
-  }),
-
-  uploadMeeting: protectedProcedure.input(
-    z.object({
-      projectId: z.string(),
-      meetingUrl: z.string(),
-      name: z.string()
-    })
-  ).mutation(async ({ ctx, input }) => {
-    const meeting = await ctx.db.meeting.create({
-      data: {
-        meetingUrl: input.meetingUrl,
-        projectId: input.projectId,
-        name: input.name,
-        status: "PROCESSING"
-      }
-    });
-    return meeting;
-  }),
-
-  getMeetings: protectedProcedure.input(
-    z.object({
-      projectId: z.string()
-    })
-  ).query(async ({ ctx, input }) => {
-    return await ctx.db.meeting.findMany({
-      where: {
-        projectId: input.projectId
-      },
-      include: {
-        issues: true,
-      }
-    });
-  }),
-
-  deleteMeeting: protectedProcedure.input(
-    z.object({
-      meetingId: z.string(),
-    })
-  ).mutation(async ({ ctx, input }) => {
-    return await ctx.db.meeting.delete({
-      where: { id: input.meetingId }
-    });
-  }),
-
-  getMeetingById: protectedProcedure.input(
-    z.object({
-      meetingId: z.string(),
-    })
-  ).query(async ({ ctx, input }) => {
-    return await ctx.db.meeting.findUnique({
-      where: { id: input.meetingId },
-      include: {
-        issues: true,
-      }
-    });
-  }),
-
-  archiveProject: protectedProcedure.input(
-    z.object({
-      projectId: z.string(),
-    })
-  ).mutation(async ({ ctx, input }) => {
-    return await ctx.db.project.update({
-      where: {
-        id: input.projectId,
-      },
-      data: {
-        deletedAt: new Date(),
       },
     });
   }),
@@ -279,6 +235,21 @@ export const projectRouter = createTRPCRouter({
       },
       include: {
         user: true,
+      },
+    });
+  }),
+
+  archiveProject: protectedProcedure.input(
+    z.object({
+      projectId: z.string(),
+    })
+  ).mutation(async ({ ctx, input }) => {
+    return await ctx.db.project.update({
+      where: {
+        id: input.projectId,
+      },
+      data: {
+        deletedAt: new Date(),
       },
     });
   }),

@@ -14,6 +14,7 @@ function DashboardContent() {
   const { project, projectId } = useProject();
   const searchParams = useSearchParams();
   const currentThreadId = searchParams.get('threadId') ?? searchParams.get('thread');
+  const isNewChat = searchParams.get('new') === 'true';
 
   const { folders } = useThreadFolders(projectId);
 
@@ -23,12 +24,10 @@ function DashboardContent() {
   );
 
   const activeQuestion = React.useMemo(() => {
+    if (isNewChat || !currentThreadId) return null;
     if (!questions || questions.length === 0) return null;
-    if (currentThreadId) {
-      return questions.find((q) => q.id === currentThreadId) ?? null;
-    }
-    return questions[0] ?? null;
-  }, [questions, currentThreadId]);
+    return questions.find((q) => q.id === currentThreadId) ?? null;
+  }, [questions, currentThreadId, isNewChat]);
 
   if (!project) {
     return (
@@ -47,7 +46,7 @@ function DashboardContent() {
     );
   }
 
-  const threadTitle = activeQuestion ? activeQuestion.question : project.name;
+  const threadTitle = activeQuestion ? activeQuestion.question : `New Chat · ${project.name}`;
   const currentFolder = activeQuestion ? folders[activeQuestion.id] : undefined;
 
   return (

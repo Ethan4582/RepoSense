@@ -8,6 +8,7 @@ export const env = createEnv({
    */
   server: {
     DATABASE_URL: z.string().url(),
+    DIRECT_URL: z.string().url().optional(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -28,6 +29,7 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().min(1),
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: z.string().min(1),
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+    NEXT_PUBLIC_LANDING_PAGE_URL: z.string().url().optional(),
   },
 
   /**
@@ -36,6 +38,7 @@ export const env = createEnv({
    */
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
+    DIRECT_URL: process.env.DIRECT_URL,
     NODE_ENV: process.env.NODE_ENV,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     HUGGING_FACE_API_KEY: process.env.HUGGING_FACE_API_KEY,
@@ -46,6 +49,7 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_LANDING_PAGE_URL: process.env.NEXT_PUBLIC_LANDING_PAGE_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
@@ -58,11 +62,3 @@ export const env = createEnv({
    */
   emptyStringAsUndefined: true,
 });
-
-
-
-
-
-
-
-

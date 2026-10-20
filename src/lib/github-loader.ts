@@ -1,63 +1,9 @@
-
 import { GithubRepoLoader } from '@langchain/community/document_loaders/web/github';
-
 import { Document } from '@langchain/core/documents';
 import { generateEmbeddings, summarizeCode } from './gemini';
 import { db } from '~/server/db';
-import { Octokit } from 'octokit';
-
-
-// recursive function to check the count of the file 
-const getFileCount = async (path: string, octokit: Octokit, githubOwner: string, githubRepo: string, acc: number = 0) => {
-  const { data } = await octokit.rest.repos.getContent({
-    owner: githubOwner,
-    repo: githubRepo,
-    path
-  })
-  if (!Array.isArray(data) && data.type === 'file') {
-    return acc + 1
-  }
-  if (Array.isArray(data)) {
-    let fileCount = 0
-    const directories: string[] = []
-
-    for (const item of data) {
-      if (item.type === 'dir') {
-        directories.push(item.path)
-      } else {
-        fileCount++;
-      }
-    }
-
-    if (directories.length > 0) {
-      const directoryCounts = await Promise.all(
-        directories.map(dirPath => getFileCount(dirPath, octokit, githubOwner, githubRepo, 0))
-      )
-      fileCount += directoryCounts.reduce((acc, count) => acc + count, 0)
-    }
-    return acc = fileCount;
-  }
-  return acc
-
-}
-
-export const checkCredits = async (githubUrl: string, githubToken?: string) => {
-  // find out how many files are in the repo
-  const token = githubToken || process.env.GITHUB_TOKEN;
-  const octokit = new Octokit({ auth: token })
-  const githubOwner = githubUrl.split('/')[3]
-  const githubRepo = githubUrl.split('/')[4]
-  if (!githubOwner || !githubRepo) {
-    return 0
-  }
-
-  const fileCount = await getFileCount('', octokit, githubOwner, githubRepo, 0)
-  return fileCount
-}
-
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 
 function isComplexFile(fileName: string, content: string): boolean {
   return content.length > 20000 ||
@@ -211,7 +157,6 @@ export const loadGithubRepo = async (repoUrl: string, githubToken?: string) => {
   }
 };
 
-
 //load the file and generate embeddings for each file
 
 export const indexGithubRepo = async (repoUrl: string, githubToken?: string, projectId?: string) => {
@@ -253,7 +198,7 @@ export const indexGithubRepo = async (repoUrl: string, githubToken?: string, pro
           data
         });
 
-        await db.$executeRaw`UPDATE "SourceCodeEmbedding" SET "summaryEmbedding" = ${embedding.embedding} :: vector WHERE "id" = ${sourceCodeEmbedding.id}`;
+        await db.$executeRaw`UPDATE "SourceCodeEmbedding" SET "summaryEmbeddingGemini" = ${embedding.embedding} :: vector WHERE "id" = ${sourceCodeEmbedding.id}`;
 
         await sleep(1000);
       } catch (error) {
@@ -292,9 +237,6 @@ async function summarizeAllFilesSequentially(docs: Document[]) {
 
       while (attempts < maxAttempts) {
         try {
-          // Calculate delay based on file complexity
-          const baseDelay = isComplexFile(fileName, doc.pageContent) ? 30000 : 15000; // 15-30 sec per file
-
           summary = await summarizeCode(doc);
           console.log(`✓ Successfully summarized ${fileName}`);
           break; // Success, exit retry loop
@@ -413,3 +355,5 @@ async function generateEmbeddingsSequentially(summaries: Array<{ fileName: strin
   console.log(`📊 Embedding statistics: ${results.length}/${totalSummaries} embeddings successfully generated`);
   return results;
 }
+
+

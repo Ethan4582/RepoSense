@@ -1,0 +1,15 @@
+# Cloudflare Worker Local Development Variables (.dev.vars)
+# Copy this file to .dev.vars for local wrangler dev testing
+
+ENCRYPTION_KEY=your_32_byte_base64_encryption_key_here
+DATABASE_URL=postgresql://user:pass@ep-xyz.aws.neon.tech/neondb?sslmode=require
+CLERK_SECRET_KEY=sk_test_...
+CLERK_PUBLISHABLE_KEY=pk_test_...
+APP_URL=http://localhost:3000
+API_URL=http://localhost:8787
+
+# Optional meeting processor keys
+ASSEMBLYAI_API_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=

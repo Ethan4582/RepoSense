@@ -47,5 +47,11 @@ yarn-error.log*
 # clerk configuration (can include secrets)
 /.clerk/
 
-
-
+# agent directories and plans
+.agent/
+.agents/
+.our.agent/
+*.agent/
+*.agents/
+/plan/
+/plans/

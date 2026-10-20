@@ -1,40 +1,37 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
-  './api/webhook/stripe(.*)'
-  // '/sync-user(.*)',
+  '/api/health',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-    if (!isPublicRoute(req)) {
-    await auth.protect()
-  }
-   const url = new URL(req.url);
+  const url = new URL(req.url);
 
-  // Redirect ONLY if the user is on the root path "/"
+  // If user visits the root path "/"
   if (url.pathname === "/") {
-    return NextResponse.redirect("https://reposense.framer.website/");
+    const { userId } = await auth();
+    // If already logged in, go straight to the internal dashboard
+    if (userId) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+    // If unauthenticated and a landing page URL is defined, redirect there
+    const landingUrl = process.env.NEXT_PUBLIC_LANDING_PAGE_URL;
+    if (landingUrl) {
+      return NextResponse.redirect(new URL(landingUrl));
+    }
+    // Default fallback to sign-in
+    return NextResponse.redirect(new URL("/sign-in", req.url));
   }
 
-  // Allow all other routes
+  if (!isPublicRoute(req)) {
+    await auth.protect();
+  }
+
   return NextResponse.next();
-
-})
-
-// export function middleware(request: Request) {
-//   const url = new URL(request.url);
-
-//   // Redirect ONLY if the user is on the root path "/"
-//   if (url.pathname === "/") {
-//     return NextResponse.redirect("https://reposense.framer.website/");
-//   }
-
-//   // Allow all other routes
-//   return NextResponse.next();
-// }
+});
 
 export const config = {
   matcher: [

@@ -1,0 +1,19 @@
+name = "reposense-api"
+main = "src/server/worker.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Application and API URLs for CORS and redirect resolution
+APP_URL = "http://localhost:3000"
+API_URL = "http://localhost:8787"
+
+# Required Cloudflare Worker Secrets (Set with `npx wrangler secret put <NAME>` in production):
+# - ENCRYPTION_KEY: 32-byte base64 or 64-char hex key used for AES-256-GCM BYOK encryption
+# - DATABASE_URL: PostgreSQL connection string (Neon direct connection)
+# - CLERK_SECRET_KEY: Clerk Backend API Secret Key
+# - CLERK_PUBLISHABLE_KEY: Clerk Publishable Key
+# - ASSEMBLYAI_API_KEY: (Optional) For meeting transcription
+# - CLOUDINARY_API_KEY: (Optional) For meeting video/audio storage
+# - CLOUDINARY_API_SECRET: (Optional)
+# - CLOUDINARY_CLOUD_NAME: (Optional)

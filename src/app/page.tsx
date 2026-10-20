@@ -8,7 +8,7 @@ export default function Home() {
 
   useEffect(() => {
     const landingUrl = process.env.NEXT_PUBLIC_LANDING_PAGE_URL;
-    if (landingUrl && landingUrl.startsWith("http")) {
+    if (landingUrl?.startsWith("http")) {
       window.location.href = landingUrl;
     } else {
       router.replace("/dashboard");

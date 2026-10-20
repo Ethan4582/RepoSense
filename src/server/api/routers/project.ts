@@ -1,4 +1,4 @@
-import { pollCommits } from "~/lib/github";
+import { pollCommits, getPullRequestsForProject } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { z } from "zod";
 import { indexGithubRepo } from "~/lib/github-loader";
@@ -58,40 +58,130 @@ export const projectRouter = createTRPCRouter({
     });
   }),
 
+  getPullRequests: protectedProcedure.input(
+    z.object({
+      projectId: z.string(),
+    })
+  ).query(async ({ input }) => {
+    try {
+      return await getPullRequestsForProject(input.projectId);
+    } catch (err) {
+      console.error("Failed to fetch pull requests:", err);
+      return [];
+    }
+  }),
+
   saveAnswer: protectedProcedure.input(
     z.object({
       projectId: z.string(),
       question: z.string(),
-      fileReference: z.any(),
-      answers: z.string()
+      answers: z.string(),
+      fileReference: z.any()
     })
   ).mutation(async ({ ctx, input }) => {
     return await ctx.db.question.create({
       data: {
         answers: input.answers,
-        fileReference: input.fileReference,
-        question: input.question,
         projectId: input.projectId,
-        userId: ctx.user.userId!,
+        question: input.question,
+        fileReference: input.fileReference,
+        userId: ctx.user.userId!
       }
     });
   }),
 
-  getQuestion: protectedProcedure.input(z.object(
-    {
+  getQuestions: protectedProcedure.input(z.object({ projectId: z.string() })).query(async ({ ctx, input }) => { return await ctx.db.question.findMany({ where: { projectId: input.projectId }, include: { user: true }, orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }] }); }),
+
+  getQuestion: protectedProcedure.input(
+    z.object({
       projectId: z.string(),
-    }
-  )).query(async ({ ctx, input }) => {
+    })
+  ).query(async ({ ctx, input }) => {
     return await ctx.db.question.findMany({
       where: {
-        projectId: input.projectId,
+        projectId: input.projectId
       },
       include: {
         user: true
       },
+      orderBy: [
+        { isPinned: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+  }),
+
+  togglePinQuestion: protectedProcedure.input(
+    z.object({
+      questionId: z.string(),
+    })
+  ).mutation(async ({ ctx, input }) => {
+    const existing = await ctx.db.question.findUnique({
+      where: { id: input.questionId },
+      select: { isPinned: true },
+    });
+    if (!existing) {
+      throw new Error("Question not found");
+    }
+    return await ctx.db.question.update({
+      where: { id: input.questionId },
+      data: { isPinned: !existing.isPinned },
+    });
+  }),
+
+  toggleBookmarkQuestion: protectedProcedure.input(
+    z.object({
+      questionId: z.string(),
+    })
+  ).mutation(async ({ ctx, input }) => {
+    const existing = await ctx.db.question.findUnique({
+      where: { id: input.questionId },
+      select: { isBookmarked: true },
+    });
+    if (!existing) {
+      throw new Error("Question not found");
+    }
+    return await ctx.db.question.update({
+      where: { id: input.questionId },
+      data: { isBookmarked: !existing.isBookmarked },
+    });
+  }),
+
+  deleteQuestion: protectedProcedure.input(
+    z.object({
+      questionId: z.string(),
+    })
+  ).mutation(async ({ ctx, input }) => {
+    return await ctx.db.question.delete({
+      where: { id: input.questionId },
+    });
+  }),
+
+  getBookmarkedQuestions: protectedProcedure.input(
+    z.object({
+      projectId: z.string(),
+      query: z.string().optional(),
+    })
+  ).query(async ({ ctx, input }) => {
+    return await ctx.db.question.findMany({
+      where: {
+        projectId: input.projectId,
+        isBookmarked: true,
+        ...(input.query?.trim()
+          ? {
+              OR: [
+                { question: { contains: input.query, mode: "insensitive" } },
+                { answers: { contains: input.query, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        user: true,
+      },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: "desc",
+      },
     });
   }),
 
@@ -151,7 +241,6 @@ export const projectRouter = createTRPCRouter({
     });
   }),
 
-  // Archive Project 
   archiveProject: protectedProcedure.input(
     z.object({
       projectId: z.string(),

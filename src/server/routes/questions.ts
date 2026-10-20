@@ -69,13 +69,14 @@ export const questionsRoutes = new Hono<AuthContext>()
         question: z.string().min(1),
         provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).optional(),
         modelId: z.string().optional(),
+        mode: z.enum(["rag", "simple"]).optional().default("rag"),
       })
     ),
     async (c) => {
       const projectId = c.req.param("id");
       const userId = c.get("userId");
       const db = c.get("db");
-      const { question, provider: overrideProvider, modelId: overrideModel } = c.req.valid("json");
+      const { question, provider: overrideProvider, modelId: overrideModel, mode } = c.req.valid("json");
 
       const project = await db.project.findUnique({
         where: { id: projectId },
@@ -85,7 +86,7 @@ export const questionsRoutes = new Hono<AuthContext>()
         return c.json({ error: "Project not found" }, 404);
       }
 
-      const provider = (overrideProvider || project.chatProvider || "GEMINI") as ProviderId;
+      const provider = (overrideProvider || project.chatProvider || "GEMINI");
       const modelId = overrideModel || project.chatModel || "gemini-2.5-flash";
 
       // Fetch user's decrypted API key for this provider
@@ -116,7 +117,29 @@ export const questionsRoutes = new Hono<AuthContext>()
         );
       }
 
-      // Generate embedding for query using project's embedding provider
+      // If Simple Chat Mode is selected, skip vector search
+      if (mode === "simple") {
+        const prompt = `You are an expert AI software engineer assisting a developer with general programming questions.\n\nQUESTION:\n${question}\n\nAnswer concisely and accurately using Markdown syntax with code blocks when relevant.`;
+        const chatModel = getModel(provider, modelId, apiKey);
+        const { text } = await generateText({
+          model: chatModel as any,
+          prompt,
+        });
+
+        if (keyRecord) {
+          db.apiKey.update({
+            where: { id: keyRecord.id },
+            data: { lastUsedAt: new Date() },
+          }).catch(console.error);
+        }
+
+        return c.json({
+          answer: text,
+          fileReferences: [],
+        });
+      }
+
+      // RAG Mode: Generate embedding for query using project's embedding provider
       const embProvider = project.embeddingProvider === "OPENAI" ? "OPENAI" : "GEMINI";
       let embKey = apiKey;
 
@@ -157,7 +180,7 @@ export const questionsRoutes = new Hono<AuthContext>()
         WHERE 1 - ("${vectorColumn}" <=> $1::vector) > 0.5
         AND "projectId" = $2
         ORDER BY similarity DESC
-        LIMIT 12;
+        LIMIT 10;
         `,
         vectorQuery,
         projectId
@@ -168,16 +191,7 @@ export const questionsRoutes = new Hono<AuthContext>()
         context += `File: ${doc.fileName}\nSummary: ${doc.summary}\nCode:\n${doc.sourceCode}\n\n---\n\n`;
       }
 
-      const prompt = `You are an AI code assistant who answers questions about the codebase.
-START CONTEXT BLOCK
-${context}
-END OF CONTEXT BLOCK
-
-START QUESTION
-${question}
-END OF QUESTION
-
-Answer the question clearly using Markdown syntax with code blocks when relevant. If the context does not provide sufficient info, state what is missing.`;
+      const prompt = `You are an AI code assistant who answers questions about the codebase.\nSTART CONTEXT BLOCK\n${context}\nEND OF CONTEXT BLOCK\n\nSTART QUESTION\n${question}\nEND OF QUESTION\n\nAnswer the question clearly using Markdown syntax with code blocks when relevant. If the context does not provide sufficient info, state what is missing.`;
 
       const chatModel = getModel(provider, modelId, apiKey);
       const { text } = await generateText({
@@ -195,7 +209,7 @@ Answer the question clearly using Markdown syntax with code blocks when relevant
 
       return c.json({
         answer: text,
-        fileReferences: matchedDocs,
+        fileReferences: matchedDocs.slice(0, 5),
       });
     }
   );

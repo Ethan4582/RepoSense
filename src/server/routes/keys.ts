@@ -58,7 +58,7 @@ export const keysRoutes = new Hono<AuthContext>()
       const { provider, apiKey, label } = c.req.valid("json");
 
       // Verify the key live with the provider
-      const verifyResult = await validateProviderKey(provider as ProviderId, apiKey);
+      const verifyResult = await validateProviderKey(provider, apiKey);
       const status = verifyResult.valid ? "VALID" : verifyResult.error?.code === "QUOTA_EXHAUSTED" ? "QUOTA_EXHAUSTED" : "INVALID";
 
       // Encrypt the key

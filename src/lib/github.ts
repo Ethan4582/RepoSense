@@ -1,19 +1,33 @@
-// all the function to interact with the GitHub API
+// Functions to interact with the GitHub API (Cloudflare Worker & Edge Compatible)
 import { Octokit } from 'octokit';
 import { db } from '~/server/db';
-import axios from 'axios';
 import { aiSummariseCommit } from './gemini';
 
 export const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
 
-type CommitResponse = {
+export type CommitResponse = {
   commitMessage: string;
   commitHash: string;
   commitAuthorName: string;
   commitAuthorAvatar: string;
   commmitDate: Date;
+};
+
+export type PullRequestResponse = {
+  id: number;
+  number: number;
+  title: string;
+  state: 'open' | 'closed';
+  isDraft: boolean;
+  authorName: string;
+  authorAvatar: string;
+  createdAt: Date;
+  updatedAt: Date;
+  htmlUrl: string;
+  branchName: string;
+  baseBranch: string;
 };
 
 export const getCommitsHashes = async (githubUrl: string): Promise<CommitResponse[]> => {
@@ -42,6 +56,52 @@ export const getCommitsHashes = async (githubUrl: string): Promise<CommitRespons
   }));
 };
 
+export const getPullRequests = async (githubUrl: string): Promise<PullRequestResponse[]> => {
+  const [owner, repo] = githubUrl.split('/').slice(-2);
+  if (!owner || !repo) {
+    throw new Error('Invalid GitHub URL');
+  }
+
+  const { data } = await octokit.rest.pulls.list({
+    owner,
+    repo,
+    state: 'all',
+    per_page: 25,
+  });
+
+  return data.map((pr: any) => ({
+    id: pr.id,
+    number: pr.number,
+    title: pr.title ?? 'Untitled PR',
+    state: pr.state === 'open' ? 'open' : 'closed',
+    isDraft: !!pr.draft,
+    authorName: pr.user?.login ?? 'Unknown',
+    authorAvatar: pr.user?.avatar_url || '',
+    createdAt: new Date(pr.created_at),
+    updatedAt: new Date(pr.updated_at),
+    htmlUrl: pr.html_url,
+    branchName: pr.head?.ref ?? 'unknown',
+    baseBranch: pr.base?.ref ?? 'main',
+  }));
+};
+
+export async function fetchProjectGithubUrl(projectId: string) {
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { repoUrl: true },
+  });
+
+  if (!project?.repoUrl) {
+    throw new Error(`Project with ID ${projectId} not found or does not have a repository URL.`);
+  }
+  return project.repoUrl;
+}
+
+export const getPullRequestsForProject = async (projectId: string): Promise<PullRequestResponse[]> => {
+  const githubUrl = await fetchProjectGithubUrl(projectId);
+  return await getPullRequests(githubUrl);
+};
+
 export const pollCommits = async (projectId: string) => {
   const githubUrl = await fetchProjectGithubUrl(projectId);
   const commitHashes = await getCommitsHashes(githubUrl);
@@ -56,7 +116,7 @@ export const pollCommits = async (projectId: string) => {
 
   const summarise = summaryResponses.map((response) => {
     if (response.status === 'fulfilled') {
-      return response.value as string;
+      return response.value;
     }
     return '';
   });
@@ -80,27 +140,26 @@ export const pollCommits = async (projectId: string) => {
   return unprocessedCommits;
 };
 
+// Edge-safe standard fetch replaces Axios for Cloudflare compatibility
 async function summariseCommit(githubUrl: string, commitHash: string) {
-  const { data } = await axios.get(`${githubUrl}/commit/${commitHash}.diff`, {
-    headers: {
-      Accept: 'application/vnd.github.v3.diff',
-      'User-Agent': 'genai-stack',
-    },
-  });
+  try {
+    const res = await fetch(`${githubUrl}/commit/${commitHash}.diff`, {
+      headers: {
+        Accept: 'application/vnd.github.v3.diff',
+        'User-Agent': 'reposense-app',
+      },
+    });
 
-  return (await aiSummariseCommit(data)) || '';
-}
+    if (!res.ok) {
+      return '';
+    }
 
-async function fetchProjectGithubUrl(projectId: string) {
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-    select: { repoUrl: true },
-  });
-
-  if (!project?.repoUrl) {
-    throw new Error(`Project with ID ${projectId} not found or does not have a Commit.`);
+    const diffText = await res.text();
+    return (await aiSummariseCommit(diffText)) || '';
+  } catch (err) {
+    console.error(`Failed to summarise commit ${commitHash}:`, err);
+    return '';
   }
-  return project.repoUrl;
 }
 
 async function filterUnprocessedCommits(projectId: string, commitHashes: CommitResponse[]) {

@@ -14,6 +14,7 @@ import {
   Trash2,
   Plus,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -125,7 +126,7 @@ export default function SettingsPage() {
       if (keysRes.ok) {
         const data = await keysRes.json();
         if ('keys' in data && Array.isArray(data.keys)) {
-          setKeys(data.keys as any);
+          setKeys(data.keys);
         }
       }
 
@@ -133,13 +134,13 @@ export default function SettingsPage() {
         const meData = await meRes.json();
         if ('user' in meData && meData.user) {
           if (meData.user.defaultChatProvider) {
-            setDefaultChatProvider(meData.user.defaultChatProvider as ProviderId);
+            setDefaultChatProvider(meData.user.defaultChatProvider);
           }
           if (meData.user.defaultChatModel) {
             setDefaultChatModel(meData.user.defaultChatModel);
           }
           if (meData.user.defaultEmbeddingProvider) {
-            setDefaultEmbeddingProvider(meData.user.defaultEmbeddingProvider as any);
+            setDefaultEmbeddingProvider(meData.user.defaultEmbeddingProvider);
           }
         }
       }
@@ -261,11 +262,14 @@ export default function SettingsPage() {
   const availableModelsForProvider = getModelsByProvider(defaultChatProvider);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto px-4 py-6 md:px-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage your account profile, Bring-Your-Own-Key (BYOK) vault, and default AI models.
+        <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          <KeyRound className="size-6 text-primary" />
+          API Keys & Vault
+        </h1>
+        <p className="text-xs text-muted-foreground mt-1">
+          Bring Your Own Key (BYOK) vault. Hardware-isolated AES-256-GCM encryption with dynamic multi-model routing.
         </p>
       </div>
 
@@ -283,6 +287,18 @@ export default function SettingsPage() {
 
         {/* Tab 1: API & Models (BYOK) */}
         <TabsContent value="api" className="space-y-6">
+          {/* Section 3.4 Dual-Key Embedding Rule Callout */}
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs space-y-1.5 shadow-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-primary">
+              <Sparkles className="size-4 text-primary" />
+              <span>The Dual-Key Embedding Rule</span>
+            </div>
+            <p className="text-foreground leading-relaxed">
+              <strong>Google Gemini</strong> and <strong>OpenAI</strong> can fulfill both chat and vector code embeddings. If either key is active in your vault, your workspace is RAG-ready.
+              To use <strong>DeepSeek</strong>, <strong>Anthropic</strong>, <strong>Groq</strong>, or <strong>Meta / xAI</strong> for chat, ensure you also have an active Gemini or OpenAI key in your vault to generate vector embeddings.
+            </p>
+          </div>
+
           <Card className="shadow-xs">
             <CardHeader className="pb-3 border-b bg-muted/20">
               <div className="flex items-center justify-between">

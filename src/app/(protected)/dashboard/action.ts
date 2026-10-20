@@ -9,6 +9,13 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+export type FileReference = {
+  fileName: string;
+  sourceCode: string;
+  summary: string;
+  similarity: number;
+};
+
 export async function askReposense(question: string, projectId: string) {
   // Validate inputs
   if (!question?.trim() || !projectId?.trim()) {
@@ -20,7 +27,7 @@ export async function askReposense(question: string, projectId: string) {
   const vectorQuery = `[${queryVector.join(",")}]`;
 
   // Execute the query to get most relevant files using dual vectors
-  const result = await db.$queryRaw`
+  const result = await db.$queryRaw<FileReference[]>`
     SELECT "fileName", "sourceCode", "summary",
     1 - (COALESCE("summaryEmbeddingGemini", "summaryEmbeddingOpenAI") <=> ${vectorQuery}::vector) AS similarity
     FROM "SourceCodeEmbedding"
@@ -28,7 +35,7 @@ export async function askReposense(question: string, projectId: string) {
     AND "projectId" = ${projectId}
     ORDER BY similarity DESC
     LIMIT 12;
-  ` as { fileName: string; sourceCode: string; summary: string; similarity: number }[];
+  `;
 
   // Build context from relevant files
   let context = "";
@@ -44,7 +51,7 @@ export async function askReposense(question: string, projectId: string) {
 
   return {
     answer: text,
-    fileReferences: result
+    fileReferences: result,
   };
 }
 
@@ -56,7 +63,7 @@ export async function askFollowUp(question: string, previousAnswer: string) {
 
   return {
     answer: text,
-    fileReferences: [] // No file references for follow-ups
+    fileReferences: [] as FileReference[],
   };
 }
 

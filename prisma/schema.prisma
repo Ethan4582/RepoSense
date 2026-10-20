@@ -42,11 +42,13 @@ enum JobStep {
   SUMMARIZING
   EMBEDDING
   COMMITS
+  STORING
   DONE
 }
 
 enum JobStatus {
   PENDING
+  QUEUED
   RUNNING
   COMPLETED
   FAILED
@@ -183,6 +185,8 @@ model Question {
   question      String
   answers       String
   fileReference Json?
+  isPinned      Boolean  @default(false)
+  isBookmarked  Boolean  @default(false)
   projectId     String
   project       Project  @relation(fields: [projectId], references: [id])
   userId        String

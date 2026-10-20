@@ -1,9 +1,6 @@
-import React from 'react'
-import { auth } from "@clerk/nextjs/server";
-import { clerkClient } from "@clerk/clerk-sdk-node";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { db } from '~/server/db'
 import { redirect } from 'next/navigation'
-
 
 type Props = {
     params: Promise<{ projectId: string }>
@@ -18,7 +15,8 @@ const JoinHandler = async (props: Props) => {
             id: userId
         }
     })
-    const user = await clerkClient.users.getUser(userId)
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
 
     // Check if a user with this email already exists
     const existingEmailUser = await db.user.findUnique({
@@ -29,7 +27,7 @@ const JoinHandler = async (props: Props) => {
       await db.user.create({
         data: {
           id: userId,
-          emailAddress: user.emailAddresses?.[0]?.emailAddress,
+          emailAddress: user.emailAddresses?.[0]?.emailAddress ?? "",
           imageUrl: user.imageUrl,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -49,11 +47,11 @@ try {
             projectId
         }
     })
-} catch (error) {
+} catch {
     console.log('user already in project')
 }
 
 return redirect(`/dashboard/${projectId}/`)
 }
 
-export default JoinHandler
+export default JoinHandler;

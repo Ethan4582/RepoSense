@@ -80,7 +80,8 @@ const AskQuestionCard = () => {
     return cached ? JSON.parse(cached) : null;
   };
 
-  const cacheResponse = (projectId: string, question: string, answer: string, files: any[]) => {
+  type FileRef = { fileName: string; sourceCode: string; summary: string };
+  const cacheResponse = (projectId: string, question: string, answer: string, files: FileRef[]) => {
     if (typeof window === 'undefined') return;
     const cacheKey = getCacheKey(projectId, question);
     localStorage.setItem(cacheKey, JSON.stringify({ answer, files }));
@@ -90,7 +91,7 @@ const AskQuestionCard = () => {
     e.preventDefault();
     if (!project?.id || !question.trim()) return;
 
-    const cached = getCachedResponse(project.id, question);
+    const cached = getCachedResponse(project.id, question) as { answer: string; files: FileRef[] } | null;
     if (cached && !isFollowUp) {
       setAnswer(cached.answer);
       setFileReferences(cached.files);

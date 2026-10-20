@@ -107,13 +107,13 @@ export default function CreatePage() {
           const meData = await meRes.json();
           if ('user' in meData && meData.user) {
             if (meData.user.defaultChatProvider) {
-              setChatProvider(meData.user.defaultChatProvider as ProviderId);
+              setChatProvider(meData.user.defaultChatProvider);
             }
             if (meData.user.defaultChatModel) {
               setChatModel(meData.user.defaultChatModel);
             }
             if (meData.user.defaultEmbeddingProvider) {
-              setEmbeddingProvider(meData.user.defaultEmbeddingProvider as any);
+              setEmbeddingProvider(meData.user.defaultEmbeddingProvider);
             }
           }
         }

@@ -1,5 +1,5 @@
 import { GithubRepoLoader } from '@langchain/community/document_loaders/web/github';
-import { Document } from '@langchain/core/documents';
+import { type Document } from '@langchain/core/documents';
 import { generateEmbeddings, summarizeCode } from './gemini';
 import { db } from '~/server/db';
 

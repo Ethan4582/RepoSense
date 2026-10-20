@@ -52,7 +52,7 @@ const MeetCard = () => {
       const file = acceptedFiles[0];
       if (!file) return;
 
-      const downloadUrl = (await uploadFile(file as File, setProgress)) as string;
+      const downloadUrl = (await uploadFile(file, setProgress));
       uploadMeeeting.mutate(
         {
           projectId,

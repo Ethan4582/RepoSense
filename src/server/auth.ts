@@ -1,6 +1,6 @@
-import { Context } from "hono";
+import { type Context } from "hono";
 import type { Next } from "hono";
-import { verifyToken } from "@clerk/backend";
+import { verifyToken } from "@clerk/nextjs/server";
 import { db } from "~/server/db";
 
 export type AuthContext = {
@@ -28,7 +28,7 @@ export async function clerkAuthMiddleware(c: Context<AuthContext>, next: Next) {
   if (!token) {
     const cookieHeader = c.req.header("cookie");
     if (cookieHeader) {
-      const match = cookieHeader.match(/__session=([^;]+)/);
+      const match = /__session=([^;]+)/.exec(cookieHeader);
       if (match?.[1]) {
         token = match[1];
       }

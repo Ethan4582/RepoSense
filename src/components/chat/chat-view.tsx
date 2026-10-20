@@ -271,7 +271,7 @@ export function ChatView({
                         ) : provMeta ? (
                           <div className="relative size-4">
                             <Image
-                              src={provMeta.logoPath}
+                              src={provMeta.logoAsset}
                               alt={provMeta.displayName}
                               fill
                               className="object-contain"

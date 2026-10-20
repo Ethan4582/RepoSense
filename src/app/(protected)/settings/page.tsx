@@ -14,7 +14,6 @@ import {
   Trash2,
   Plus,
   RefreshCw,
-  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -95,7 +94,7 @@ interface ApiKeyItem {
 }
 
 export default function SettingsPage() {
-  const { user, isLoaded } = useUser();
+  const { user } = useUser();
   const [keys, setKeys] = React.useState<ApiKeyItem[]>([]);
   const [loadingKeys, setLoadingKeys] = React.useState(true);
   const [testingProvider, setTestingProvider] = React.useState<ProviderId | null>(null);
@@ -237,7 +236,7 @@ export default function SettingsPage() {
   const handleSaveDefaults = async () => {
     try {
       setSavingDefaults(true);
-      const res = await client.me.$patch({
+      const res = await client.me.defaults.$patch({
         json: {
           defaultChatProvider,
           defaultChatModel,
@@ -321,7 +320,7 @@ export default function SettingsPage() {
                           <div className="flex items-center gap-2.5">
                             <div className="relative size-6 shrink-0">
                               <Image
-                                src={meta.logoPath}
+                                src={meta.logoAsset}
                                 alt={meta.displayName}
                                 fill
                                 className="object-contain"
@@ -475,7 +474,7 @@ export default function SettingsPage() {
                     <SelectContent>
                       {availableModelsForProvider.map((m) => (
                         <SelectItem key={m.id} value={m.id} className="text-xs">
-                          {m.displayName}
+                          {m.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

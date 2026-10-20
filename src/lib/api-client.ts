@@ -12,4 +12,5 @@ const getBaseUrl = () => {
   return "http://localhost:3000";
 };
 
-export const client = hc<AppType>(getBaseUrl());
+const honoApp = hc<AppType>(getBaseUrl());
+export const client = honoApp.api;

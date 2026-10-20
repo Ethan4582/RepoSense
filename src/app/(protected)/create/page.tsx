@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
-  KeyRound,
   ExternalLink,
   Sparkles,
 } from 'lucide-react';
@@ -35,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { Badge } from '~/components/ui/badge';
 import {
   PROVIDER_METADATA,
   getModelsByProvider,
@@ -197,7 +195,6 @@ export default function CreatePage() {
   };
 
   const hasEmbeddingKey = validProviders.includes(embeddingProvider);
-  const hasChatKey = validProviders.includes(chatProvider);
 
   return (
     <div className="max-w-2xl mx-auto py-8 space-y-6">
@@ -415,7 +412,7 @@ export default function CreatePage() {
                 <SelectContent>
                   {getModelsByProvider(chatProvider).map((m) => (
                     <SelectItem key={m.id} value={m.id} className="text-xs">
-                      {m.displayName}
+                      {m.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

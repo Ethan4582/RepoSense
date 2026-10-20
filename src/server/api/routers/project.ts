@@ -147,6 +147,18 @@ export const projectRouter = createTRPCRouter({
     });
   }),
 
+  renameQuestion: protectedProcedure.input(
+    z.object({
+      questionId: z.string(),
+      question: z.string().min(1, "Thread title cannot be empty"),
+    })
+  ).mutation(async ({ ctx, input }) => {
+    return await ctx.db.question.update({
+      where: { id: input.questionId },
+      data: { question: input.question },
+    });
+  }),
+
   deleteQuestion: protectedProcedure.input(
     z.object({
       questionId: z.string(),

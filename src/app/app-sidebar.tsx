@@ -4,9 +4,8 @@ import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { useUser, UserButton } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 import {
-  MessageSquare,
   GitPullRequest,
   Video,
   Bookmark,
@@ -14,14 +13,22 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeft,
-  ChevronDown,
   Pin,
   PinOff,
   Trash2,
+  MoreHorizontal,
+  Pencil,
+  FolderPlus,
+  Settings,
   FolderGit2,
   Check,
-  GitBranch,
-  ExternalLink,
+  LogOut,
+  User as UserIcon,
+  Sun,
+  Moon,
+  CreditCard,
+  Gauge,
+  Sliders,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -40,25 +47,29 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
 import useProject from '~/hooks/use-project';
+import { useThreadFolders } from '~/hooks/use-thread-folders';
 import { api } from '~/trpc/react';
 import { cn } from '~/lib/utils';
 import { toast } from 'sonner';
+import {
+  RenameThreadDialog,
+  FolderThreadDialog,
+  DeleteThreadDialog,
+} from '~/components/chat/thread-action-dialogs';
 
 const WORKSPACE_TABS = [
-  {
-    title: 'Chat & Discussions',
-    shortTitle: 'Chat',
-    subtitle: 'T3 composer + RAG canvas',
-    icon: MessageSquare,
-    url: '/dashboard',
-  },
   {
     title: 'Pull Requests',
     shortTitle: 'Pull Requests',
@@ -81,8 +92,8 @@ const WORKSPACE_TABS = [
     url: '/qa',
   },
   {
-    title: 'API Keys & Vault',
-    shortTitle: 'API Keys & Vault',
+    title: 'API Keys',
+    shortTitle: 'API Keys',
     subtitle: 'Clean centralized BYOK page',
     icon: KeyRound,
     url: '/settings',
@@ -92,13 +103,22 @@ const WORKSPACE_TABS = [
 export function AppSideBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const currentThreadId = searchParams.get('threadId');
+  const currentThreadId = searchParams.get('threadId') ?? searchParams.get('thread');
   const router = useRouter();
   const { open, setOpen } = useSidebar();
   const { user } = useUser();
-  const { projects, project, projectId, setProjectId } = useProject();
+  const { signOut, openUserProfile } = useClerk();
+  const { projects, projectId, setProjectId } = useProject();
 
-  const { data: questions, refetch: refetchQuestions } = api.project.getQuestion.useQuery(
+  const [profilePopoverOpen, setProfilePopoverOpen] = React.useState(false);
+  const [targetThread, setTargetThread] = React.useState<{ id: string; title: string } | null>(null);
+  const [renameOpen, setRenameOpen] = React.useState(false);
+  const [folderOpen, setFolderOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+
+  const { folders, assignFolder, existingFolders } = useThreadFolders(projectId);
+
+  const { data: questions, refetch: refetchQuestions } = api.project.getQuestions.useQuery(
     { projectId: projectId ?? '' },
     { enabled: !!projectId }
   );
@@ -115,6 +135,10 @@ export function AppSideBar() {
     onSuccess: () => {
       void refetchQuestions();
       toast.success('Thread deleted');
+      setDeleteOpen(false);
+      if (targetThread && currentThreadId === targetThread.id) {
+        router.push('/dashboard');
+      }
     },
     onError: () => toast.error('Failed to delete thread'),
   });
@@ -128,14 +152,26 @@ export function AppSideBar() {
     [questions]
   );
 
+  const toggleDarkMode = () => {
+    const isDark = document.documentElement.classList.toggle('dark');
+    try {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    } catch {}
+    toast.success(`Switched to ${isDark ? 'Dark' : 'Light'} theme`);
+  };
+
+  const handleStartNewChat = () => {
+    router.push('/dashboard');
+  };
+
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar select-none">
-      {/* Top Header: Logo & Collapse Sidebar button */}
-      <SidebarHeader className="border-b border-border/40 p-3 space-y-2">
+      {/* Top Header: Logo, Sidebar Toggle & Clean "New Chat" Initiation (Gemini Style) */}
+      <SidebarHeader className="border-b border-border/40 p-3 space-y-3">
         <div className="flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="relative size-8 shrink-0 overflow-hidden rounded-lg">
-              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" />
+            <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
+              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
             </div>
             {open && (
               <span className="font-bold text-base tracking-tight text-foreground">
@@ -155,70 +191,29 @@ export function AppSideBar() {
           </Button>
         </div>
 
-        {/* Repository Switcher Header & Branch Selector */}
-        {open && (
-          <div className="pt-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border bg-background/50 hover:bg-muted text-xs font-medium text-foreground transition-colors"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <FolderGit2 className="size-3.5 text-primary shrink-0" />
-                    <span className="truncate">{project?.name ?? 'Select Repository'}</span>
-                  </div>
-                  <ChevronDown className="size-3 text-muted-foreground shrink-0 opacity-70" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Repositories
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {projects?.map((p) => {
-                  const isCurrent = p.id === projectId;
-                  return (
-                    <DropdownMenuItem
-                      key={p.id}
-                      onClick={() => setProjectId(p.id)}
-                      className="flex items-center justify-between gap-2 text-xs cursor-pointer"
-                    >
-                      <span className="truncate">{p.name}</span>
-                      {isCurrent && <Check className="size-3.5 text-primary shrink-0" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/create" className="flex items-center gap-2 text-xs cursor-pointer text-primary font-medium">
-                    <Plus className="size-3.5" />
-                    <span>+ Link New Repository</span>
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Branch indicator */}
-            <div className="mt-1.5 flex items-center justify-between px-1 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1 font-mono">
-                <GitBranch className="size-3" />
-                branch: <strong className="text-foreground">main</strong>
-              </span>
-              {project?.repoUrl && (
-                <Link
-                  href={project.repoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-primary transition-colors flex items-center gap-0.5"
-                >
-                  <span>GitHub</span>
-                  <ExternalLink className="size-2.5" />
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Primary "New chat" initiation button anchored at the top (Gemini Reference UI) */}
+        <div>
+          {open ? (
+            <Button
+              onClick={handleStartNewChat}
+              variant="outline"
+              className="w-full justify-start gap-2.5 h-9 text-xs font-semibold shadow-xs border-border/80 bg-background hover:bg-muted text-foreground transition-all"
+            >
+              <Plus className="size-4 text-primary shrink-0" />
+              <span>New chat</span>
+            </Button>
+          ) : (
+            <Button
+              onClick={handleStartNewChat}
+              variant="outline"
+              size="icon"
+              className="size-8 mx-auto flex items-center justify-center border-border/80 text-foreground"
+              title="New chat"
+            >
+              <Plus className="size-4 text-primary" />
+            </Button>
+          )}
+        </div>
       </SidebarHeader>
 
       <SidebarContent className="p-2 gap-3 overflow-y-auto">
@@ -226,7 +221,7 @@ export function AppSideBar() {
         <SidebarGroup className="p-0">
           {open && (
             <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-              Workspace Tabs
+              Workspace
             </SidebarGroupLabel>
           )}
           <SidebarGroupContent>
@@ -261,11 +256,11 @@ export function AppSideBar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* PINNED THREADS 📌 */}
+        {/* PINNED THREADS */}
         {open && pinnedQuestions.length > 0 && (
           <SidebarGroup className="p-0">
             <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center justify-between">
-              <span>Pinned Threads 📌</span>
+              <span>Pinned</span>
               <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
                 {pinnedQuestions.length}
               </Badge>
@@ -274,6 +269,8 @@ export function AppSideBar() {
               <SidebarMenu className="gap-0.5">
                 {pinnedQuestions.map((q) => {
                   const isSelected = currentThreadId === q.id;
+                  const folder = folders[q.id];
+
                   return (
                     <SidebarMenuItem key={q.id}>
                       <div
@@ -288,20 +285,73 @@ export function AppSideBar() {
                         <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                           <Pin className="size-3 text-amber-500 fill-amber-500/20 shrink-0" />
                           <span className="truncate text-left">{q.question}</span>
+                          {folder && (
+                            <span className="text-[9px] text-muted-foreground bg-muted px-1 rounded shrink-0">
+                              {folder}
+                            </span>
+                          )}
                         </div>
 
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-5 shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                          title="Unpin Thread"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePinMutation.mutate({ questionId: q.id });
-                          }}
-                        >
-                          <PinOff className="size-3" />
-                        </Button>
+                        {/* Thread context menu trigger beside thread item */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-5 shrink-0 opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Thread actions"
+                            >
+                              <MoreHorizontal className="size-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44 text-xs">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetThread({ id: q.id, title: q.question });
+                                setRenameOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-xs"
+                            >
+                              <Pencil className="size-3.5 text-muted-foreground" />
+                              <span>Rename thread</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetThread({ id: q.id, title: q.question });
+                                setFolderOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-xs"
+                            >
+                              <FolderPlus className="size-3.5 text-muted-foreground" />
+                              <span>{folder ? 'Change folder' : 'Add to folder'}</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePinMutation.mutate({ questionId: q.id });
+                              }}
+                              className="gap-2 cursor-pointer text-xs"
+                            >
+                              <PinOff className="size-3.5 text-muted-foreground" />
+                              <span>Unpin thread</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetThread({ id: q.id, title: q.question });
+                                setDeleteOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-xs text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5" />
+                              <span>Delete thread</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </SidebarMenuItem>
                   );
@@ -315,12 +365,14 @@ export function AppSideBar() {
         {open && (
           <SidebarGroup className="p-0">
             <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-              Recent Threads
+              Recent
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {recentQuestions.slice(0, 8).map((q) => {
+                {recentQuestions.map((q) => {
                   const isSelected = currentThreadId === q.id;
+                  const folder = folders[q.id];
+
                   return (
                     <SidebarMenuItem key={q.id}>
                       <div
@@ -335,94 +387,322 @@ export function AppSideBar() {
                         <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                           <span className="text-muted-foreground/60 text-xs shrink-0">•</span>
                           <span className="truncate text-left">{q.question}</span>
+                          {folder && (
+                            <span className="text-[9px] text-muted-foreground bg-muted px-1 rounded shrink-0">
+                              {folder}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-5 hover:text-amber-500"
-                            title="Pin Thread"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              togglePinMutation.mutate({ questionId: q.id });
-                            }}
-                          >
-                            <Pin className="size-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-5 hover:text-destructive"
-                            title="Delete Thread"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteQuestionMutation.mutate({ questionId: q.id });
-                            }}
-                          >
-                            <Trash2 className="size-3" />
-                          </Button>
-                        </div>
+                        {/* Thread-level compact ⋯ context menu inside thread item */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-5 shrink-0 opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Thread actions"
+                            >
+                              <MoreHorizontal className="size-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44 text-xs">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetThread({ id: q.id, title: q.question });
+                                setRenameOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-xs"
+                            >
+                              <Pencil className="size-3.5 text-muted-foreground" />
+                              <span>Rename thread</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetThread({ id: q.id, title: q.question });
+                                setFolderOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-xs"
+                            >
+                              <FolderPlus className="size-3.5 text-muted-foreground" />
+                              <span>{folder ? 'Change folder' : 'Add to folder'}</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePinMutation.mutate({ questionId: q.id });
+                              }}
+                              className="gap-2 cursor-pointer text-xs"
+                            >
+                              <Pin className="size-3.5 text-muted-foreground" />
+                              <span>Pin thread</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetThread({ id: q.id, title: q.question });
+                                setDeleteOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer text-xs text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5" />
+                              <span>Delete thread</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </SidebarMenuItem>
                   );
                 })}
 
                 {recentQuestions.length === 0 && pinnedQuestions.length === 0 && (
-                  <div className="px-2.5 py-2 text-xs text-muted-foreground/70 italic">
+                  <div className="px-2.5 py-3 text-xs text-muted-foreground/70 italic text-center">
                     No conversations yet.
                   </div>
                 )}
-
-                {/* [+ New Thread] Button anchored cleanly below thread list (ChatGPT style) */}
-                <div className="pt-2 px-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push('/dashboard')}
-                    className="w-full justify-start gap-2 h-8 text-xs font-medium text-foreground hover:bg-muted border-dashed"
-                  >
-                    <Plus className="size-3.5 text-primary" />
-                    <span>+ New Thread</span>
-                  </Button>
-                </div>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
       </SidebarContent>
 
-      {/* User Footer: User avatar & Account Settings */}
-      <SidebarFooter className="border-t border-border/40 p-2.5">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <UserButton afterSignOutUrl="/sign-in" />
+      {/* Bottom Sidebar Profile: Profile Icon, Name, Plan Badge + Dedicated Settings Gear (Gemini Reference UI) */}
+      <SidebarFooter className="border-t border-border/40 p-2">
+        <Popover open={profilePopoverOpen} onOpenChange={setProfilePopoverOpen}>
+          <div className="flex items-center justify-between w-full">
+            {/* Clickable Profile Entry */}
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2.5 overflow-hidden flex-1 p-1 rounded-lg hover:bg-muted/60 transition-colors text-left"
+              >
+                <Avatar className="size-7 shrink-0 border border-border">
+                  <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
+                  <AvatarFallback className="text-[11px] bg-primary/10 text-primary font-semibold">
+                    {user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ?? 'U'}
+                  </AvatarFallback>
+                </Avatar>
+
+                {open && (
+                  <div className="flex flex-col truncate min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      {user?.fullName ?? user?.primaryEmailAddress?.emailAddress?.split('@')[0] ?? 'Developer'}
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Badge variant="outline" className="px-1 py-0 h-3.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                        Pro
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {user?.primaryEmailAddress?.emailAddress}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </button>
+            </PopoverTrigger>
+
+            {/* Dedicated Settings Gear Icon Button (Right beside profile entry) */}
             {open && (
-              <div className="flex flex-col truncate text-left">
-                <span className="text-xs font-semibold text-foreground truncate">
-                  {user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? 'Developer'}
-                </span>
-                <span className="text-[10px] text-muted-foreground truncate">
-                  {user?.primaryEmailAddress?.emailAddress ?? 'Connected'}
-                </span>
-              </div>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground hover:text-foreground shrink-0 ml-1"
+                  title="Settings & Preferences"
+                >
+                  <Settings className="size-4" />
+                </Button>
+              </PopoverTrigger>
             )}
           </div>
 
-          {open && (
-            <Link href="/settings">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                title="Account & API Settings"
+          {/* Consolidated Popover Menu Providing Profile Configuration, Clerk Settings, Preferences, and Login/Logout Actions */}
+          <PopoverContent
+            side="top"
+            align="start"
+            sideOffset={10}
+            className="w-64 p-2 shadow-2xl border rounded-xl bg-popover text-foreground space-y-1.5"
+          >
+            {/* User Account Summary */}
+            <div className="px-2 py-1.5 flex items-center gap-2.5 border-b border-border/40 pb-2">
+              <Avatar className="size-8 shrink-0">
+                <AvatarImage src={user?.imageUrl} />
+                <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                  {user?.firstName?.[0] ?? 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {user?.fullName ?? 'Developer'}
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate">
+                  {user?.primaryEmailAddress?.emailAddress}
+                </span>
+              </div>
+            </div>
+
+            {/* Account Group (Gemini Style) */}
+            <div className="pt-1">
+              <div className="px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Account
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfilePopoverOpen(false);
+                  openUserProfile();
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
               >
-                <KeyRound className="size-3.5" />
-              </Button>
-            </Link>
-          )}
-        </div>
+                <UserIcon className="size-3.5 text-muted-foreground" />
+                <span>Account Settings (Clerk)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfilePopoverOpen(false);
+                  router.push('/settings');
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
+              >
+                <CreditCard className="size-3.5 text-muted-foreground" />
+                <span>Manage Subscription</span>
+                <Badge variant="secondary" className="ml-auto text-[9px] px-1 py-0 h-3.5">
+                  Pro
+                </Badge>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfilePopoverOpen(false);
+                  router.push('/settings?tab=api');
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
+              >
+                <Gauge className="size-3.5 text-muted-foreground" />
+                <span>Usage Limits & Quotas</span>
+              </button>
+            </div>
+
+            {/* Active Repositories Switcher */}
+            <div className="pt-1 border-t border-border/40">
+              <div className="px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                <span>Repositories</span>
+                <Link
+                  href="/create"
+                  onClick={() => setProfilePopoverOpen(false)}
+                  className="text-primary hover:underline lowercase text-[10px]"
+                >
+                  + new
+                </Link>
+              </div>
+              <div className="max-h-28 overflow-y-auto space-y-0.5">
+                {projects?.map((p) => {
+                  const isCurrent = p.id === projectId;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setProjectId(p.id);
+                        setProfilePopoverOpen(false);
+                      }}
+                      className={cn(
+                        'w-full flex items-center justify-between gap-2 px-2 py-1 rounded-md text-xs text-left transition-colors',
+                        isCurrent ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground'
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FolderGit2 className="size-3 shrink-0" />
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                      {isCurrent && <Check className="size-3 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Preferences Group */}
+            <div className="pt-1 border-t border-border/40">
+              <div className="px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Preferences
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfilePopoverOpen(false);
+                  router.push('/settings');
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
+              >
+                <Sliders className="size-3.5 text-muted-foreground" />
+                <span>API Keys & Model Vault</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Sun className="size-3.5 text-muted-foreground dark:hidden" />
+                  <Moon className="size-3.5 text-muted-foreground hidden dark:inline" />
+                  <span>Toggle Theme</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">Dark / Light</span>
+              </button>
+            </div>
+
+            {/* Logout Action */}
+            <div className="pt-1 border-t border-border/40">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfilePopoverOpen(false);
+                  void signOut(() => router.push('/sign-in'));
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-destructive hover:bg-destructive/10 transition-colors text-left"
+              >
+                <LogOut className="size-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </SidebarFooter>
+
+      {/* Sidebar Thread Action Modals */}
+      {targetThread && (
+        <>
+          <RenameThreadDialog
+            open={renameOpen}
+            onOpenChange={setRenameOpen}
+            threadId={targetThread.id}
+            initialTitle={targetThread.title}
+            onSuccess={() => void refetchQuestions()}
+          />
+
+          <FolderThreadDialog
+            open={folderOpen}
+            onOpenChange={setFolderOpen}
+            threadId={targetThread.id}
+            currentFolder={folders[targetThread.id]}
+            existingFolders={existingFolders}
+            onAssign={assignFolder}
+          />
+
+          <DeleteThreadDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            isPending={deleteQuestionMutation.isPending}
+            onConfirm={() => deleteQuestionMutation.mutate({ questionId: targetThread.id })}
+          />
+        </>
+      )}
     </Sidebar>
   );
 }

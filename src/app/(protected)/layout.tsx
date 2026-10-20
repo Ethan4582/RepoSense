@@ -10,7 +10,9 @@ export default function SideBarLayout({ children }: Props) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
-        <AppSideBar />
+        <React.Suspense fallback={null}>
+          <AppSideBar />
+        </React.Suspense>
         <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
           {children}
         </main>

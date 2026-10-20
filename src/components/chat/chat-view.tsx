@@ -14,11 +14,9 @@ import {
   Bookmark,
   Bot,
   User as UserIcon,
-  Lightbulb,
   AtSign,
   Layers,
   MessageSquare,
-  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import MDEditor from '@uiw/react-md-editor';
@@ -75,25 +73,6 @@ interface ChatViewProps {
   }>;
   activeThreadId?: string | null;
 }
-
-const PROMPT_TIPS = [
-  {
-    title: 'Architecture Overview',
-    prompt: 'Explain the high-level architecture of this codebase, key modules, and request lifecycle.',
-  },
-  {
-    title: 'Authentication & BYOK Flow',
-    prompt: 'How is user authentication handled, and how does the BYOK key encryption/decryption flow work?',
-  },
-  {
-    title: 'Data Flow & Database Models',
-    prompt: 'Trace the data flow from client requests through tRPC routers to Prisma and the database.',
-  },
-  {
-    title: 'Security & Edge Readiness',
-    prompt: 'Analyze this repository for security best practices, edge runtime safety, and unhandled errors.',
-  },
-];
 
 export function ChatView({
   projectId,
@@ -160,6 +139,8 @@ export function ChatView({
           },
         ]);
       }
+    } else if (!activeThreadId && initialQuestions.length === 0) {
+      setMessages([]);
     }
   }, [activeThreadId, initialQuestions]);
 
@@ -330,63 +311,15 @@ export function ChatView({
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 relative select-none">
       {/* Messages Canvas */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 max-w-4xl w-full mx-auto pb-48">
-        {/* Onboarding & Lifecycle Banner */}
-        <div className="mb-8 rounded-xl border border-border/80 bg-muted/20 p-4">
-          <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-foreground uppercase tracking-wider">
-            <Sparkles className="size-3.5 text-primary" />
-            Repository Grounding & Status
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
-              <span>Repository scanned</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
-              <span>Chunks vectorized</span>
-            </div>
-            <div className="flex items-center gap-2 text-foreground font-medium">
-              <span className="text-primary font-bold">✨</span>
-              <span>Ready for code inquiries</span>
-            </div>
-          </div>
-        </div>
-
+      <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 max-w-4xl w-full mx-auto pb-28">
         {messages.length === 0 && (
-          <div className="text-center py-12 space-y-4">
-            <div className="size-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
-              <Bot className="size-6" />
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
+            <div className="relative size-10 mb-3 opacity-90">
+              <Image src="/logo.png" alt="RepoSense" fill className="object-contain" priority />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-foreground">
-                Ask anything about {projectName}
-              </h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Use T3 composer below to search code references, trace data flows, or get architectural insights.
-              </p>
-            </div>
-
-            {/* Quick Prompt Starters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto pt-2">
-              {PROMPT_TIPS.map((tip, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setInput(tip.prompt);
-                  }}
-                  className="p-3 text-left rounded-lg border bg-card hover:bg-muted/50 transition-colors text-xs space-y-1 group"
-                >
-                  <span className="font-semibold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-                    <Lightbulb className="size-3 text-amber-500" />
-                    {tip.title}
-                  </span>
-                  <p className="text-[11px] text-muted-foreground line-clamp-2">
-                    {tip.prompt}
-                  </p>
-                </button>
-              ))}
-            </div>
+            <h2 className="text-base sm:text-lg font-medium text-foreground tracking-tight">
+              How can I help with {projectName}?
+            </h2>
           </div>
         )}
 
@@ -440,7 +373,7 @@ export function ChatView({
                         <MDEditor.Markdown source={message.content} />
                       </div>
 
-                      {/* 5-File Citation Strip */}
+                      {/* File Citation Strip */}
                       {message.fileReferences && message.fileReferences.length > 0 && (
                         <div className="pt-2 border-t border-border/60 space-y-2">
                           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -541,42 +474,54 @@ export function ChatView({
         </div>
       </div>
 
-      {/* T3 Docked Floating Composer Bar */}
-      <div className="absolute bottom-4 left-0 right-0 px-4 md:px-8 z-10 pointer-events-none">
-        <div className="max-w-4xl mx-auto pointer-events-auto">
-          <div className="rounded-2xl border border-border bg-background/95 backdrop-blur-md shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 overflow-hidden">
-            {/* Top Bar: Mode Selector Pill | Model Selector Pill | Get Tips Pill */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border/40 bg-muted/20 text-xs">
+      {/* Compact Docked Floating Chat Input Bar (Claude-style) */}
+      <div className="absolute bottom-3 left-0 right-0 px-4 md:px-8 z-10 pointer-events-none">
+        <div className="max-w-3xl mx-auto pointer-events-auto">
+          <div className="rounded-2xl border border-border/80 bg-background/95 backdrop-blur-md shadow-lg transition-all focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/50 overflow-hidden">
+            {/* Auto-expanding Compact Textarea */}
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`Write a message or ask about ${projectName}...`}
+              className="min-h-[42px] max-h-[160px] resize-none border-0 bg-transparent px-3.5 py-2.5 text-sm focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60 leading-snug"
+              rows={1}
+            />
+
+            {/* Compact Bottom Toolbar Row: Controls & Send Button */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-t border-border/30 bg-muted/20">
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Mode Selector Pill */}
-                <div className="flex items-center rounded-lg border bg-background p-0.5 text-[11px] font-medium">
+                {/* Compact Mode Pill */}
+                <div className="flex items-center rounded-lg border bg-background/80 p-0.5 text-[10px] font-medium">
                   <button
                     type="button"
                     onClick={() => setChatMode('rag')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md transition-colors ${
+                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
                       chatMode === 'rag'
                         ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
+                    title="Retrieve repository files for grounding"
                   >
-                    <Layers className="size-3" />
-                    <span>RAG Mode (5 Files)</span>
+                    <Layers className="size-2.5" />
+                    <span>RAG</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setChatMode('simple')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md transition-colors ${
+                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
                       chatMode === 'simple'
                         ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
+                    title="Direct model chat without vector retrieval"
                   >
-                    <MessageSquare className="size-3" />
-                    <span>Simple Chat Mode</span>
+                    <MessageSquare className="size-2.5" />
+                    <span>Direct</span>
                   </button>
                 </div>
 
-                {/* Model Selector Pill */}
+                {/* Compact Model Selector */}
                 <ModelSelector
                   selectedProvider={selectedProvider}
                   selectedModel={selectedModel}
@@ -587,64 +532,17 @@ export function ChatView({
                   }}
                   disabled={isLoading}
                 />
-              </div>
 
-              {/* Get Tips 💡 Popover Pill */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
-                  >
-                    <Lightbulb className="size-3.5" />
-                    <span>Get Tips 💡</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-80 p-3 space-y-2">
-                  <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                    <Lightbulb className="size-3.5 text-amber-500" />
-                    <span>Codebase Inquiries</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Click any tip to immediately draft high-signal codebase queries:
-                  </p>
-                  <div className="space-y-1 pt-1">
-                    {PROMPT_TIPS.map((tip, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setInput(tip.prompt)}
-                        className="w-full text-left p-1.5 rounded-md hover:bg-muted text-xs text-foreground transition-colors"
-                      >
-                        <span className="font-medium text-[11px] block text-primary">{tip.title}</span>
-                        <span className="text-[10px] text-muted-foreground line-clamp-1">{tip.prompt}</span>
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Auto-expanding Textarea */}
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={`Ask anything about ${projectName}... (e.g., How does the auth router verify tokens?)`}
-              className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent p-3 text-sm focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60 leading-relaxed"
-            />
-
-            {/* Bottom Footer: @ Mention File | Shortcut hint | Send Button */}
-            <div className="flex items-center justify-between px-3 py-2 border-t border-border/40 bg-background/50">
-              <div className="flex items-center gap-2">
+                {/* File Mention Popover */}
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-dashed"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                      title="Mention a file"
                     >
                       <AtSign className="size-3" />
-                      <span>Mention File</span>
+                      <span className="hidden sm:inline">File</span>
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-64 p-2 text-xs space-y-1">
@@ -665,23 +563,19 @@ export function ChatView({
                     </div>
                   </PopoverContent>
                 </Popover>
-
-                <span className="text-[11px] text-muted-foreground/60 hidden sm:inline">
-                  Enter to send · Shift+Enter for newline
-                </span>
               </div>
 
-              {/* Send / Stop Circular Button */}
+              {/* Send Button */}
               <Button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
                 size="icon"
-                className="size-8 rounded-full shadow-xs"
+                className="size-7 rounded-full shadow-xs shrink-0"
               >
                 {isLoading ? (
-                  <Sparkles className="size-3.5 animate-spin" />
+                  <Sparkles className="size-3 animate-spin" />
                 ) : (
-                  <Send className="size-3.5" />
+                  <Send className="size-3" />
                 )}
                 <span className="sr-only">Send message</span>
               </Button>
@@ -713,7 +607,7 @@ export function ChatView({
               )}
             </div>
 
-            {/* File Switcher Tabs for all 5 cited files */}
+            {/* File Switcher Tabs for cited files */}
             {inspectorFiles.length > 1 && (
               <div className="flex items-center gap-1 pt-2 overflow-x-auto pb-1 scrollbar-none">
                 {inspectorFiles.map((f, idx) => (

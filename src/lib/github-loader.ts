@@ -11,6 +11,16 @@ function isComplexFile(fileName: string, content: string): boolean {
     fileName.endsWith('.json');
 }
 
+function cleanRepoFileName(doc: Document): string {
+  const raw = doc.metadata?.source ?? doc.metadata?.path ?? "unknown";
+  if (typeof raw !== 'string') return "unknown";
+  const blobMatch = raw.match(/blob\/[^/]+\/(.+)$/);
+  if (blobMatch?.[1]) {
+    return blobMatch[1];
+  }
+  return raw.replace(/^[/\\]+/, '');
+}
+
 export const loadGithubRepo = async (repoUrl: string, githubToken?: string) => {
   try {
     // Always try to use a token to avoid rate limits
@@ -22,7 +32,6 @@ export const loadGithubRepo = async (repoUrl: string, githubToken?: string) => {
 
     const loader = new GithubRepoLoader(repoUrl, {
       accessToken: token,
-      branch: "main",
       ignoreFiles: [
         // Dependency lock files
         "package-lock.json",
@@ -42,51 +51,87 @@ export const loadGithubRepo = async (repoUrl: string, githubToken?: string) => {
         // Build outputs
         "dist",
         "build",
+        "out",
         ".next",
         ".nuxt",
         ".output",
-        "out",
-        "public/build",
-        "target",
-        "bin",
-        "obj",
-        "*.tsbuildinfo",
+        ".turbo",
+        ".vercel",
 
-        // Cache directories
+        // Cache and temp
         ".cache",
         ".parcel-cache",
-        ".svelte-kit",
-        ".turbo",
+        ".npm",
         ".eslintcache",
-        ".stylelintcache",
 
-        // Runtime files
-        "*.log",
-        "logs",
-        "npm-debug.log*",
-        "yarn-debug.log*",
-        "yarn-error.log*",
-
-        // Environment files
+        // Environment and secrets
         ".env",
         ".env.local",
         ".env.development",
         ".env.test",
         ".env.production",
-        ".env.*.local",
+        "*.pem",
+        "*.key",
+        "*.cert",
 
-        // IDE/Editor files
+        // Binary and media files
+        "*.png",
+        "*.jpg",
+        "*.jpeg",
+        "*.gif",
+        "*.svg",
+        "*.ico",
+        "*.webp",
+        "*.avif",
+        "*.mp4",
+        "*.webm",
+        "*.ogg",
+        "*.mp3",
+        "*.wav",
+        "*.flac",
+        "*.pdf",
+        "*.zip",
+        "*.tar.gz",
+        "*.tgz",
+        "*.rar",
+        "*.7z",
+        "*.wasm",
+        "*.exe",
+        "*.dll",
+        "*.so",
+        "*.dylib",
+
+        // Fonts
+        "*.woff",
+        "*.woff2",
+        "*.ttf",
+        "*.eot",
+        "*.otf",
+
+        // Large data files
+        "*.csv",
+        "*.tsv",
+        "*.parquet",
+        "*.sql",
+        "*.dump",
+        "*.sqlite",
+        "*.db",
+
+        // IDE files
         ".vscode",
         ".idea",
         "*.swp",
         "*.swo",
-        "*~",
-
-        // OS metadata
         ".DS_Store",
         "Thumbs.db",
-        "Desktop.ini",
-        "$RECYCLE.BIN",
+
+        // Logs
+        "logs",
+        "*.log",
+        "npm-debug.log*",
+        "yarn-debug.log*",
+        "yarn-error.log*",
+        "pnpm-debug.log*",
 
         // Coverage reports
         "coverage",
@@ -226,7 +271,7 @@ async function summarizeAllFilesSequentially(docs: Document[]) {
   for (let i = 0; i < totalFiles; i++) {
     const doc = docs[i];
     if (!doc) continue; // Type guard: skip if undefined
-    const fileName = doc.metadata?.source ?? "unknown";
+    const fileName = cleanRepoFileName(doc);
     console.log(`Summarizing file ${i + 1}/${totalFiles}: ${fileName}`);
 
     try {
@@ -279,20 +324,18 @@ async function summarizeAllFilesSequentially(docs: Document[]) {
 
   // Check if we need to wait longer to meet minimum duration
   const elapsed = Date.now() - startTime;
-  const remaining = minimumTotalDuration - elapsed;
-
-  if (remaining > 0) {
-    console.log(`⏳ Enforcing minimum processing time - waiting ${remaining / 1000}s more...`);
-    await sleep(remaining);
+  if (elapsed < minimumTotalDuration) {
+    const remainingTime = minimumTotalDuration - elapsed;
+    console.log(`⏳ Waiting additional ${remainingTime / 1000}s to meet minimum duration requirement...`);
+    await sleep(remainingTime);
   }
 
-  console.log(`📊 Summary statistics: ${summaries.length}/${totalFiles} files successfully summarized`);
   return summaries;
 }
 
-// STEP 3: Generate embeddings sequentially with rate limiting
+// STEP 3: Generate embeddings for all summaries with rate limiting
 async function generateEmbeddingsSequentially(summaries: Array<{ fileName: string, summary: string, sourceCode: string }>) {
-  const results = [];
+  const embeddings = [];
   const totalSummaries = summaries.length;
 
   console.log(`Starting embedding generation for ${totalSummaries} summaries`);
@@ -313,7 +356,7 @@ async function generateEmbeddingsSequentially(summaries: Array<{ fileName: strin
         try {
           embedding = await generateEmbeddings(summary);
           console.log(`✓ Successfully generated embedding for ${fileName}`);
-          break;
+          break; // Success, exit retry loop
         } catch (error: any) {
           attempts++;
           console.error(`Attempt ${attempts}/${maxAttempts} failed for ${fileName}:`, error.message);
@@ -325,7 +368,7 @@ async function generateEmbeddingsSequentially(summaries: Array<{ fileName: strin
             await sleep(backoffTime);
           } else if (attempts < maxAttempts) {
             // For other errors, wait a bit less
-            await sleep(10000);
+            await sleep(10000); // 10 seconds
           } else {
             // Max attempts reached
             console.error(`❌ Failed to generate embedding for ${fileName} after ${maxAttempts} attempts`);
@@ -335,25 +378,22 @@ async function generateEmbeddingsSequentially(summaries: Array<{ fileName: strin
       }
 
       if (embedding) {
-        results.push({
+        embeddings.push({
           fileName,
           summary,
-          embedding,
-          sourceCode
+          sourceCode,
+          embedding
         });
       }
 
-      // Fixed delay between API calls (4-6 seconds)
-      const delay = 2000 + Math.random() * 2000;
-      console.log(`⏳ Waiting ${Math.round(delay / 1000)}s before next embedding...`);
-      await sleep(delay);
+      // Ensure minimum delay between API calls (4-6 seconds)
+      const baseDelay = 4000; // 4 seconds between embeddings
+      console.log(`⏳ Waiting ${baseDelay / 1000}s before next embedding...`);
+      await sleep(baseDelay);
     } catch (error) {
       console.error(`Error generating embedding for ${fileName}:`, error);
     }
   }
 
-  console.log(`📊 Embedding statistics: ${results.length}/${totalSummaries} embeddings successfully generated`);
-  return results;
+  return embeddings;
 }
-
-

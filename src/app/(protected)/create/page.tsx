@@ -1,21 +1,23 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   FolderGit2,
-  Calculator,
-  Cpu,
+  Sparkles,
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  ExternalLink,
-  Sparkles,
+  AlertCircle,
+  Cpu,
+  Coins,
+  FileCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import useRefetch from '~/hooks/use-refetch';
+import useProject from '~/hooks/use-project';
+import { client } from '~/lib/api-client';
+import { api } from '~/trpc/react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -23,7 +25,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '~/components/ui/card';
@@ -34,27 +35,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import {
-  PROVIDER_METADATA,
-  getModelsByProvider,
-  type ProviderId,
-} from '~/lib/providers';
-import { api } from '~/trpc/react';
-import useRefetch from '~/hooks/use-refetch';
-import useProject from '~/hooks/use-project';
-import { client } from '~/lib/api-client';
+import { Badge } from '~/components/ui/badge';
+import Link from 'next/link';
 
-const ALL_PROVIDERS: ProviderId[] = [
-  'GEMINI',
-  'OPENAI',
-  'ANTHROPIC',
-  'META',
-  'DEEPSEEK',
-  'XAI',
-  'GROQ',
-];
+type ProviderId =
+  | 'OPENAI'
+  | 'ANTHROPIC'
+  | 'GEMINI'
+  | 'GROQ'
+  | 'DEEPSEEK'
+  | 'XAI'
+  | 'META';
 
-export default function CreatePage() {
+function extractRepoName(url: string): string {
+  try {
+    const clean = url.trim().replace(/\.git$/, '').replace(/\/$/, '');
+    const parts = clean.split('/').filter(Boolean);
+    return parts.pop() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export default function CreateProjectPage() {
   const router = useRouter();
   const refetch = useRefetch();
   const { setProjectId } = useProject();
@@ -66,6 +69,7 @@ export default function CreatePage() {
   const [projectName, setProjectName] = React.useState('');
   const [repoUrl, setRepoUrl] = React.useState('');
   const [githubToken, setGithubToken] = React.useState('');
+  const [autoDetectedName, setAutoDetectedName] = React.useState('');
 
   // Models Selection
   const [chatProvider, setChatProvider] = React.useState<ProviderId>('GEMINI');
@@ -118,15 +122,25 @@ export default function CreatePage() {
           }
         }
       } catch (err) {
-        console.error('Failed to load user preferences:', err);
+        console.error('Failed to load user preferences', err);
       }
     }
-    loadData();
+    void loadData();
   }, []);
 
-  const runEstimate = async () => {
-    if (!repoUrl.trim()) {
-      toast.error('Please enter a GitHub repository URL');
+  const handleRepoUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setRepoUrl(val);
+    const extracted = extractRepoName(val);
+    if (extracted && (!projectName || projectName === autoDetectedName)) {
+      setProjectName(extracted);
+      setAutoDetectedName(extracted);
+    }
+  };
+
+  const handleEstimate = async () => {
+    if (!projectName.trim() || !repoUrl.trim()) {
+      toast.error('Project Name and GitHub Repo URL are required.');
       return;
     }
 
@@ -235,28 +249,31 @@ export default function CreatePage() {
               Repository Information
             </CardTitle>
             <CardDescription className="text-xs">
-              Enter the GitHub repository name and clone URL.
+              Enter your GitHub repository URL. The repository name is automatically extracted.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Project Name</Label>
-              <Input
-                placeholder="e.g. reposense-web"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                className="text-xs"
-              />
-            </div>
-
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">GitHub Repository URL</Label>
               <Input
                 placeholder="https://github.com/owner/repository"
                 value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
+                onChange={handleRepoUrlChange}
                 className="text-xs font-mono"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Repository Name</Label>
+              <Input
+                placeholder="Auto-inferred from GitHub repo (e.g. reposense)"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                By default, this matches your GitHub repository name.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -269,104 +286,105 @@ export default function CreatePage() {
                 className="text-xs font-mono"
               />
               <p className="text-[11px] text-muted-foreground">
-                Tokens are encrypted with AES-256-GCM. Public repos do not require a token.
+                Encrypted at rest using AES-GCM. Never exposed to clients.
               </p>
             </div>
+
+            <div className="pt-2 flex justify-end">
+              <Button
+                onClick={handleEstimate}
+                disabled={isEstimating || !projectName.trim() || !repoUrl.trim()}
+                className="gap-2 text-xs"
+              >
+                {isEstimating ? (
+                  <>
+                    <Sparkles className="size-3.5 animate-spin" />
+                    <span>Analyzing GitHub Tree...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Next: Token Estimate</span>
+                    <ArrowRight className="size-3.5" />
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
-          <CardFooter className="justify-end border-t pt-4">
-            <Button
-              size="sm"
-              onClick={runEstimate}
-              disabled={isEstimating || !projectName.trim() || !repoUrl.trim()}
-              className="gap-2 text-xs"
-            >
-              {isEstimating ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Calculating Estimate...
-                </>
-              ) : (
-                <>
-                  Next: Token Estimate
-                  <ArrowRight className="size-3.5" />
-                </>
-              )}
-            </Button>
-          </CardFooter>
         </Card>
       )}
 
-      {/* Step 2: Token & Cost Estimate Card */}
-      {step === 2 && (
+      {/* Step 2: Token Estimate */}
+      {step === 2 && estimateData && (
         <Card className="shadow-xs">
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Calculator className="size-4 text-primary" />
-              Repository Token & Cost Estimate
+              <Coins className="size-4 text-primary" />
+              Pre-Index Token & Cost Estimate
             </CardTitle>
             <CardDescription className="text-xs">
-              Calculated based on repository size, character density, and provider model rates.
+              Based on {estimateData.files} source code files. Verified against your personal API keys.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase">Eligible Files</span>
-                <p className="text-lg font-bold text-foreground mt-0.5">{estimateData?.files ?? 0}</p>
+              <div className="p-3 rounded-lg border bg-muted/20">
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <FileCode className="size-3" />
+                  Files
+                </span>
+                <p className="text-lg font-bold text-foreground mt-1">{estimateData.files}</p>
               </div>
 
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase">Input Tokens</span>
-                <p className="text-lg font-bold text-foreground mt-0.5">
-                  ~{estimateData?.inputTokens ? Math.round(estimateData.inputTokens.min / 1000) : 0}k
+              <div className="p-3 rounded-lg border bg-muted/20">
+                <span className="text-[11px] text-muted-foreground">Input Tokens</span>
+                <p className="text-sm font-semibold text-foreground mt-1">
+                  ~{Math.round((estimateData.inputTokens.min + estimateData.inputTokens.max) / 2 / 1000)}k
                 </p>
               </div>
 
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase">Output Tokens</span>
-                <p className="text-lg font-bold text-foreground mt-0.5">
-                  ~{estimateData?.outputTokens ? Math.round(estimateData.outputTokens.min / 1000) : 0}k
+              <div className="p-3 rounded-lg border bg-muted/20">
+                <span className="text-[11px] text-muted-foreground">Output Tokens</span>
+                <p className="text-sm font-semibold text-foreground mt-1">
+                  ~{Math.round((estimateData.outputTokens.min + estimateData.outputTokens.max) / 2 / 1000)}k
                 </p>
               </div>
 
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase">Est. Cost Range</span>
-                <p className="text-lg font-bold text-emerald-600 mt-0.5">
-                  ${estimateData?.estimatedCostUsd ? estimateData.estimatedCostUsd.min.toFixed(3) : '0.000'} - ${estimateData?.estimatedCostUsd ? estimateData.estimatedCostUsd.max.toFixed(3) : '0.010'}
+              <div className="p-3 rounded-lg border bg-muted/20">
+                <span className="text-[11px] text-muted-foreground">Est. Cost</span>
+                <p className="text-sm font-semibold text-emerald-600 mt-1">
+                  ${estimateData.estimatedCostUsd.min.toFixed(4)} - ${estimateData.estimatedCostUsd.max.toFixed(4)}
                 </p>
               </div>
             </div>
 
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground flex items-center gap-2">
-              <Sparkles className="size-4 text-primary shrink-0" />
-              <span>
-                BYOK Architecture: API tokens are billed directly by your AI provider. RepoSense never charges usage fees or credits.
-              </span>
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-700 dark:text-amber-400">
+              <strong>Note:</strong> Cost range is calculated from public provider pricing. Tokens will be deducted directly from your personal provider quota (BYOK).
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStep(1)}
+                className="gap-1.5 text-xs"
+              >
+                <ArrowLeft className="size-3.5" />
+                <span>Back</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setStep(3)}
+                className="gap-1.5 text-xs"
+              >
+                <span>Next: Model Configuration</span>
+                <ArrowRight className="size-3.5" />
+              </Button>
             </div>
           </CardContent>
-          <CardFooter className="justify-between border-t pt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStep(1)}
-              className="gap-1.5 text-xs"
-            >
-              <ArrowLeft className="size-3.5" />
-              Back
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setStep(3)}
-              className="gap-2 text-xs"
-            >
-              Next: Select Models
-              <ArrowRight className="size-3.5" />
-            </Button>
-          </CardFooter>
         </Card>
       )}
 
-      {/* Step 3: Model Configuration & Verification */}
+      {/* Step 3: Model Configuration */}
       {step === 3 && (
         <Card className="shadow-xs">
           <CardHeader>
@@ -375,113 +393,106 @@ export default function CreatePage() {
               AI Model & Provider Configuration
             </CardTitle>
             <CardDescription className="text-xs">
-              Configure which models will handle chat answering and code embedding.
+              Select your preferred chat reasoning and embedding providers for this repository.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Embedding Provider Lock */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Chat Provider</Label>
-              <Select
-                value={chatProvider}
-                onValueChange={(val) => {
-                  const prov = val as ProviderId;
-                  setChatProvider(prov);
-                  const m = getModelsByProvider(prov);
-                  if (m[0]) setChatModel(m[0].id);
-                }}
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ALL_PROVIDERS.map((p) => (
-                    <SelectItem key={p} value={p} className="text-xs">
-                      {PROVIDER_METADATA[p].displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Chat Model</Label>
-              <Select value={chatModel} onValueChange={setChatModel}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getModelsByProvider(chatProvider).map((m) => (
-                    <SelectItem key={m.id} value={m.id} className="text-xs">
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Embedding Provider (Locked permanently after indexing)</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Embedding Provider (Locked After Indexing)</Label>
+                {!hasEmbeddingKey && (
+                  <Badge variant="destructive" className="text-[10px] gap-1">
+                    <AlertCircle className="size-2.5" />
+                    Missing API Key
+                  </Badge>
+                )}
+              </div>
               <Select
                 value={embeddingProvider}
-                onValueChange={(val) => setEmbeddingProvider(val as any)}
+                onValueChange={(val: any) => setEmbeddingProvider(val)}
               >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select embedding provider" />
+                <SelectTrigger className="text-xs">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GEMINI" className="text-xs">
-                    Google Gemini (gemini-embedding-001 · 768 dimensions)
-                  </SelectItem>
-                  <SelectItem value="OPENAI" className="text-xs">
-                    OpenAI (text-embedding-3-small · 1536 dimensions)
-                  </SelectItem>
+                  <SelectItem value="GEMINI">Google Gemini (gemini-embedding-001 - 768d)</SelectItem>
+                  <SelectItem value="OPENAI">OpenAI (text-embedding-3-small - 1536d)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Embedding dimension is fixed per repository to ensure fast vector search performance.
+              </p>
+            </div>
+
+            {/* Default Chat Provider */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Default Chat Provider</Label>
+              <Select
+                value={chatProvider}
+                onValueChange={(val: any) => setChatProvider(val)}
+              >
+                <SelectTrigger className="text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GEMINI">Google Gemini</SelectItem>
+                  <SelectItem value="OPENAI">OpenAI</SelectItem>
+                  <SelectItem value="ANTHROPIC">Anthropic Claude</SelectItem>
+                  <SelectItem value="GROQ">Groq</SelectItem>
+                  <SelectItem value="DEEPSEEK">DeepSeek</SelectItem>
+                  <SelectItem value="XAI">xAI Grok</SelectItem>
+                  <SelectItem value="META">Meta Model</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Verification warning if required keys are missing */}
+            {/* Provider Key Missing Warning */}
             {!hasEmbeddingKey && (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="size-4 shrink-0" />
-                  <span>Missing {embeddingProvider} API Key in your vault.</span>
+              <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-xs text-destructive space-y-1">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <AlertCircle className="size-3.5" />
+                  API Key Required for {embeddingProvider}
                 </div>
-                <Link href="/settings?tab=api" className="font-semibold underline flex items-center gap-1">
-                  <span>Add in Settings</span>
-                  <ExternalLink className="size-3" />
+                <p className="text-[11px]">
+                  You must configure a valid {embeddingProvider} API key in your Key Vault before indexing.
+                </p>
+                <Link href="/settings" className="inline-block mt-1 font-semibold underline text-primary">
+                  Go to Settings & Key Vault →
                 </Link>
               </div>
             )}
+
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStep(2)}
+                className="gap-1.5 text-xs"
+              >
+                <ArrowLeft className="size-3.5" />
+                <span>Back</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleFinish}
+                disabled={isSubmitting || !hasEmbeddingKey}
+                className="gap-1.5 text-xs"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Sparkles className="size-3.5 animate-spin" />
+                    <span>Creating & Launching Workflow...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="size-3.5" />
+                    <span>Start Indexing Repository</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
-          <CardFooter className="justify-between border-t pt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStep(2)}
-              className="gap-1.5 text-xs"
-            >
-              <ArrowLeft className="size-3.5" />
-              Back
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleFinish}
-              disabled={isSubmitting || !hasEmbeddingKey}
-              className="gap-2 text-xs"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Creating Project...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="size-3.5" />
-                  Start Indexing Repository
-                </>
-              )}
-            </Button>
-          </CardFooter>
         </Card>
       )}
     </div>

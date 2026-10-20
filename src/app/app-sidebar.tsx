@@ -1,152 +1,219 @@
-"use client"
+'use client';
 
-import { Bot, LayoutDashboard, PanelRightClose, Plus } from "lucide-react"
-import Image from "next/image"
-import { useRouter, usePathname } from "next/navigation"
-import { Button } from "~/components/ui/button"
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "~/components/ui/sidebar"
-import useProject from "~/hooks/use-project"
-import { cn } from "~/lib/utils"
-import { motion, AnimatePresence } from "framer-motion"
-import Link from "next/link"
+import * as React from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
+import {
+  MessageSquare,
+  Bot,
+  Video,
+  GitPullRequest,
+  Settings,
+  Plus,
+  PanelLeftClose,
+  PanelLeft,
+  ChevronRight,
+  FolderGit2,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from '~/components/ui/sidebar';
+import { Button } from '~/components/ui/button';
+import useProject from '~/hooks/use-project';
+import { cn } from '~/lib/utils';
 
-const items = [
+const navItems = [
   {
-    title: "Dashboard",
-    icon: LayoutDashboard,
-    url: "/dashboard"
+    title: 'Overview',
+    icon: MessageSquare,
+    url: '/dashboard',
   },
   {
-    title: "Q&A",
+    title: 'Q&A History',
     icon: Bot,
-    url: "/qa"
+    url: '/qa',
   },
   {
-    title: "Meetings",
-    icon: Bot,
-    url: "/meetings"
-  }
-]
+    title: 'Pull Requests',
+    icon: GitPullRequest,
+    url: '/pull-requests',
+  },
+  {
+    title: 'Meetings',
+    icon: Video,
+    url: '/meetings',
+  },
+];
 
 export function AppSideBar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { open, setOpen } = useSidebar()
-  const { projects, projectId, setProjectId } = useProject()
+  const pathname = usePathname();
+  const router = useRouter();
+  const { open, setOpen } = useSidebar();
+  const { projects, projectId, setProjectId } = useProject();
 
   return (
-    <motion.div
-      initial={{ x: -40, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: -40, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="h-full"
-    >
-      <Sidebar collapsible="icon" variant="floating">
-        <SidebarHeader>
-          <div className="flex items-center gap-2">
-            <Image src="/logo.png" alt="Logo" width={40} height={40} />
-            <AnimatePresence>
-              {open && (
-                <motion.div
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="flex items-center gap-2"
-                >
-                  <h1 className="text-xl font-semibold text-primary">
-                    Reposense
-                  </h1>
-                  <button
-                    type="button"
-                    className="ml-2 p-1 rounded hover:bg-gray-100 transition"
-                    onClick={() => setOpen(false)}
-                    aria-label="Close sidebar"
-                  >
-                     <PanelRightClose className="w-5 mt-1 h-6 text-primary" />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>
-              {/* Application */}
+    <Sidebar collapsible="icon" className="border-r border-border bg-sidebar">
+      {/* Top Header: Logo & Toggle */}
+      <SidebarHeader className="border-b border-border/40 p-3">
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
+            <div className="relative size-8 shrink-0 overflow-hidden rounded-lg">
+              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" />
+            </div>
+            {open && (
+              <span className="font-bold text-base tracking-tight text-foreground">
+                Repo<span className="text-primary">Sense</span>
+              </span>
+            )}
+          </Link>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setOpen(!open)}
+            className="size-7 text-muted-foreground hover:text-foreground"
+            aria-label="Toggle sidebar"
+          >
+            {open ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
+          </Button>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="p-2 gap-4">
+        {/* Active Project Navigation Items */}
+        <SidebarGroup>
+          {open && (
+            <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+              Project Tools
             </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {items.map(item => {
-                  const Icon = item.icon
-                  return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        onClick={() => router.push(item.url)}
+          )}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.url;
+
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      onClick={() => router.push(item.url)}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      {open && <span>{item.title}</span>}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Projects Section */}
+        <SidebarGroup>
+          <div className="flex items-center justify-between px-2 py-1">
+            {open && (
+              <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider p-0">
+                Repositories
+              </SidebarGroupLabel>
+            )}
+            {open && (
+              <Link href="/create">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                  aria-label="Create new project"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              </Link>
+            )}
+          </div>
+
+          <SidebarGroupContent className="mt-1">
+            <SidebarMenu>
+              {projects?.map((proj) => {
+                const isCurrent = proj.id === projectId;
+
+                return (
+                  <SidebarMenuItem key={proj.id}>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setProjectId(proj.id);
+                        if (pathname !== '/dashboard') {
+                          router.push('/dashboard');
+                        }
+                      }}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-colors',
+                        isCurrent
+                          ? 'bg-muted text-foreground font-semibold'
+                          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                      )}
+                    >
+                      <div
                         className={cn(
-                          pathname === item.url && '!bg-primary !text-white'
+                          'flex size-5 shrink-0 items-center justify-center rounded text-[10px] font-bold uppercase transition-colors',
+                          isCurrent
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted-foreground/20 text-foreground'
                         )}
                       >
-                        <Icon className="mr-2" />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupLabel>
-              Your Projects
-            </SidebarGroupLabel>
-             <SidebarContent>
-                   <SidebarMenu>
-                      {projects?.map(project =>{
-                        return(
-                           <SidebarMenuItem key={project.name}>
-                              <SidebarMenuButton asChild>
-                                 <div onClick={()=>{
-                                  setProjectId(project.id)
-                                 }}>
-                                    <div className={cn(
-                                       'rounded-sm border size-6 flex items-center justify-center text-sm bg-white text-primary',{
-                                          'bg-primary text-white': project.id===projectId
-
-                                       }
-                                    )}>
-                                      {/* i made a change */}
-                                       {project.name[0]!.toUpperCase()}
-
-                                    </div>
-
-                                    <span className="ml-2 text-sm">
-                                       {project.name}
-                                    </span>
-                                 </div>
-                              </SidebarMenuButton>
-                           </SidebarMenuItem>
-                        )
-                      })}
-                       <div className="mt-2">
-                      {open &&
-                       <SidebarMenuItem>
-                     <Link href="/create">
-                     <Button size="sm" variant="outline" className="w-fit">
-                        <Plus className="mr-2" />
-                        Create Project
-                       </Button>
-                     
-                     </Link>
-                        </SidebarMenuItem>
-                         }
-                      
+                        {proj.name[0]}
                       </div>
-                     </SidebarMenu>
-                  </SidebarContent>
-          </SidebarGroup>
-        </SidebarContent>
-      </Sidebar>
-    </motion.div>
-  )
+                      {open && <span className="truncate flex-1 text-left">{proj.name}</span>}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+
+              {open && (!projects || projects.length === 0) && (
+                <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                  No repositories linked yet.
+                </div>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      {/* Bottom Footer: Settings Navigation */}
+      <SidebarFooter className="border-t border-border/40 p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => router.push('/settings')}
+              className={cn(
+                'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
+                pathname === '/settings'
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              <Settings className="size-4 shrink-0" />
+              {open && <span>Settings</span>}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
 }

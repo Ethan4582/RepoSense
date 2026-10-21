@@ -3,7 +3,6 @@
  *
  * Web Crypto API based AES-256-GCM encryption, decryption, and key fingerprinting.
  * Runtime-agnostic: fully compatible with Cloudflare Workers and Node.js 18+.
- * Reference: reposense_revamp_migration_feature_plan.md (Phase 5)
  */
 
 export interface EncryptedParts {

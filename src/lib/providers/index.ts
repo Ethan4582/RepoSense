@@ -31,6 +31,76 @@ export { META_DEFAULT_PROVIDER_OPTIONS } from './meta';
 export { GROQ_ALLOWED_MODELS } from './groq';
 
 /**
+ * Normalizes modern provider models (spec version v4) to be compatible with AI SDK v4 (spec version v1).
+ */
+export function ensureV1LanguageModel(model: any): AnyChatModel {
+  if (!model || model.specificationVersion === 'v1') return model;
+
+  return new Proxy(model, {
+    get(target, prop, receiver) {
+      if (prop === 'specificationVersion') return 'v1';
+      if (prop === 'doGenerate') {
+        return async (options: any) => {
+          const res = await target.doGenerate(options);
+          const extractedText =
+            res.text ??
+            (Array.isArray(res.content)
+              ? res.content
+                  .filter((c: any) => c.type === 'text')
+                  .map((c: any) => c.text)
+                  .join('')
+              : '');
+          return {
+            ...res,
+            text: extractedText,
+          };
+        };
+      }
+      if (prop === 'doStream') {
+        return async (options: any) => {
+          const res = await target.doStream(options);
+          const origStream = res.stream;
+          const reader = origStream.getReader();
+          const transformedStream = new ReadableStream({
+            async pull(controller) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                  controller.close();
+                  return;
+                }
+                if (value.type === 'text-delta') {
+                  controller.enqueue({
+                    ...value,
+                    textDelta: value.delta ?? value.textDelta ?? '',
+                  });
+                  return;
+                } else if (
+                  value.type === 'finish' ||
+                  value.type === 'error' ||
+                  value.type === 'tool-call'
+                ) {
+                  controller.enqueue(value);
+                  return;
+                }
+              }
+            },
+            cancel(reason) {
+              return reader.cancel(reason);
+            },
+          });
+          return {
+            ...res,
+            stream: transformedStream,
+          };
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+/**
  * Returns an instantiated model instance for the target provider and model ID.
  *
  * @param provider Target LLM provider ('OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'META' | 'DEEPSEEK' | 'XAI' | 'GROQ')
@@ -42,21 +112,29 @@ export function getModel(
   modelId: string,
   apiKey: string
 ): AnyChatModel {
+  let model: AnyChatModel;
   switch (provider) {
     case 'OPENAI':
-      return openaiAdapter.getChatModel(modelId, apiKey);
+      model = openaiAdapter.getChatModel(modelId, apiKey);
+      break;
     case 'ANTHROPIC':
-      return anthropicAdapter.getChatModel(modelId, apiKey);
+      model = anthropicAdapter.getChatModel(modelId, apiKey);
+      break;
     case 'GEMINI':
-      return geminiAdapter.getChatModel(modelId, apiKey);
+      model = geminiAdapter.getChatModel(modelId, apiKey);
+      break;
     case 'META':
-      return metaAdapter.getChatModel(modelId, apiKey);
+      model = metaAdapter.getChatModel(modelId, apiKey);
+      break;
     case 'DEEPSEEK':
-      return deepseekAdapter.getChatModel(modelId, apiKey);
+      model = deepseekAdapter.getChatModel(modelId, apiKey);
+      break;
     case 'XAI':
-      return xaiAdapter.getChatModel(modelId, apiKey);
+      model = xaiAdapter.getChatModel(modelId, apiKey);
+      break;
     case 'GROQ':
-      return groqAdapter.getChatModel(modelId, apiKey);
+      model = groqAdapter.getChatModel(modelId, apiKey);
+      break;
     default: {
       const _exhaustive: never = provider;
       throw new ProviderError(
@@ -65,6 +143,7 @@ export function getModel(
       );
     }
   }
+  return ensureV1LanguageModel(model);
 }
 
 /**
@@ -97,12 +176,8 @@ export function getEmbeddingModel(
 
 /**
  * Validates a user's API key with a fast network ping and normalized error diagnostics.
- *
- * @param provider Provider enum
- * @param apiKey User's plaintext API key
- * @returns { valid: true } or { valid: false, error: ProviderError }
  */
-export async function validateProviderKey(
+export async function validateApiKey(
   provider: ProviderId,
   apiKey: string
 ): Promise<VerifyResult> {
@@ -125,43 +200,10 @@ export async function validateProviderKey(
       const _exhaustive: never = provider;
       throw new ProviderError(
         'PROVIDER_ERROR',
-        `Unsupported provider for key verification: ${String(_exhaustive)}`
+        `Unsupported provider identifier: ${String(_exhaustive)}`
       );
     }
   }
 }
 
-/**
- * Returns all supported models for a provider, prioritizing the curated static catalog.
- *
- * @param provider Provider enum
- * @param apiKey Optional key for future dynamic metadata enrichment
- */
-export async function listProviderModels(
-  provider: ProviderId,
-  apiKey?: string
-): Promise<ModelInfo[]> {
-  switch (provider) {
-    case 'OPENAI':
-      return openaiAdapter.listModels(apiKey);
-    case 'ANTHROPIC':
-      return anthropicAdapter.listModels(apiKey);
-    case 'GEMINI':
-      return geminiAdapter.listModels(apiKey);
-    case 'META':
-      return metaAdapter.listModels(apiKey);
-    case 'DEEPSEEK':
-      return deepseekAdapter.listModels(apiKey);
-    case 'XAI':
-      return xaiAdapter.listModels(apiKey);
-    case 'GROQ':
-      return groqAdapter.listModels(apiKey);
-    default: {
-      const _exhaustive: never = provider;
-      throw new ProviderError(
-        'PROVIDER_ERROR',
-        `Unsupported provider for model listing: ${String(_exhaustive)}`
-      );
-    }
-  }
-}
+export { validateApiKey as validateProviderKey };

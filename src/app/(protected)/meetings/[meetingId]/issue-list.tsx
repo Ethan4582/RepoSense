@@ -80,7 +80,7 @@ export default function IssuesList({ meetingId }: Props) {
   }
 
   // Extract owner & repo for GitHub issue creation link
-  const githubRepoBase = project?.repoUrl?.replace(/\.git$/, '') ?? '';
+  const githubRepoBase = ((meeting as any)?.project?.repoUrl ?? project?.repoUrl)?.replace(/\.git$/, '') ?? '';
 
   const getGithubIssueUrl = (issue: IssueType) => {
     if (!githubRepoBase) return '#';
@@ -127,175 +127,157 @@ export default function IssuesList({ meetingId }: Props) {
               </span>
               <span>•</span>
               <span className="font-medium text-foreground">
-                {meeting.issues.length} {meeting.issues.length === 1 ? 'Actionable Issue' : 'Actionable Issues'}
+                {meeting.issues?.length ?? 0} actionable items extracted
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Notion Callout: Executive Summary */}
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs space-y-1.5">
-        <div className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
-          <Lightbulb className="size-4" />
-          <span>Executive Summary</span>
-        </div>
-        <p className="text-foreground leading-relaxed">
-          {meeting.issues.length > 0
-            ? `Discussion focused on ${meeting.issues.map((i) => i.gist).slice(0, 3).join(', ')}. Action items and architectural tasks were identified and isolated below with direct GitHub issue export.`
-            : 'Audio processing completed. No critical blockers were identified during transcription.'}
-        </p>
-      </div>
-
-      {/* Embedded Audio Playback Strip */}
+      {/* Audio Player Card */}
       {meeting.meetingUrl && (
-        <div className="rounded-xl border bg-muted/20 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="p-4 rounded-xl border bg-card/60 backdrop-blur-xs space-y-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="font-medium flex items-center gap-1.5 text-foreground">
+              <Volume2 className="size-4 text-primary" />
+              Recording Audio Player
+            </span>
+            <div className="flex items-center gap-1">
+              {[1, 1.25, 1.5, 2].map((speed) => (
+                <button
+                  key={speed}
+                  type="button"
+                  onClick={() => handleSpeedChange(speed)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition-colors ${
+                    playbackRate === speed
+                      ? 'bg-primary text-primary-foreground font-bold'
+                      : 'hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <Button
               size="icon"
-              variant="secondary"
+              variant="outline"
               onClick={toggleAudio}
-              className="size-8 rounded-full shrink-0 shadow-xs"
+              className="size-9 rounded-full shrink-0 shadow-2xs"
             >
-              {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5 ml-0.5" />}
+              {isPlaying ? <Pause className="size-4" /> : <Play className="size-4 ml-0.5" />}
             </Button>
-            <div className="space-y-0.5">
-              <span className="text-xs font-semibold text-foreground flex items-center gap-1">
-                <Volume2 className="size-3 text-primary" />
-                Audio Recording Playback
-              </span>
-              <p className="text-[11px] text-muted-foreground font-mono">
-                Speed: {playbackRate}x
-              </p>
-            </div>
-          </div>
-
-          <audio
-            ref={audioRef}
-            src={meeting.meetingUrl}
-            onEnded={() => setIsPlaying(false)}
-            className="hidden"
-          />
-
-          <div className="flex items-center gap-1 self-end sm:self-center">
-            {[1, 1.25, 1.5, 2].map((speed) => (
-              <button
-                key={speed}
-                type="button"
-                onClick={() => handleSpeedChange(speed)}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors ${
-                  playbackRate === speed
-                    ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {speed}x
-              </button>
-            ))}
+            <audio
+              ref={audioRef}
+              src={meeting.meetingUrl}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => setIsPlaying(false)}
+              className="w-full h-8"
+              controls
+            />
           </div>
         </div>
       )}
 
-      {/* Extracted Issues (Notion Inline Toggles ▸ / ▾ — No Modal Popups!) */}
-      <div className="space-y-3 pt-2">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <span>Actionable Issues ({meeting.issues.length})</span>
-        </h2>
+      {/* Issues / Notion Document View */}
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center justify-between border-b pb-2">
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider flex items-center gap-2">
+            <Lightbulb className="size-4 text-amber-500" />
+            Extracted Tasks & GitHub Issues ({meeting.issues?.length ?? 0})
+          </h2>
+          <span className="text-[11px] text-muted-foreground">
+            Click an item to expand details & create GitHub issue
+          </span>
+        </div>
 
-        {meeting.issues.length === 0 ? (
-          <div className="rounded-xl border bg-muted/20 p-6 text-center text-xs text-muted-foreground">
-            No issues extracted from this meeting.
+        {meeting.issues?.length === 0 ? (
+          <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-xl space-y-1">
+            <p className="font-medium text-foreground">No issues identified in this recording.</p>
+            <p>Our pipeline analyzes audio for decisions, action items, and bug discussions.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {meeting.issues.map((issue, index) => {
               const isExpanded = !!expandedIssueIds[issue.id];
+
               return (
-                <div
+                <Collapsible
                   key={issue.id}
-                  className="rounded-xl border bg-card overflow-hidden shadow-xs transition-all"
+                  open={isExpanded}
+                  onOpenChange={() => toggleExpand(issue.id)}
+                  className="border rounded-xl bg-card overflow-hidden transition-all shadow-xs"
                 >
-                  <Collapsible
-                    open={isExpanded}
-                    onOpenChange={() => toggleExpand(issue.id)}
-                  >
-                    {/* Toggle Header: ▸ / ▾ Issue #X: Gist [start - end] [Create GitHub Issue ↗] */}
-                    <div className="flex items-center justify-between p-3.5 hover:bg-muted/40 transition-colors gap-3">
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex items-center gap-2.5 text-left flex-1 min-w-0 cursor-pointer"
-                        >
-                          <span className="text-muted-foreground">
-                            {isExpanded ? (
-                              <ChevronDown className="size-4 text-foreground" />
-                            ) : (
-                              <ChevronRight className="size-4" />
-                            )}
-                          </span>
-                          <span className="font-semibold text-xs text-foreground truncate">
-                            Issue #{index + 1}: {issue.gist}
-                          </span>
-                          <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground shrink-0">
-                            {issue.start} – {issue.end}
-                          </Badge>
-                        </button>
-                      </CollapsibleTrigger>
+                  <CollapsibleTrigger asChild>
+                    <div className="p-4 flex items-start justify-between gap-4 cursor-pointer hover:bg-muted/30 transition-colors">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <span className="size-5 rounded-full bg-primary/10 text-primary text-[10px] font-mono font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          {index + 1}
+                        </span>
+                        <div className="space-y-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-foreground hover:text-primary transition-colors">
+                            {issue.gist}
+                          </h3>
+                          <p className="text-xs text-muted-foreground line-clamp-1">
+                            {issue.headline}
+                          </p>
+                        </div>
+                      </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        {githubRepoBase && (
+                        <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                          {issue.start} - {issue.end}
+                        </Badge>
+                        <div className="p-1 rounded text-muted-foreground hover:text-foreground">
+                          {isExpanded ? (
+                            <ChevronDown className="size-4" />
+                          ) : (
+                            <ChevronRight className="size-4" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <div className="px-5 pb-5 pt-2 border-t bg-muted/10 space-y-4 text-xs leading-relaxed">
+                      <div>
+                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                          Full Summary & Action Item
+                        </h4>
+                        <p className="text-foreground whitespace-pre-wrap rounded-lg bg-background border p-3">
+                          {issue.summary}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <span className="text-[11px] text-muted-foreground">
+                          Context window: {issue.start} to {issue.end}
+                        </span>
+
+                        {githubRepoBase ? (
                           <Link
                             href={getGithubIssueUrl(issue)}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                           >
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs px-2.5 gap-1.5 font-medium"
-                            >
+                            <Button size="sm" className="h-7 text-xs gap-1.5 shadow-xs">
                               <span>Create GitHub Issue</span>
                               <ExternalLink className="size-3" />
                             </Button>
                           </Link>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground italic">
+                            No GitHub repository linked to this meeting
+                          </span>
                         )}
                       </div>
                     </div>
-
-                    {/* Inline Expanded Content (Notion Document Body) */}
-                    <CollapsibleContent>
-                      <div className="px-4 pb-4 pt-1 space-y-3 border-t bg-muted/10 text-xs">
-                        {/* Headline */}
-                        <div className="pt-2">
-                          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
-                            Topic Headline
-                          </span>
-                          <p className="font-medium text-foreground">
-                            {issue.headline}
-                          </p>
-                        </div>
-
-                        {/* Summary Callout */}
-                        <div className="rounded-lg border bg-background p-3 space-y-1">
-                          <span className="text-[11px] font-semibold text-primary uppercase tracking-wider block">
-                            Summary & Technical Context
-                          </span>
-                          <p className="text-foreground leading-relaxed">
-                            {issue.summary}
-                          </p>
-                        </div>
-
-                        {/* Transcript Chunk Block */}
-                        <div className="rounded-lg border-l-2 border-primary bg-muted/40 p-3 font-mono text-[11px] text-muted-foreground leading-relaxed">
-                          <span className="text-[10px] font-bold text-foreground block mb-1">
-                            Transcript Chunk ({issue.start} – {issue.end})
-                          </span>
-                          &ldquo;{issue.summary}&rdquo;
-                        </div>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
               );
             })}
           </div>

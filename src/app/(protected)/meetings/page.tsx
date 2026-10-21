@@ -33,31 +33,33 @@ import {
   DialogTitle,
   DialogDescription,
 } from '~/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
 
 export default function MeetingsPage() {
-  const { projectId, project } = useProject();
+  const { projectId, project, projects, setProjectId } = useProject();
+  const [selectedProjectFilter, setSelectedProjectFilter] = React.useState<string>(projectId ?? 'all');
   const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    if (projectId && selectedProjectFilter === 'all') {
+      setSelectedProjectFilter(projectId);
+    }
+  }, [projectId]);
+
+  const queryProjectId = selectedProjectFilter === 'all' ? undefined : selectedProjectFilter;
+
   const { data: meetings, isLoading } = api.project.getMeetings.useQuery(
-    { projectId: projectId ?? '' },
-    { refetchInterval: 5000, enabled: !!projectId }
+    { projectId: queryProjectId },
+    { refetchInterval: 5000 }
   );
   const deleteMeeting = api.project.deleteMeeting.useMutation();
   const refetch = useRefetch();
-
-  if (!project) {
-    return (
-      <div className="flex h-[75vh] flex-col items-center justify-center text-center p-6">
-        <div className="rounded-full bg-primary/10 p-4 text-primary mb-4">
-          <FolderGit2 className="size-8" />
-        </div>
-        <h2 className="text-xl font-semibold text-foreground">No Project Selected</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          Select a project from the sidebar to view audio recordings and extracted issues.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full w-full max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
@@ -69,12 +71,48 @@ export default function MeetingsPage() {
             Meetings & Issues
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Audio transcripts and Notion-style issue extraction for{' '}
-            <strong className="text-foreground">{project.name}</strong>.
+            Audio transcripts and Notion-style issue extraction
+            {project && selectedProjectFilter !== 'all' ? (
+              <>
+                {' for '}
+                <strong className="text-foreground">{project.name}</strong>
+              </>
+            ) : (
+              ' across all linked repositories'
+            )}.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Repository Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Repository:</span>
+            <Select
+              value={selectedProjectFilter}
+              onValueChange={(val) => {
+                setSelectedProjectFilter(val);
+                if (val !== 'all') {
+                  setProjectId(val);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 min-w-[180px] max-w-[260px] text-xs gap-2 border-border/80 bg-background">
+                <FolderGit2 className="size-3.5 text-primary shrink-0" />
+                <SelectValue placeholder="All Repositories" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="all" className="text-xs font-medium">
+                  All Repositories
+                </SelectItem>
+                {projects?.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                    <span className="font-medium truncate">{p.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button
             size="sm"
             onClick={() => setUploadDialogOpen(true)}
@@ -86,7 +124,7 @@ export default function MeetingsPage() {
         </div>
       </div>
 
-      {/* Notion-Style Document List (No Clunky Boxy Cards) */}
+      {/* Notion-Style Document List */}
       <div className="rounded-xl border bg-card overflow-hidden shadow-xs">
         <div className="border-b bg-muted/20 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Processed Recordings ({meetings?.length ?? 0})</span>
@@ -98,20 +136,22 @@ export default function MeetingsPage() {
             <span>Loading meeting documents...</span>
           </div>
         ) : !meetings || meetings.length === 0 ? (
-          <div className="p-12 text-center text-xs text-muted-foreground space-y-2">
+          <div className="p-12 text-center text-xs text-muted-foreground space-y-3">
             <FileText className="size-8 mx-auto text-muted-foreground/40" />
             <p className="font-medium text-foreground">No meetings recorded yet.</p>
-            <p className="text-[11px]">
-              Upload audio recordings from your design sprints or standups to automatically extract GitHub issues.
+            <p className="text-[11px] max-w-sm mx-auto leading-relaxed">
+              Upload audio recordings from your design sprints or standups to automatically transcribe and extract actionable GitHub issues.
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setUploadDialogOpen(true)}
-              className="mt-2 text-xs"
-            >
-              Upload First Audio Recording
-            </Button>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUploadDialogOpen(true)}
+                className="h-7 text-xs"
+              >
+                Upload First Recording
+              </Button>
+            </div>
           </div>
         ) : (
           <ul className="divide-y divide-border">
@@ -130,13 +170,22 @@ export default function MeetingsPage() {
                     </div>
 
                     <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
                         <Link
                           href={`/meetings/${meeting.id}`}
                           className="text-sm font-semibold text-foreground hover:text-primary transition-colors truncate"
                         >
                           {meeting.name}
                         </Link>
+
+                        {/* Project Badge if viewing All Repositories */}
+                        {selectedProjectFilter === 'all' && (meeting as any).project?.name && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
+                            <FolderGit2 className="size-2.5 text-primary" />
+                            {(meeting as any).project.name}
+                          </Badge>
+                        )}
+
                         {isProcessing ? (
                           <Badge variant="outline" className="text-[10px] border-amber-500/20 bg-amber-500/10 text-amber-600 animate-pulse">
                             Processing Audio...
@@ -223,7 +272,7 @@ export default function MeetingsPage() {
           </DialogHeader>
 
           <div className="py-2">
-            <MeetCard />
+            <MeetCard overrideProjectId={selectedProjectFilter !== 'all' ? selectedProjectFilter : undefined} />
           </div>
         </DialogContent>
       </Dialog>

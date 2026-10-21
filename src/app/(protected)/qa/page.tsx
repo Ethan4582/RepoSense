@@ -24,6 +24,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
 import { Input } from '~/components/ui/input';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -38,21 +45,31 @@ type CitationFile = {
 
 export default function QaBookmarksPage() {
   const router = useRouter();
-  const { projectId, project } = useProject();
+  const { projectId, project, projects, setProjectId } = useProject();
+  const [selectedProjectFilter, setSelectedProjectFilter] = React.useState<string>(projectId ?? 'all');
   const [search, setSearch] = React.useState('');
+
+  React.useEffect(() => {
+    if (projectId && selectedProjectFilter === 'all') {
+      setSelectedProjectFilter(projectId);
+    }
+  }, [projectId]);
+
+  const queryProjectId = selectedProjectFilter === 'all' ? undefined : selectedProjectFilter;
 
   // Inspector state
   const [inspectorOpen, setInspectorOpen] = React.useState(false);
   const [inspectorFiles, setInspectorFiles] = React.useState<CitationFile[]>([]);
   const [activeFileIndex, setActiveFileIndex] = React.useState(0);
+  const [activeRepoUrl, setActiveRepoUrl] = React.useState<string | undefined>(undefined);
 
   const {
     data: bookmarks,
     isLoading,
     refetch,
   } = api.project.getBookmarkedQuestions.useQuery(
-    { projectId: projectId ?? '', query: search },
-    { enabled: !!projectId }
+    { projectId: queryProjectId, query: search },
+    { refetchInterval: 5000 }
   );
 
   const toggleBookmarkMutation = api.project.toggleBookmarkQuestion.useMutation({
@@ -63,28 +80,15 @@ export default function QaBookmarksPage() {
     onError: () => toast.error('Failed to remove bookmark'),
   });
 
-  const openInspector = (refs: CitationFile[], index = 0) => {
+  const openInspector = (refs: CitationFile[], index = 0, repoUrl?: string) => {
     if (!refs || refs.length === 0) return;
     setInspectorFiles(refs);
     setActiveFileIndex(index);
+    setActiveRepoUrl(repoUrl ?? project?.repoUrl);
     setInspectorOpen(true);
   };
 
   const activeInspectorFile = inspectorFiles[activeFileIndex] ?? null;
-
-  if (!project) {
-    return (
-      <div className="flex h-[75vh] flex-col items-center justify-center text-center p-6">
-        <div className="rounded-full bg-primary/10 p-4 text-primary mb-4">
-          <FolderGit2 className="size-8" />
-        </div>
-        <h2 className="text-xl font-semibold text-foreground">No Project Selected</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          Select a project from the sidebar to view bookmarked questions and answers.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full w-full max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
@@ -96,20 +100,58 @@ export default function QaBookmarksPage() {
             QA Bookmarks Vault
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Searchable knowledge base of bookmarked inquiries and code citations for{' '}
-            <strong className="text-foreground">{project.name}</strong>.
+            Searchable knowledge base of bookmarked inquiries and code citations
+            {project && selectedProjectFilter !== 'all' ? (
+              <>
+                {' for '}
+                <strong className="text-foreground">{project.name}</strong>
+              </>
+            ) : (
+              ' across all linked repositories'
+            )}.
           </p>
         </div>
 
-        {/* Real-time search */}
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Search saved answers & files..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-xs bg-muted/20"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Repository Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Repository:</span>
+            <Select
+              value={selectedProjectFilter}
+              onValueChange={(val) => {
+                setSelectedProjectFilter(val);
+                if (val !== 'all') {
+                  setProjectId(val);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 min-w-[180px] max-w-[260px] text-xs gap-2 border-border/80 bg-background">
+                <FolderGit2 className="size-3.5 text-primary shrink-0" />
+                <SelectValue placeholder="All Repositories" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="all" className="text-xs font-medium">
+                  All Repositories
+                </SelectItem>
+                {projects?.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                    <span className="font-medium truncate">{p.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Real-time search */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search saved answers & files..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 h-8 text-xs bg-muted/20"
+            />
+          </div>
         </div>
       </div>
 
@@ -125,19 +167,20 @@ export default function QaBookmarksPage() {
             <span>Searching bookmarked questions...</span>
           </div>
         ) : !bookmarks || bookmarks.length === 0 ? (
-          <div className="p-12 text-center text-xs text-muted-foreground space-y-2">
+          <div className="p-12 text-center text-xs text-muted-foreground space-y-3">
             <Bookmark className="size-8 mx-auto text-muted-foreground/30" />
             <p className="font-medium text-foreground">
               {search ? 'No matching bookmarks found.' : 'No bookmarked Q&As yet.'}
             </p>
-            <p className="text-[11px]">
-              When chatting with the AI assistant in Chat & Discussions, click &quot;Save to QA History&quot; on any answer to bookmark it here.
+            <p className="text-[11px] max-w-sm mx-auto leading-relaxed">
+              When chatting with the AI assistant in Chat & Discussions, click &quot;Save to QA History&quot; on any answer to bookmark key inquiries and code citations here.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {bookmarks.map((b) => {
               const fileRefs = (Array.isArray(b.fileReference) ? b.fileReference : []) as unknown as CitationFile[];
+              const repoUrl = (b as any).project?.repoUrl ?? project?.repoUrl;
 
               return (
                 <div
@@ -156,6 +199,14 @@ export default function QaBookmarksPage() {
                         <h3 className="font-semibold text-sm text-foreground">
                           {b.question}
                         </h3>
+
+                        {/* Project Badge if in All Repositories view */}
+                        {selectedProjectFilter === 'all' && (b as any).project?.name && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
+                            <FolderGit2 className="size-2.5 text-primary" />
+                            {(b as any).project.name}
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -170,7 +221,7 @@ export default function QaBookmarksPage() {
                         {b.user && (
                           <>
                             <span>•</span>
-                            <span>Asked by {b.user.firstName}</span>
+                            <span>Asked by {b.user.firstName || b.user.emailAddress}</span>
                           </>
                         )}
                       </div>
@@ -228,7 +279,7 @@ export default function QaBookmarksPage() {
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => openInspector(fileRefs, idx)}
+                          onClick={() => openInspector(fileRefs, idx, repoUrl)}
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded border bg-background hover:bg-muted text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                         >
                           <Code2 className="size-2.5" />
@@ -254,9 +305,9 @@ export default function QaBookmarksPage() {
                 <span className="truncate">{activeInspectorFile?.fileName ?? 'File Inspector'}</span>
               </SheetTitle>
 
-              {project?.repoUrl && activeInspectorFile && (
+              {activeRepoUrl && activeInspectorFile && (
                 <Link
-                  href={`${project.repoUrl}/blob/main/${activeInspectorFile.fileName}`}
+                  href={`${activeRepoUrl.replace(/\.git$/, '')}/blob/main/${activeInspectorFile.fileName}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"

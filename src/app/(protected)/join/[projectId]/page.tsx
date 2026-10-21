@@ -1,57 +1,55 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { db } from '~/server/db'
-import { redirect } from 'next/navigation'
+import { auth, clerkClient } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
+import { db } from '~/server/db';
 
 type Props = {
-    params: Promise<{ projectId: string }>
+    params: Promise<{ projectId: string }>;
 }
 
 const JoinHandler = async (props: Props) => {
-    const { projectId } = await props.params
-    const { userId } = await auth()
-    if (!userId) return redirect("/sign-in")
-    const dbUser = await db.user.findUnique({
-        where: {
-            id: userId
-        }
-    })
-    const client = await clerkClient()
-    const user = await client.users.getUser(userId)
+    const { projectId } = await props.params;
+    const { userId } = await auth();
+    if (!userId) return redirect("/sign-in");
 
-    // Check if a user with this email already exists
-    const existingEmailUser = await db.user.findUnique({
-      where: { emailAddress: user.emailAddresses?.[0]?.emailAddress }
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+
+    const dbUser = await db.user.findUnique({
+        where: { id: userId }
     });
 
-    if (!dbUser && !existingEmailUser) {
-      await db.user.create({
-        data: {
-          id: userId,
-          emailAddress: user.emailAddresses?.[0]?.emailAddress ?? "",
-          imageUrl: user.imageUrl,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        }
-      });
+    if (!dbUser) {
+        await db.user.create({
+            data: {
+                id: userId,
+                emailAddress: user.emailAddresses[0]!.emailAddress,
+                imageUrl: user.imageUrl,
+                firstName: user.firstName,
+                lastName: user.lastName,
+            }
+        });
     }
-   const project = await db.project.findUnique({
-    where: {
-        id: projectId
-    }
-})
-if (!project) return redirect("/dashboard")
-try {
-    await db.userToProject.create({
-        data: {
-            userId,
-            projectId
-        }
-    })
-} catch {
-    console.log('user already in project')
-}
 
-return redirect(`/dashboard/${projectId}/`)
-}
+    const project = await db.project.findUnique({
+        where: {
+            id: projectId
+        }
+    });
+
+    if (!project) return redirect("/dashboard");
+
+    try {
+        await db.userToProject.create({
+            data: {
+                userId,
+                projectId
+            }
+        });
+    } catch {
+        // User is already a member
+    }
+
+    return redirect(`/dashboard/${projectId}/`);
+};
 
 export default JoinHandler;

@@ -1,11 +1,67 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { Octokit } from "octokit";
 import type { AuthContext } from "../auth";
 import { estimateProjectCost, estimateRepoTokensFromTree } from "~/lib/estimate";
 
 const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
+
+async function checkGitHubRepo(owner: string, repo: string, userToken?: string) {
+  const headers: Record<string, string> = {
+    "User-Agent": "reposense-app",
+    Accept: "application/vnd.github.v3+json",
+  };
+
+  const token = userToken || process.env.GITHUB_TOKEN;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+
+  // If token is invalid or unauthorized, retry unauthenticated for public repositories
+  if (res.status === 401 && !userToken && process.env.GITHUB_TOKEN) {
+    delete headers["Authorization"];
+    res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+  }
+
+  if (!res.ok) {
+    throw new Error("Repository not found or inaccessible");
+  }
+
+  return await res.json();
+}
+
+async function fetchRepoTree(owner: string, repo: string, branch: string, userToken?: string) {
+  const headers: Record<string, string> = {
+    "User-Agent": "reposense-app",
+    Accept: "application/vnd.github.v3+json",
+  };
+
+  const token = userToken || process.env.GITHUB_TOKEN;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  let res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    { headers }
+  );
+
+  if (res.status === 401 && !userToken && process.env.GITHUB_TOKEN) {
+    delete headers["Authorization"];
+    res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      { headers }
+    );
+  }
+
+  if (!res.ok) {
+    return { tree: [] };
+  }
+
+  return await res.json();
+}
 
 export const estimateRoutes = new Hono<AuthContext>().post(
   "/",
@@ -30,16 +86,12 @@ export const estimateRoutes = new Hono<AuthContext>().post(
       const owner = match[1];
       const repo = match[2];
 
-      const token = githubToken || process.env.GITHUB_TOKEN;
-      const octokit = new Octokit({ auth: token });
-
-      // Check reachability of the public/accessible repository
+      // Check reachability of the repository
       let defaultBranch = "main";
       try {
-        const repoData = await octokit.rest.repos.get({ owner, repo });
-        defaultBranch = repoData.data.default_branch || "main";
+        const repoData = await checkGitHubRepo(owner, repo, githubToken?.trim() || undefined);
+        defaultBranch = repoData.default_branch || "main";
       } catch (repoErr) {
-        // Block estimation on invalid or unreachable repository
         return c.json(
           { error: "Please provide a valid, public GitHub repository URL." },
           400
@@ -51,21 +103,15 @@ export const estimateRoutes = new Hono<AuthContext>().post(
       let treeEntries: Array<{ path?: string; size?: number }> = [];
 
       try {
-        const treeData = await octokit.rest.git.getTree({
-          owner,
-          repo,
-          tree_sha: defaultBranch,
-          recursive: "1",
-        });
+        const treeData = await fetchRepoTree(owner, repo, defaultBranch, githubToken?.trim() || undefined);
 
-        if (treeData.data.tree) {
-          treeEntries = treeData.data.tree
-            .filter((item) => item.type === "blob")
-            .map((item) => ({ path: item.path, size: item.size }));
+        if (treeData && Array.isArray(treeData.tree)) {
+          treeEntries = treeData.tree
+            .filter((item: any) => item.type === "blob")
+            .map((item: any) => ({ path: item.path, size: item.size }));
           fileCount = treeEntries.length;
         }
       } catch {
-        // Fallback file count if tree endpoint hits rate limits
         fileCount = 50;
       }
 

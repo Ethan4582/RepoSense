@@ -159,7 +159,10 @@ export function AppSideBar() {
   };
 
   const handleStartNewChat = () => {
-    router.push('/dashboard?new=true');
+    if (!projectId && projects && projects.length > 0) {
+      setProjectId(projects[0]!.id);
+    }
+    router.push(`/dashboard?new=true&t=${Date.now()}`);
   };
 
   return (

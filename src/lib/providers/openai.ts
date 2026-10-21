@@ -31,7 +31,7 @@ export function getOpenAIClient(apiKey: string): OpenAIClient {
  */
 export function getChatModel(modelId: string, apiKey: string): OpenAIChatModel {
   const client = getOpenAIClient(apiKey);
-  return client(modelId);
+  return (typeof client.chat === 'function' ? client.chat(modelId) : client(modelId)) as OpenAIChatModel;
 }
 
 /**
@@ -62,18 +62,18 @@ export async function validateKey(apiKey: string): Promise<VerifyResult> {
   }
 
   return performHttpKeyValidation({
+    providerName: 'OpenAI',
     url: `${OPENAI_BASE_URL}/models`,
     headers: {
       Authorization: `Bearer ${cleanKey}`,
     },
-    timeoutMs: 7000,
-    providerName: 'OpenAI',
+    timeoutMs: 8000,
   });
 }
 
 /**
- * Returns available OpenAI models, prioritizing the static curated catalog.
+ * Returns static model info for all supported OpenAI chat and reasoning models.
  */
-export async function listModels(_apiKey?: string): Promise<ModelInfo[]> {
+export function listModels(): ModelInfo[] {
   return getModelsByProvider('OPENAI');
 }

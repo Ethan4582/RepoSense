@@ -2,8 +2,7 @@
  * RepoSense Token & Cost Estimation
  *
  * Provides pre-indexing token and USD cost estimation for repositories.
- * Replaces legacy credit calculation with realistic token-based ranges.
- * Reference: reposense_revamp_migration_feature_plan.md (Phase 2)
+ * Replaces legacy credit calculation with realistic token-based ranges.
  */
 
 import { calculateModelCost } from './pricing';

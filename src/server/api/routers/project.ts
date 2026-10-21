@@ -2,7 +2,6 @@ import { pollCommits, getPullRequestsForProject } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { Octokit } from "octokit";
 import { indexGithubRepo } from "~/lib/github-loader";
 
 const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
@@ -43,12 +42,23 @@ export const projectRouter = createTRPCRouter({
 
       const owner = match[1];
       const repo = match[2];
-      const token = input.githubToken || process.env.GITHUB_TOKEN;
-      const octokit = new Octokit({ auth: token });
 
-      try {
-        await octokit.rest.repos.get({ owner, repo });
-      } catch {
+      const headers: Record<string, string> = {
+        "User-Agent": "reposense-app",
+        Accept: "application/vnd.github.v3+json",
+      };
+      const token = input.githubToken || process.env.GITHUB_TOKEN;
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+      if (res.status === 401 && !input.githubToken && process.env.GITHUB_TOKEN) {
+        delete headers["Authorization"];
+        res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+      }
+
+      if (!res.ok) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Please provide a valid, public GitHub repository URL.",
@@ -82,14 +92,39 @@ export const projectRouter = createTRPCRouter({
   getCommits: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
-      })
+        projectId: z.string().optional(),
+      }).optional()
     )
     .query(async ({ ctx, input }) => {
-      pollCommits(input.projectId).then().catch(console.error);
+      const pid = input?.projectId;
+      if (pid && pid !== "all") {
+        pollCommits(pid).then().catch(console.error);
+        return await ctx.db.commit.findMany({
+          where: {
+            projectId: pid,
+          },
+          orderBy: {
+            commmitDate: "desc",
+          },
+        });
+      }
+
+      const userProjects = await ctx.db.project.findMany({
+        where: {
+          userToProjects: {
+            some: {
+              userId: ctx.user.userId!,
+            },
+          },
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      const projectIds = userProjects.map((p) => p.id);
+
       return await ctx.db.commit.findMany({
         where: {
-          projectId: input.projectId,
+          projectId: { in: projectIds },
         },
         orderBy: {
           commmitDate: "desc",
@@ -100,12 +135,36 @@ export const projectRouter = createTRPCRouter({
   getPullRequests: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
-      })
+        projectId: z.string().optional(),
+      }).optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      const pid = input?.projectId;
       try {
-        return await getPullRequestsForProject(input.projectId);
+        if (pid && pid !== "all") {
+          return await getPullRequestsForProject(pid);
+        }
+
+        const userProjects = await ctx.db.project.findMany({
+          where: {
+            userToProjects: {
+              some: {
+                userId: ctx.user.userId!,
+              },
+            },
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        const results = await Promise.allSettled(
+          userProjects.map((p) => getPullRequestsForProject(p.id))
+        );
+
+        const allPrs = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+        return allPrs.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
       } catch (err) {
         console.error("Failed to fetch pull requests:", err);
         return [];
@@ -230,16 +289,36 @@ export const projectRouter = createTRPCRouter({
   getBookmarkedQuestions: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
+        projectId: z.string().optional(),
         query: z.string().optional(),
-      })
+      }).optional()
     )
     .query(async ({ ctx, input }) => {
+      const pid = input?.projectId;
+      let projectFilter: any;
+
+      if (pid && pid !== "all") {
+        projectFilter = pid;
+      } else {
+        const userProjects = await ctx.db.project.findMany({
+          where: {
+            userToProjects: {
+              some: {
+                userId: ctx.user.userId!,
+              },
+            },
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        projectFilter = { in: userProjects.map((p) => p.id) };
+      }
+
       return await ctx.db.question.findMany({
         where: {
-          projectId: input.projectId,
+          projectId: projectFilter,
           isBookmarked: true,
-          ...(input.query
+          ...(input?.query
             ? {
                 question: {
                   contains: input.query,
@@ -250,6 +329,7 @@ export const projectRouter = createTRPCRouter({
         },
         include: {
           user: true,
+          project: true,
         },
         orderBy: {
           createdAt: "desc",
@@ -279,13 +359,33 @@ export const projectRouter = createTRPCRouter({
   getMeetings: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
-      })
+        projectId: z.string().optional(),
+      }).optional()
     )
     .query(async ({ ctx, input }) => {
+      const pid = input?.projectId;
+      let projectFilter: any;
+
+      if (pid && pid !== "all") {
+        projectFilter = pid;
+      } else {
+        const userProjects = await ctx.db.project.findMany({
+          where: {
+            userToProjects: {
+              some: {
+                userId: ctx.user.userId!,
+              },
+            },
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        projectFilter = { in: userProjects.map((p) => p.id) };
+      }
+
       return await ctx.db.meeting.findMany({
-        where: { projectId: input.projectId },
-        include: { issues: true },
+        where: { projectId: projectFilter },
+        include: { issues: true, project: true },
         orderBy: { createdAt: "desc" },
       });
     }),
@@ -299,7 +399,7 @@ export const projectRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return await ctx.db.meeting.findUnique({
         where: { id: input.meetingId },
-        include: { issues: true },
+        include: { issues: true, project: true },
       });
     }),
 

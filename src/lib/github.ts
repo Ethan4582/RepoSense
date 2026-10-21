@@ -1,11 +1,13 @@
-// Functions to interact with the GitHub API (Cloudflare Worker & Edge Compatible)
 import { Octokit } from 'octokit';
 import { db } from '~/server/db';
 import { aiSummariseCommit } from './gemini';
 
-export const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-});
+export function getOctokit(token?: string | null) {
+  const authToken = token || process.env.GITHUB_TOKEN;
+  return new Octokit(authToken ? { auth: authToken } : {});
+}
+
+export const octokit = getOctokit();
 
 export type CommitResponse = {
   commitMessage: string;
@@ -34,16 +36,33 @@ export type PullRequestResponse = {
   commits?: CommitResponse[];
 };
 
-export const getCommitsHashes = async (githubUrl: string): Promise<CommitResponse[]> => {
+export const getCommitsHashes = async (githubUrl: string, token?: string | null): Promise<CommitResponse[]> => {
   const [owner, repo] = githubUrl.split('/').slice(-2);
   if (!owner || !repo) {
     throw new Error('Invalid GitHub URL');
   }
 
-  const { data } = await octokit.rest.repos.listCommits({
-    owner,
-    repo,
-  });
+  const client = getOctokit(token);
+  let data: any[] = [];
+  try {
+    const res = await client.rest.repos.listCommits({
+      owner,
+      repo,
+    });
+    data = res.data;
+  } catch (err: any) {
+    if (err?.status === 401 || err?.message?.includes('Bad credentials')) {
+      console.warn('⚠️ GitHub token 401 Bad credentials. Falling back to public unauthenticated request...');
+      const fallbackClient = new Octokit({});
+      const res = await fallbackClient.rest.repos.listCommits({
+        owner,
+        repo,
+      });
+      data = res.data;
+    } else {
+      throw err;
+    }
+  }
 
   const sortedCommits = [...data].sort((a: any, b: any) => {
     const dateB = b.commit?.author?.date ? new Date(b.commit.author.date).getTime() : 0;
@@ -60,18 +79,37 @@ export const getCommitsHashes = async (githubUrl: string): Promise<CommitRespons
   }));
 };
 
-export const getPullRequests = async (githubUrl: string): Promise<PullRequestResponse[]> => {
+export const getPullRequests = async (githubUrl: string, token?: string | null): Promise<PullRequestResponse[]> => {
   const [owner, repo] = githubUrl.split('/').slice(-2);
   if (!owner || !repo) {
     throw new Error('Invalid GitHub URL');
   }
 
-  const { data } = await octokit.rest.pulls.list({
-    owner,
-    repo,
-    state: 'all',
-    per_page: 25,
-  });
+  const client = getOctokit(token);
+  let data: any[] = [];
+  try {
+    const res = await client.rest.pulls.list({
+      owner,
+      repo,
+      state: 'all',
+      per_page: 25,
+    });
+    data = res.data;
+  } catch (err: any) {
+    if (err?.status === 401 || err?.message?.includes('Bad credentials')) {
+      console.warn('⚠️ GitHub token 401 Bad credentials on pulls list. Retrying unauthenticated...');
+      const fallbackClient = new Octokit({});
+      const res = await fallbackClient.rest.pulls.list({
+        owner,
+        repo,
+        state: 'all',
+        per_page: 25,
+      });
+      data = res.data;
+    } else {
+      throw err;
+    }
+  }
 
   return data.map((pr: any) => ({
     id: pr.id,
@@ -129,8 +167,6 @@ export const pollCommits = async (projectId: string) => {
 
   await db.commit.createMany({
     data: summarise.map((summary, index) => {
-      console.log(`processing commit ${index + 1} of ${unprocessedCommits.length}`);
-
       return {
         projectId,
         commitHash: unprocessedCommits[index]!.commitHash,
@@ -146,7 +182,6 @@ export const pollCommits = async (projectId: string) => {
   return unprocessedCommits;
 };
 
-// Edge-safe standard fetch replaces Axios for Cloudflare compatibility
 async function summariseCommit(githubUrl: string, commitHash: string) {
   try {
     const res = await fetch(`${githubUrl}/commit/${commitHash}.diff`, {

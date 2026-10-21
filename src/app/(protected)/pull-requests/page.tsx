@@ -65,6 +65,7 @@ type PullRequest = NonNullable<RouterOutputs['project']['getPullRequests']>[numb
 
 export default function PullRequestsPage() {
   const { projectId, project, projects, setProjectId } = useProject();
+  const [selectedRepoFilter, setSelectedRepoFilter] = React.useState<string>(projectId ?? 'all');
   const [filterState, setFilterState] = React.useState<'all' | 'open' | 'closed'>('all');
   const [search, setSearch] = React.useState('');
   const [selectedPr, setSelectedPr] = React.useState<PullRequest | null>(null);
@@ -75,14 +76,22 @@ export default function PullRequestsPage() {
     setIsMounted(true);
   }, []);
 
+  React.useEffect(() => {
+    if (projectId && selectedRepoFilter === 'all') {
+      setSelectedRepoFilter(projectId);
+    }
+  }, [projectId]);
+
+  const queryProjectId = selectedRepoFilter === 'all' ? undefined : selectedRepoFilter;
+
   const { data: prs, isLoading: isPrsLoading } = api.project.getPullRequests.useQuery(
-    { projectId: projectId ?? '' },
-    { enabled: !!projectId }
+    { projectId: queryProjectId },
+    { refetchInterval: 10000 }
   );
 
   const { data: commits, isLoading: isCommitsLoading } = api.project.getCommits.useQuery(
-    { projectId: projectId ?? '' },
-    { enabled: !!projectId }
+    { projectId: queryProjectId },
+    { refetchInterval: 10000 }
   );
 
   const toggleExpand = (id: number | string, e?: React.MouseEvent) => {
@@ -144,39 +153,6 @@ export default function PullRequestsPage() {
     }));
   }, [commits]);
 
-  if (!project) {
-    return (
-      <div className="flex h-[75vh] flex-col items-center justify-center text-center p-6">
-        <div className="rounded-full bg-primary/10 p-4 text-primary mb-4">
-          <FolderGit2 className="size-8" />
-        </div>
-        <h2 className="text-xl font-semibold text-foreground">No Project Selected</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          Select a repository to review pull requests and commit activity.
-        </p>
-        {projects && projects.length > 0 && (
-          <div className="mt-4 flex flex-col items-center gap-2">
-            <span className="text-xs text-muted-foreground">Choose an active repository:</span>
-            <div className="flex flex-wrap gap-2 justify-center max-w-md">
-              {projects.map((p) => (
-                <Button
-                  key={p.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setProjectId(p.id)}
-                  className="text-xs gap-1.5"
-                >
-                  <FolderGit2 className="size-3.5 text-primary" />
-                  <span>{p.name}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full w-full max-w-6xl mx-auto px-4 py-6 md:px-8 space-y-6">
       {/* Header Bar: Repository Filter & Context Actions */}
@@ -187,26 +163,39 @@ export default function PullRequestsPage() {
             Pull Requests
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Repository-scoped GitHub PRs, commit history, and AI inspection for{' '}
-            <strong className="text-foreground">{project.name}</strong>.
+            Repository-scoped GitHub PRs, commit history, and AI inspection
+            {project && selectedRepoFilter !== 'all' ? (
+              <>
+                {' for '}
+                <strong className="text-foreground">{project.name}</strong>
+              </>
+            ) : (
+              ' across all linked repositories'
+            )}.
           </p>
         </div>
 
-        {/* Repository Switcher / Filter replacing static View on GitHub URL */}
+        {/* Repository Switcher / Filter */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Repository:</span>
             <Select
-              value={projectId ?? ''}
+              value={selectedRepoFilter}
               onValueChange={(val) => {
-                if (val) setProjectId(val);
+                setSelectedRepoFilter(val);
+                if (val !== 'all') {
+                  setProjectId(val);
+                }
               }}
             >
               <SelectTrigger className="h-8 min-w-[200px] max-w-[280px] text-xs gap-2 border-border/80 bg-background">
                 <FolderGit2 className="size-3.5 text-primary shrink-0" />
-                <SelectValue placeholder="Select repository" />
+                <SelectValue placeholder="All Repositories" />
               </SelectTrigger>
               <SelectContent align="end">
+                <SelectItem value="all" className="text-xs font-medium">
+                  All Repositories
+                </SelectItem>
                 {projects?.map((p) => (
                   <SelectItem key={p.id} value={p.id} className="text-xs">
                     <span className="font-medium truncate">{p.name}</span>
@@ -216,7 +205,7 @@ export default function PullRequestsPage() {
             </Select>
           </div>
 
-          {project.repoUrl && (
+          {project?.repoUrl && (
             <Link
               href={`${project.repoUrl}/pulls`}
               target="_blank"
@@ -235,7 +224,7 @@ export default function PullRequestsPage() {
         </div>
       </div>
 
-      {/* COMMIT ACTIVITY & VELOCITY CHART (Above the table - Phase 15) */}
+      {/* Commit Activity & Velocity Chart */}
       <Card className="shadow-xs overflow-hidden border">
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -245,7 +234,7 @@ export default function PullRequestsPage() {
                 Commit Activity & Velocity
               </CardTitle>
               <CardDescription className="text-xs">
-                Historical commit frequency and contribution pace for {project.name}.
+                Historical commit frequency and contribution pace{project && selectedRepoFilter !== 'all' ? ` for ${project.name}` : ''}.
               </CardDescription>
             </div>
 
@@ -298,12 +287,12 @@ export default function PullRequestsPage() {
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
+                      backgroundColor: 'hsl(var(--background))',
                       borderColor: 'hsl(var(--border))',
                       borderRadius: '8px',
-                      fontSize: '12px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      fontSize: '11px',
                     }}
+                    formatter={(val: any) => [`${val} commits`, 'Pushed']}
                   />
                   <Area
                     type="monotone"
@@ -317,65 +306,76 @@ export default function PullRequestsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-28 flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-lg">
-              {isCommitsLoading ? 'Aggregating commit history...' : 'No commit history available for this repository'}
+            <div className="h-32 flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-lg">
+              {isCommitsLoading ? 'Aggregating commit history...' : 'No commit activity recorded yet.'}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Controls & Filter Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant={filterState === 'all' ? 'secondary' : 'ghost'}
-            size="sm"
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Status Filter Buttons */}
+        <div className="inline-flex rounded-lg border bg-muted/30 p-1 text-xs">
+          <button
+            type="button"
             onClick={() => setFilterState('all')}
-            className="text-xs h-8"
+            className={`px-3 py-1 rounded-md font-medium transition-colors ${
+              filterState === 'all'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
             All ({counts.all})
-          </Button>
-          <Button
-            variant={filterState === 'open' ? 'secondary' : 'ghost'}
-            size="sm"
+          </button>
+          <button
+            type="button"
             onClick={() => setFilterState('open')}
-            className="text-xs h-8"
+            className={`px-3 py-1 rounded-md font-medium transition-colors ${
+              filterState === 'open'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
             Open ({counts.open})
-          </Button>
-          <Button
-            variant={filterState === 'closed' ? 'secondary' : 'ghost'}
-            size="sm"
+          </button>
+          <button
+            type="button"
             onClick={() => setFilterState('closed')}
-            className="text-xs h-8"
+            className={`px-3 py-1 rounded-md font-medium transition-colors ${
+              filterState === 'closed'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
             Closed ({counts.closed})
-          </Button>
+          </button>
         </div>
 
-        <div className="relative w-full sm:w-64">
+        {/* Search Input */}
+        <div className="relative w-full sm:w-72">
           <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
           <Input
-            placeholder="Filter by title, author, branch, #..."
+            placeholder="Search PRs, branches, authors..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-xs"
+            className="pl-8 h-8 text-xs bg-muted/20"
           />
         </div>
       </div>
 
-      {/* Pull Requests Table */}
-      <Card className="shadow-xs overflow-hidden">
+      {/* Main Pull Requests Table with Expandable Rows */}
+      <Card className="overflow-hidden border shadow-xs">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableHead className="w-8 px-2"></TableHead>
-              <TableHead className="text-xs font-semibold">PR Title</TableHead>
-              <TableHead className="text-xs font-semibold w-24">Status</TableHead>
-              <TableHead className="text-xs font-semibold w-40">Author</TableHead>
-              <TableHead className="text-xs font-semibold w-48">Branch</TableHead>
-              <TableHead className="text-xs font-semibold w-28">Date</TableHead>
-              <TableHead className="text-right text-xs font-semibold w-28">Actions</TableHead>
+            <TableRow className="bg-muted/30 text-xs font-semibold text-muted-foreground">
+              <TableHead className="w-8"></TableHead>
+              <TableHead>Pull Request</TableHead>
+              <TableHead className="w-24">Status</TableHead>
+              <TableHead className="w-40">Author</TableHead>
+              <TableHead className="w-48">Branches</TableHead>
+              <TableHead className="w-32">Created</TableHead>
+              <TableHead className="w-28 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -388,9 +388,21 @@ export default function PullRequestsPage() {
             ) : filteredPrs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground">
-                  {search
-                    ? 'No pull requests match your search criteria.'
-                    : 'No pull requests found for this repository.'}
+                  {search ? (
+                    'No pull requests match your search criteria.'
+                  ) : !projects || projects.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-4">
+                      <p>No pull requests found. Link a GitHub repository to track pull requests and commit activity.</p>
+                      <Link href="/create">
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 mt-1">
+                          <FolderGit2 className="size-3 text-primary" />
+                          <span>Link Repository</span>
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    'No pull requests found for the selected repository.'
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -504,48 +516,34 @@ export default function PullRequestsPage() {
                       </TableCell>
                     </TableRow>
 
-                    {/* EXPANDABLE ROW SHOWING COMMIT MESSAGES (Phase 15 specification) */}
+                    {/* Expandable row showing commit messages */}
                     {isExpanded && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20 border-b">
                         <TableCell colSpan={7} className="p-4">
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between text-xs border-b border-border/40 pb-2">
-                              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                          <div className="space-y-3 pl-6 border-l-2 border-primary/40 my-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                 <GitCommit className="size-3.5 text-primary" />
-                                Commit Messages & Summaries for #{pr.number}
+                                PR Commits & Activity
                               </span>
-                              <Link
-                                href={`${project.repoUrl}/pull/${pr.number}/commits`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary hover:underline text-[11px] flex items-center gap-1"
-                              >
-                                <span>View all branch commits on GitHub</span>
-                                <ExternalLink className="size-3" />
-                              </Link>
+                              <span className="text-[11px] text-muted-foreground">
+                                {pr.commits?.length ?? 0} commits recorded
+                              </span>
                             </div>
 
                             {pr.commits && pr.commits.length > 0 ? (
-                              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {pr.commits.map((c) => (
                                   <div
                                     key={c.id}
-                                    className="rounded-md border bg-card p-2.5 text-xs space-y-1"
+                                    className="rounded-lg border bg-background p-2.5 text-xs space-y-1 shadow-2xs"
                                   >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 truncate font-mono text-[11px]">
-                                        <span className="text-primary font-bold">
-                                          {c.commitHash.slice(0, 7)}
-                                        </span>
-                                        <span className="text-muted-foreground truncate">
-                                          by {c.commitAuthorName}
-                                        </span>
-                                      </div>
-                                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                        {new Date(c.commmitDate).toLocaleDateString([], {
-                                          month: 'short',
-                                          day: 'numeric',
-                                        })}
+                                    <div className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
+                                      <span className="font-semibold text-primary">
+                                        {c.commitHash.slice(0, 7)}
+                                      </span>
+                                      <span>
+                                        {new Date(c.commmitDate).toLocaleDateString()}
                                       </span>
                                     </div>
                                     <p className="text-foreground font-medium line-clamp-1">

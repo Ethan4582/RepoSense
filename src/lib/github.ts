@@ -200,6 +200,8 @@ export type PullRequestResponse = {
   branchName: string;
   baseBranch: string;
   body?: string | null;
+  labels: string[];
+  mergedAt: Date | null;
 };
 
 export const getPullRequests = async (
@@ -231,6 +233,10 @@ export const getPullRequests = async (
       branchName: pr.head?.ref ?? 'unknown',
       baseBranch: pr.base?.ref ?? 'main',
       body: pr.body ?? null,
+      labels: (pr.labels ?? []).map((label) =>
+        typeof label === 'string' ? label : (label.name ?? '')
+      ).filter(Boolean),
+      mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
     }));
   } catch (err) {
     wrapGithubError(err, Boolean(token));

@@ -48,7 +48,15 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider>
-      <html lang="en" className={`${geist.variable}`}>
+      <html lang="en" suppressHydrationWarning className={`${geist.variable}`}>
+        <head>
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                "(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();",
+            }}
+          />
+        </head>
         <body>
           <TRPCReactProvider>{children}</TRPCReactProvider>
           <Toaster />

@@ -66,7 +66,7 @@ export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<
     await db.$executeRawUnsafe(
       `UPDATE "SourceCodeEmbedding" AS s
        SET "${column}" = v.emb::vector
-       FROM (SELECT unnest($1::text[]) AS id, unnest($2::text[]) AS emb) AS v
+       FROM unnest($1::text[], $2::text[]) AS v(id, emb)
        WHERE s."id" = v.id`,
       ids,
       vectors

@@ -54,7 +54,7 @@ export const publicRoutes = new Hono()
           summary: project.wikiPages[0]?.content?.slice(0, 280) ?? null,
         })),
       };
-    });
+    }, 60);
   })
   .get('/projects/:id', async (c) => {
     const projectId = c.req.param('id');

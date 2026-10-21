@@ -8,12 +8,14 @@ ALTER TABLE "User" ADD COLUMN "preferences" JSONB;
 
 UPDATE "User" SET "defaultChatProvider" = 'OPENAI' WHERE "defaultChatProvider" IS NULL;
 UPDATE "User" SET "defaultChatModel" = 'gpt-6.1-sol' WHERE "defaultChatModel" IS NULL;
+UPDATE "User" SET "defaultEmbeddingProvider" = 'OPENAI' WHERE "defaultEmbeddingProvider" IS NULL;
 
 ALTER TABLE "User" ALTER COLUMN "defaultChatProvider" SET DEFAULT 'OPENAI';
 ALTER TABLE "User" ALTER COLUMN "defaultChatProvider" SET NOT NULL;
 ALTER TABLE "User" ALTER COLUMN "defaultChatModel" SET DEFAULT 'gpt-6.1-sol';
 ALTER TABLE "User" ALTER COLUMN "defaultChatModel" SET NOT NULL;
 ALTER TABLE "User" ALTER COLUMN "defaultEmbeddingProvider" SET DEFAULT 'OPENAI';
+ALTER TABLE "User" ALTER COLUMN "defaultEmbeddingProvider" SET NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- KeyStatus: retire REVOKED
@@ -26,6 +28,8 @@ ALTER TABLE "ApiKey"
   USING (CASE WHEN "status"::text = 'REVOKED' THEN 'INVALID'::"KeyStatus" ELSE "status"::text::"KeyStatus" END);
 ALTER TABLE "ApiKey" ALTER COLUMN "status" SET DEFAULT 'UNVERIFIED';
 DROP TYPE "KeyStatus_old";
+
+ALTER TABLE "ApiKey" DROP COLUMN "label";
 
 -- ---------------------------------------------------------------------------
 -- Project: repo identity, visibility, encrypted token, skeleton
@@ -55,11 +59,15 @@ WHERE "repoUrl" LIKE '%github.com%' AND split_part(regexp_replace("repoUrl", '^.
 ALTER TABLE "Project" ALTER COLUMN "repoOwner" DROP DEFAULT;
 ALTER TABLE "Project" ALTER COLUMN "repoName" DROP DEFAULT;
 
+UPDATE "Project" SET "chatProvider" = 'OPENAI' WHERE "chatProvider" IS NULL;
+UPDATE "Project" SET "chatModel" = 'gpt-6.1-sol' WHERE "chatModel" IS NULL;
+
 ALTER TABLE "Project" ALTER COLUMN "chatProvider" SET DEFAULT 'OPENAI';
 ALTER TABLE "Project" ALTER COLUMN "chatProvider" SET NOT NULL;
 ALTER TABLE "Project" ALTER COLUMN "chatModel" SET DEFAULT 'gpt-6.1-sol';
 ALTER TABLE "Project" ALTER COLUMN "chatModel" SET NOT NULL;
 ALTER TABLE "Project" ALTER COLUMN "embeddingProvider" SET DEFAULT 'OPENAI';
+ALTER TABLE "Project" ALTER COLUMN "embeddingProvider" SET NOT NULL;
 ALTER TABLE "Project" ALTER COLUMN "embeddingModel" SET DEFAULT 'text-embedding-3-small';
 ALTER TABLE "Project" ALTER COLUMN "embeddingDimensions" SET DEFAULT 1536;
 
@@ -79,8 +87,16 @@ ALTER TABLE "SourceCodeEmbedding" ADD COLUMN "chunkIndex" INTEGER NOT NULL DEFAU
 ALTER TABLE "SourceCodeEmbedding" ADD COLUMN "startLine" INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE "SourceCodeEmbedding" ADD COLUMN "endLine" INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE "SourceCodeEmbedding" ADD COLUMN "fullFileContent" TEXT;
+ALTER TABLE "SourceCodeEmbedding" ADD COLUMN "embeddingOpenAI" vector(1536);
+ALTER TABLE "SourceCodeEmbedding" ADD COLUMN "embeddingGemini" vector(768);
+
+UPDATE "SourceCodeEmbedding"
+SET "embeddingOpenAI" = "summaryEmbeddingOpenAI",
+    "embeddingGemini" = "summaryEmbeddingGemini";
 
 ALTER TABLE "SourceCodeEmbedding" DROP COLUMN "summary";
+ALTER TABLE "SourceCodeEmbedding" DROP COLUMN "summaryEmbeddingOpenAI";
+ALTER TABLE "SourceCodeEmbedding" DROP COLUMN "summaryEmbeddingGemini";
 
 ALTER TABLE "SourceCodeEmbedding" ALTER COLUMN "directory" DROP DEFAULT;
 ALTER TABLE "SourceCodeEmbedding" ALTER COLUMN "chunkIndex" DROP DEFAULT;

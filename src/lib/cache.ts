@@ -2,6 +2,10 @@ import type { Context } from 'hono';
 
 export const PUBLIC_WIKI_CACHE_CONTROL = 'public, s-maxage=3600, stale-while-revalidate=86400';
 
+// Cache keys must be identical from every hostname (preview, apex, www) and from
+// background workflows, otherwise purges miss entries written through another origin.
+const EDGE_CACHE_ORIGIN = 'https://edge-cache.reposense.internal';
+
 interface EdgeCacheLike {
   match(request: Request): Promise<Response | undefined>;
   put(request: Request, response: Response): Promise<void>;
@@ -14,6 +18,10 @@ function getEdgeCache(): EdgeCacheLike | null {
   return cache ?? null;
 }
 
+function edgeCacheKey(key: string): Request {
+  return new Request(new URL(`/__edge-cache/${encodeURIComponent(key)}`, EDGE_CACHE_ORIGIN).toString());
+}
+
 export async function cachedJson(
   c: Context,
   key: string,
@@ -21,7 +29,7 @@ export async function cachedJson(
   maxAge = 3600
 ): Promise<Response> {
   const cache = getEdgeCache();
-  const cacheKey = new Request(new URL(`/__edge-cache/${encodeURIComponent(key)}`, c.req.url).toString());
+  const cacheKey = edgeCacheKey(key);
 
   if (cache) {
     try {
@@ -48,22 +56,20 @@ export async function cachedJson(
   return response;
 }
 
-export async function purgeWikiCache(projectId: string): Promise<void> {
+export async function purgeWikiCache(projectId: string, slugs: readonly string[] = []): Promise<void> {
   const cache = getEdgeCache();
   if (!cache) return;
 
-  const base = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
   const keys = [
     `public-project-${projectId}`,
-    `explore-all`,
+    'explore-all',
+    ...slugs.map((slug) => `public-page-${projectId}-${slug}`),
   ];
 
   await Promise.all(
-    keys.map(async (key) => {
+    Array.from(new Set(keys)).map(async (key) => {
       try {
-        await cache.delete(
-          new Request(new URL(`/__edge-cache/${encodeURIComponent(key)}`, base).toString())
-        );
+        await cache.delete(edgeCacheKey(key));
       } catch {
         // ignore
       }

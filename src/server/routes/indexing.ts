@@ -7,8 +7,18 @@ import { writesPaused } from "~/lib/emergency";
 
 export const indexingRoutes = new Hono<AuthContext>()
   .get("/:id/indexing/status", async (c) => {
-    const job = await c.get("db").indexingJob.findFirst({
-      where: { projectId: c.req.param("id") },
+    const db = c.get("db");
+    const userId = c.get("userId");
+    const projectId = c.req.param("id");
+
+    const member = await db.userToProject.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      select: { id: true },
+    });
+    if (!member) return c.json({ error: "Project not found" }, 404);
+
+    const job = await db.indexingJob.findFirst({
+      where: { projectId },
       orderBy: { startedAt: "desc" },
     });
 

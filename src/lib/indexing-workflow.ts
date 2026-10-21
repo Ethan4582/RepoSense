@@ -21,6 +21,7 @@ import {
   type RepoSource,
 } from './repo-filter';
 import { ProviderAccessError, resolveProjectKeys } from './providers/guard';
+import { purgeWikiCache } from './cache';
 import {
   fallbackPlan,
   generateWikiPage,
@@ -318,6 +319,10 @@ async function executePipeline(opts: {
 
   await step.do('finalize', async () => {
     const keepSlugs = plan.sections.flatMap((section) => section.pages.map((page) => page.slug));
+    const previousPages = await db.wikiPage.findMany({
+      where: { projectId: project.id },
+      select: { slug: true },
+    });
     await db.wikiPage.deleteMany({
       where: { projectId: project.id, slug: { notIn: keepSlugs } },
     });
@@ -325,6 +330,10 @@ async function executePipeline(opts: {
       where: { id: project.id },
       data: { lastIndexedAt: new Date() },
     });
+    await purgeWikiCache(project.id, [
+      ...previousPages.map((page) => page.slug),
+      ...keepSlugs,
+    ]);
   });
 
   await updateJob(db, jobId, {

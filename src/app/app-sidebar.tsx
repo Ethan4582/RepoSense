@@ -3,30 +3,31 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useUser, useClerk } from '@clerk/nextjs';
 import {
-  GitPullRequest,
-  Video,
-  Bookmark,
-  KeyRound,
-  Plus,
-  PanelLeftClose,
-  PanelLeft,
-  Pin,
-  PinOff,
-  Trash2,
-  MoreHorizontal,
-  Pencil,
-  FolderPlus,
-  Settings,
-  FolderGit2,
+  ArrowRight,
+  BookOpen,
   Check,
+  Compass,
+  FolderGit2,
+  Globe2,
+  KeyRound,
+  Lock,
   LogOut,
-  User as UserIcon,
-  Sun,
+  MoreHorizontal,
   Moon,
-  Sliders,
+  PanelLeft,
+  PanelLeftClose,
+  Pencil,
+  Plus,
+  Settings,
+  Sun,
+  Trash2,
+  User as UserIcon,
+  Video,
+  GitPullRequest,
+  Loader2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -48,130 +49,108 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
 import useProject from '~/hooks/use-project';
-import { useThreadFolders } from '~/hooks/use-thread-folders';
-import { api } from '~/trpc/react';
 import { cn } from '~/lib/utils';
 import { toast } from 'sonner';
-import {
-  RenameThreadDialog,
-  FolderThreadDialog,
-  DeleteThreadDialog,
-} from '~/components/chat/thread-action-dialogs';
 
-const WORKSPACE_TABS = [
-  {
-    title: 'Pull Requests',
-    shortTitle: 'Pull Requests',
-    subtitle: 'Repository-scoped GitHub PRs',
-    icon: GitPullRequest,
-    url: '/pull-requests',
-  },
-  {
-    title: 'Meetings & Issues',
-    shortTitle: 'Meetings',
-    subtitle: 'Notion-style audio & issues',
-    icon: Video,
-    url: '/meetings',
-  },
-  {
-    title: 'QA Bookmarks',
-    shortTitle: 'QA Bookmarks',
-    subtitle: 'Searchable saved QA vault',
-    icon: Bookmark,
-    url: '/qa',
-  },
-  {
-    title: 'API Keys',
-    shortTitle: 'API Keys',
-    subtitle: 'Clean centralized BYOK page',
-    icon: KeyRound,
-    url: '/settings',
-  },
+const NAV_ITEMS = [
+  { title: 'Explore Public Wikis', icon: Compass, url: '/explore' },
+  { title: 'New Repository', icon: FolderGit2, url: '/create' },
+  { title: 'Pull Requests', icon: GitPullRequest, url: '/pulls' },
+  { title: 'Meetings', icon: Video, url: '/meetings' },
+  { title: 'API Keys & Models', icon: KeyRound, url: '/settings' },
 ];
+
+type ProjectSummary = {
+  id: string;
+  name: string;
+  repoOwner: string;
+  repoName: string;
+  isPublicWiki: boolean;
+  isPrivateRepo: boolean;
+  deletedAt: string | Date | null;
+  indexingJobs?: Array<{ status: string }>;
+  _count?: { wikiPages: number };
+};
+
+function statusFor(project: ProjectSummary) {
+  const status = project.indexingJobs?.[0]?.status;
+  if (!status) return { color: 'bg-muted-foreground/40', label: 'Not indexed' };
+  if (status === 'FAILED') return { color: 'bg-red-500', label: 'Indexing failed' };
+  if (status === 'COMPLETED') return { color: 'bg-emerald-500', label: 'Ready' };
+  if (status === 'RUNNING') return { color: 'bg-amber-500 animate-pulse', label: 'Indexing' };
+  if (status === 'QUEUED') return { color: 'bg-amber-400', label: 'Queued' };
+  return { color: 'bg-muted-foreground/40', label: status.toLowerCase() };
+}
 
 export function AppSideBar() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentThreadId = searchParams.get('threadId') ?? searchParams.get('thread');
   const router = useRouter();
   const { open, setOpen } = useSidebar();
   const { user } = useUser();
   const { signOut, openUserProfile } = useClerk();
-  const { projects, projectId, setProjectId } = useProject();
+  const { projects, projectId, setProjectId, refetchProjects } = useProject();
 
-  const [profilePopoverOpen, setProfilePopoverOpen] = React.useState(false);
-  const [targetThread, setTargetThread] = React.useState<{ id: string; title: string } | null>(null);
-  const [renameOpen, setRenameOpen] = React.useState(false);
-  const [folderOpen, setFolderOpen] = React.useState(false);
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [profileOpen, setProfileOpen] = React.useState(false);
+  const [busyProject, setBusyProject] = React.useState<string | null>(null);
 
-  const { folders, assignFolder, existingFolders } = useThreadFolders(projectId);
-
-  const { data: questions, refetch: refetchQuestions } = api.project.getQuestions.useQuery(
-    { projectId: projectId ?? '' },
-    {
-      enabled: !!projectId,
-      refetchInterval: 3000,
-      refetchOnWindowFocus: true,
-    }
-  );
-
-  const togglePinMutation = api.project.togglePinQuestion.useMutation({
-    onSuccess: () => {
-      void refetchQuestions();
-      toast.success('Thread pin updated');
-    },
-    onError: () => toast.error('Failed to update pin'),
-  });
-
-  const deleteQuestionMutation = api.project.deleteQuestion.useMutation({
-    onSuccess: () => {
-      void refetchQuestions();
-      toast.success('Thread deleted');
-      setDeleteOpen(false);
-      if (targetThread && currentThreadId === targetThread.id) {
-        router.push('/dashboard');
-      }
-    },
-    onError: () => toast.error('Failed to delete thread'),
-  });
-
-  const pinnedQuestions = React.useMemo(
-    () => questions?.filter((q) => q.isPinned) ?? [],
-    [questions]
-  );
-  const recentQuestions = React.useMemo(
-    () => questions?.filter((q) => !q.isPinned) ?? [],
-    [questions]
-  );
-
-  const toggleDarkMode = () => {
+  const toggleTheme = () => {
     const isDark = document.documentElement.classList.toggle('dark');
     try {
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     } catch {}
-    toast.success(`Switched to ${isDark ? 'Dark' : 'Light'} theme`);
   };
 
-  const handleStartNewChat = () => {
-    if (!projectId && projects && projects.length > 0) {
-      setProjectId(projects[0]!.id);
+  const updateProject = async (id: string, data: Record<string, unknown>) => {
+    setBusyProject(id);
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? 'Could not update wiki.');
+      }
+      await refetchProjects();
+      toast.success('Wiki updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update wiki.');
+    } finally {
+      setBusyProject(null);
     }
-    router.push(`/dashboard?new=true&t=${Date.now()}`);
   };
+
+  const renameProject = (project: ProjectSummary) => {
+    const name = window.prompt('Rename wiki', project.name)?.trim();
+    if (!name || name === project.name) return;
+    void updateProject(project.id, { name });
+  };
+
+  const deleteProject = async (project: ProjectSummary) => {
+    if (!window.confirm(`Delete the "${project.name}" wiki? This cannot be undone.`)) return;
+    setBusyProject(project.id);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/archive`, { method: 'PATCH' });
+      if (!res.ok) throw new Error('Could not delete wiki.');
+      await refetchProjects();
+      toast.success('Wiki deleted');
+      if (projectId === project.id) router.push('/dashboard');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete wiki.');
+    } finally {
+      setBusyProject(null);
+    }
+  };
+
+  const visibleProjects = (projects ?? []).filter((project) => !project.deletedAt);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar select-none">
-      {/* Top Header: Logo, Sidebar Toggle & Clean "New Chat" Initiation (Gemini Style) */}
       <SidebarHeader className="border-b border-border/40 p-3 space-y-3">
         <div className="flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
@@ -179,7 +158,7 @@ export function AppSideBar() {
               <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
             </div>
             {open && (
-              <span className="font-bold text-base tracking-tight text-foreground">
+              <span className="text-base font-bold tracking-tight text-foreground">
                 Repo<span className="text-primary">Sense</span>
               </span>
             )}
@@ -196,77 +175,50 @@ export function AppSideBar() {
           </Button>
         </div>
 
-        {/* Primary "New chat" initiation button anchored at the top */}
-        <div>
-          {open ? (
-            <div className="flex items-center gap-1.5">
-              <Button
-                onClick={handleStartNewChat}
-                variant="outline"
-                className="flex-1 justify-start gap-2 h-9 text-xs font-semibold shadow-xs border-border/80 bg-background hover:bg-muted text-foreground transition-all"
-              >
-                <Plus className="size-4 text-primary shrink-0" />
-                <span>New chat</span>
-              </Button>
-              <Link href="/create">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="size-9 border-border/80 text-muted-foreground hover:text-foreground shrink-0"
-                  title="Link a new repository URL"
-                >
-                  <FolderGit2 className="size-4 text-primary" />
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <Button
-              onClick={handleStartNewChat}
-              variant="outline"
-              size="icon"
-              className="size-8 mx-auto flex items-center justify-center border-border/80 text-foreground"
-              title="New chat"
-            >
-              <Plus className="size-4 text-primary" />
-            </Button>
-          )}
-        </div>
+        <Link href="/create" className="block">
+          <Button
+            variant="outline"
+            className={cn(
+              'h-9 border-border/80 bg-background text-xs font-semibold text-foreground shadow-xs transition-all hover:bg-muted',
+              open ? 'w-full justify-start gap-2' : 'mx-auto size-8 p-0'
+            )}
+            title="New Repository Wiki"
+          >
+            <Plus className="size-4 shrink-0 text-primary" />
+            {open && <span>New Repository Wiki</span>}
+          </Button>
+        </Link>
       </SidebarHeader>
 
-      <SidebarContent className="p-2 gap-3 overflow-y-auto">
-        {/* WORKSPACE TABS */}
+      <SidebarContent className="gap-3 overflow-y-auto p-2">
         <SidebarGroup className="p-0">
           {open && (
-            <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+            <SidebarGroupLabel className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Workspace
             </SidebarGroupLabel>
           )}
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
-              {WORKSPACE_TABS.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = pathname === tab.url;
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.url || pathname.startsWith(`${item.url}/`);
 
                 return (
-                  <SidebarMenuItem key={tab.url}>
+                  <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
-                      tooltip={tab.title}
+                      tooltip={item.title}
                       className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors w-full cursor-pointer',
+                        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
                         isActive
-                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs hover:bg-primary hover:text-primary-foreground'
+                          ? 'bg-primary font-semibold text-primary-foreground shadow-xs hover:bg-primary hover:text-primary-foreground'
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       )}
                     >
-                      <Link href={tab.url} prefetch>
+                      <Link href={item.url} prefetch>
                         <Icon className="size-4 shrink-0" />
-                        {open && (
-                          <div className="flex flex-col text-left truncate">
-                            <span className="truncate">{tab.title}</span>
-                          </div>
-                        )}
+                        {open && <span className="truncate">{item.title}</span>}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -276,237 +228,144 @@ export function AppSideBar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* PINNED THREADS */}
-        {open && pinnedQuestions.length > 0 && (
+        {open && (
           <SidebarGroup className="p-0">
-            <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
-              <Pin className="size-3 text-primary rotate-45" />
-              <span>Pinned</span>
+            <SidebarGroupLabel className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>Repositories</span>
+              <span className="text-[10px] font-normal normal-case text-muted-foreground/70">
+                {visibleProjects.length}
+              </span>
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {pinnedQuestions.map((q) => {
-                  const isCurrent = currentThreadId === q.id;
-                  const folder = folders[q.id];
+              {visibleProjects.length === 0 ? (
+                <div className="mx-1 rounded-lg border border-dashed px-3 py-4 text-center">
+                  <BookOpen className="mx-auto mb-1.5 size-4 text-muted-foreground/40" />
+                  <p className="text-[10px] leading-4 text-muted-foreground">
+                    No wikis yet. Link a GitHub repository to generate one.
+                  </p>
+                </div>
+              ) : (
+                <SidebarMenu className="gap-0.5">
+                  {visibleProjects.map((project) => {
+                    const status = statusFor(project);
+                    const isCurrent = project.id === projectId;
+                    const isBusy = busyProject === project.id;
 
-                  return (
-                    <SidebarMenuItem key={q.id}>
-                      <div
-                        className={cn(
-                          'group relative flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors cursor-pointer w-full',
-                          isCurrent
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                      >
-                        <Link
-                          href={`/dashboard?threadId=${q.id}`}
-                          prefetch
-                          className="flex flex-col truncate min-w-0 pr-2 flex-1 text-left"
-                        >
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span className="truncate">{q.question}</span>
-                          </div>
-                          {folder && (
-                            <span className="text-[10px] text-muted-foreground/70 truncate">
-                              📁 {folder}
-                            </span>
+                    return (
+                      <SidebarMenuItem key={project.id}>
+                        <div
+                          className={cn(
+                            'group relative flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors',
+                            isCurrent
+                              ? 'bg-primary/10 font-medium text-foreground'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                           )}
-                        </Link>
-
-                        {/* Thread Action Dots Menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => e.stopPropagation()}
-                              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground shrink-0 transition-opacity"
-                            >
-                              <MoreHorizontal className="size-3.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44 text-xs">
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePinMutation.mutate({ questionId: q.id });
-                              }}
-                              className="gap-2"
-                            >
-                              <PinOff className="size-3.5 text-muted-foreground" />
-                              <span>Unpin</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTargetThread({ id: q.id, title: q.question });
-                                setRenameOpen(true);
-                              }}
-                              className="gap-2"
-                            >
-                              <Pencil className="size-3.5 text-muted-foreground" />
-                              <span>Rename</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTargetThread({ id: q.id, title: q.question });
-                                setFolderOpen(true);
-                              }}
-                              className="gap-2"
-                            >
-                              <FolderPlus className="size-3.5 text-muted-foreground" />
-                              <span>Organize / Move</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTargetThread({ id: q.id, title: q.question });
-                                setDeleteOpen(true);
-                              }}
-                              className="gap-2 text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="size-3.5" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* RECENT THREADS */}
-        {open && recentQuestions.length > 0 && (
-          <SidebarGroup className="p-0">
-            <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-              Recent
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {recentQuestions.map((q) => {
-                  const isCurrent = currentThreadId === q.id;
-                  const folder = folders[q.id];
-
-                  return (
-                    <SidebarMenuItem key={q.id}>
-                      <div
-                        className={cn(
-                          'group relative flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors cursor-pointer w-full',
-                          isCurrent
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                      >
-                        <Link
-                          href={`/dashboard?threadId=${q.id}`}
-                          prefetch
-                          className="flex flex-col truncate min-w-0 pr-2 flex-1 text-left"
                         >
-                          <span className="truncate">{q.question}</span>
-                          {folder && (
-                            <span className="text-[10px] text-muted-foreground/70 truncate">
-                              📁 {folder}
+                          <Link
+                            href={`/wiki/${project.id}`}
+                            prefetch
+                            onClick={() => setProjectId(project.id)}
+                            className="flex min-w-0 flex-1 flex-col gap-0.5 pr-1"
+                          >
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className={cn('size-1.5 shrink-0 rounded-full', status.color)} />
+                              <span className="truncate text-[11.5px] font-medium">{project.name}</span>
                             </span>
-                          )}
-                        </Link>
+                            <span className="flex min-w-0 items-center gap-1 pl-3 text-[9.5px] text-muted-foreground/80">
+                              {project.isPublicWiki ? (
+                                <Globe2 className="size-2.5 shrink-0" />
+                              ) : (
+                                <Lock className="size-2.5 shrink-0" />
+                              )}
+                              <span className="truncate">{project.repoOwner}/{project.repoName}</span>
+                              {isCurrent && <Check className="ml-auto size-3 shrink-0 text-primary" />}
+                            </span>
+                          </Link>
 
-                        {/* Thread Action Dots Menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => e.stopPropagation()}
-                              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground shrink-0 transition-opacity"
-                            >
-                              <MoreHorizontal className="size-3.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44 text-xs">
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePinMutation.mutate({ questionId: q.id });
-                              }}
-                              className="gap-2"
-                            >
-                              <Pin className="size-3.5 text-muted-foreground rotate-45" />
-                              <span>Pin thread</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTargetThread({ id: q.id, title: q.question });
-                                setRenameOpen(true);
-                              }}
-                              className="gap-2"
-                            >
-                              <Pencil className="size-3.5 text-muted-foreground" />
-                              <span>Rename</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTargetThread({ id: q.id, title: q.question });
-                                setFolderOpen(true);
-                              }}
-                              className="gap-2"
-                            >
-                              <FolderPlus className="size-3.5 text-muted-foreground" />
-                              <span>Organize / Move</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTargetThread({ id: q.id, title: q.question });
-                                setDeleteOpen(true);
-                              }}
-                              className="gap-2 text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="size-3.5" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background/80 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {isBusy ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                  <MoreHorizontal className="size-3.5" />
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 text-xs">
+                              <DropdownMenuItem asChild className="gap-2">
+                                <Link href={`/wiki/${project.id}`}>
+                                  <ArrowRight className="size-3.5 text-muted-foreground" />
+                                  Open wiki
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => renameProject(project)} className="gap-2">
+                                <Pencil className="size-3.5 text-muted-foreground" />
+                                Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={project.isPrivateRepo || isBusy}
+                                onClick={() =>
+                                  void updateProject(project.id, { isPublicWiki: !project.isPublicWiki })
+                                }
+                                className="gap-2"
+                              >
+                                {project.isPublicWiki ? (
+                                  <Lock className="size-3.5 text-muted-foreground" />
+                                ) : (
+                                  <Globe2 className="size-3.5 text-muted-foreground" />
+                                )}
+                                {project.isPublicWiki ? 'Make private' : 'Make public'}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => void deleteProject(project)}
+                                className="gap-2 text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="size-3.5" />
+                                Delete wiki
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              )}
             </SidebarGroupContent>
           </SidebarGroup>
         )}
       </SidebarContent>
 
-      {/* Bottom Sidebar Profile: Profile Icon, Name + Dedicated Settings Gear (Gemini Reference UI) */}
       <SidebarFooter className="border-t border-border/40 p-2">
-        <Popover open={profilePopoverOpen} onOpenChange={setProfilePopoverOpen}>
-          <div className="flex items-center justify-between w-full">
-            {/* Clickable Profile Entry */}
+        <Popover open={profileOpen} onOpenChange={setProfileOpen}>
+          <div className="flex w-full items-center justify-between">
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2.5 overflow-hidden flex-1 p-1 rounded-lg hover:bg-muted/60 transition-colors text-left"
+                className="flex flex-1 items-center gap-2.5 overflow-hidden rounded-lg p-1 text-left transition-colors hover:bg-muted/60"
               >
                 <Avatar className="size-7 shrink-0 border border-border">
                   <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
-                  <AvatarFallback className="text-[11px] bg-primary/10 text-primary font-semibold">
-                    {user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ?? 'U'}
+                  <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
+                    {user?.firstName?.[0] ??
+                      user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ??
+                      'U'}
                   </AvatarFallback>
                 </Avatar>
-
                 {open && (
-                  <div className="flex flex-col truncate min-w-0">
-                    <span className="text-xs font-semibold text-foreground truncate">
-                      {user?.fullName ?? user?.primaryEmailAddress?.emailAddress?.split('@')[0] ?? 'Developer'}
+                  <div className="flex min-w-0 flex-col truncate">
+                    <span className="truncate text-xs font-semibold text-foreground">
+                      {user?.fullName ??
+                        user?.primaryEmailAddress?.emailAddress?.split('@')[0] ??
+                        'Developer'}
                     </span>
-                    <span className="text-[10px] text-muted-foreground truncate">
+                    <span className="truncate text-[10px] text-muted-foreground">
                       {user?.primaryEmailAddress?.emailAddress}
                     </span>
                   </div>
@@ -514,14 +373,13 @@ export function AppSideBar() {
               </button>
             </PopoverTrigger>
 
-            {/* Dedicated Settings Gear Icon Button (Right beside profile entry) */}
             {open && (
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7 text-muted-foreground hover:text-foreground shrink-0 ml-1"
-                  title="Settings & Preferences"
+                  className="ml-1 size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  title="Settings"
                 >
                   <Settings className="size-4" />
                 </Button>
@@ -529,164 +387,84 @@ export function AppSideBar() {
             )}
           </div>
 
-          {/* Consolidated Popover Menu Providing Profile Configuration, Clerk Settings, Preferences, and Login/Logout Actions */}
           <PopoverContent
             side="top"
             align="start"
             sideOffset={10}
-            className="w-64 p-2 shadow-2xl border rounded-xl bg-popover text-foreground space-y-1.5"
+            className="w-64 space-y-1.5 rounded-xl border bg-popover p-2 text-foreground shadow-2xl"
           >
-            {/* User Account Summary */}
-            <div className="px-2 py-1.5 flex items-center gap-2.5 border-b border-border/40 pb-2">
+            <div className="flex items-center gap-2.5 border-b border-border/40 px-2 py-1.5 pb-2">
               <Avatar className="size-8 shrink-0">
                 <AvatarImage src={user?.imageUrl} />
-                <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
                   {user?.firstName?.[0] ?? 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col min-w-0 flex-1">
-                <span className="text-xs font-semibold text-foreground truncate">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-xs font-semibold text-foreground">
                   {user?.fullName ?? 'Developer'}
                 </span>
-                <span className="text-[10px] text-muted-foreground truncate">
+                <span className="truncate text-[10px] text-muted-foreground">
                   {user?.primaryEmailAddress?.emailAddress}
                 </span>
               </div>
             </div>
 
-            {/* Account Group (Gemini Style) */}
             <div className="pt-1">
-              <div className="px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Account
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  setProfilePopoverOpen(false);
+                  setProfileOpen(false);
                   openUserProfile();
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
               >
                 <UserIcon className="size-3.5 text-muted-foreground" />
-                <span>Account Settings (Clerk)</span>
+                <span>Account settings</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setProfilePopoverOpen(false);
+                  setProfileOpen(false);
                   router.push('/settings');
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors text-left"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
               >
                 <KeyRound className="size-3.5 text-muted-foreground" />
-                <span>API Keys & Preferences</span>
+                <span>API keys & models</span>
               </button>
             </div>
 
-            {/* Active Repositories Switcher */}
-            <div className="pt-1 border-t border-border/40">
-              <div className="px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-                <span>Repositories</span>
-                <Link
-                  href="/create"
-                  onClick={() => setProfilePopoverOpen(false)}
-                  className="text-primary hover:underline lowercase text-[10px]"
-                >
-                  + link repo
-                </Link>
-              </div>
-              <div className="max-h-28 overflow-y-auto space-y-0.5">
-                {projects?.map((p) => {
-                  const isCurrent = p.id === projectId;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setProjectId(p.id);
-                        setProfilePopoverOpen(false);
-                      }}
-                      className={cn(
-                        'w-full flex items-center justify-between gap-2 px-2 py-1 rounded-md text-xs text-left transition-colors',
-                        isCurrent ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground'
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <FolderGit2 className="size-3 shrink-0" />
-                        <span className="truncate">{p.name}</span>
-                      </div>
-                      {isCurrent && <Check className="size-3 shrink-0 text-primary" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Preferences & Sign Out */}
-            <div className="pt-1 border-t border-border/40 space-y-0.5">
+            <div className="space-y-0.5 border-t border-border/40 pt-1">
               <button
                 type="button"
-                onClick={() => {
-                  toggleDarkMode();
-                  setProfilePopoverOpen(false);
-                }}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs hover:bg-muted text-foreground transition-colors"
+                onClick={toggleTheme}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
               >
                 <div className="flex items-center gap-2">
                   <Sun className="size-3.5 text-muted-foreground dark:hidden" />
-                  <Moon className="size-3.5 text-muted-foreground hidden dark:block" />
-                  <span>Toggle Theme</span>
+                  <Moon className="hidden size-3.5 text-muted-foreground dark:block" />
+                  <span>Toggle theme</span>
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  setProfilePopoverOpen(false);
+                  setProfileOpen(false);
                   void signOut({ redirectUrl: '/sign-in' });
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-destructive/10 text-destructive transition-colors text-left"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
               >
                 <LogOut className="size-3.5" />
-                <span>Sign Out</span>
+                <span>Sign out</span>
               </button>
             </div>
           </PopoverContent>
         </Popover>
-
-        {/* Global Dialogs for Thread Management */}
-        {targetThread && (
-          <>
-            <RenameThreadDialog
-              open={renameOpen}
-              onOpenChange={setRenameOpen}
-              threadId={targetThread.id}
-              initialTitle={targetThread.title}
-              onRenamed={() => {
-                void refetchQuestions();
-                setTargetThread(null);
-              }}
-            />
-            <FolderThreadDialog
-              open={folderOpen}
-              onOpenChange={setFolderOpen}
-              threadId={targetThread.id}
-              currentFolder={folders[targetThread.id]}
-              existingFolders={existingFolders}
-              onFolderAssigned={(folder) => {
-                assignFolder(targetThread.id, folder);
-                setTargetThread(null);
-              }}
-            />
-            <DeleteThreadDialog
-              open={deleteOpen}
-              onOpenChange={setDeleteOpen}
-              threadTitle={targetThread.title}
-              isPending={deleteQuestionMutation.isPending}
-              onConfirm={() => deleteQuestionMutation.mutate({ questionId: targetThread.id })}
-            />
-          </>
-        )}
       </SidebarFooter>
     </Sidebar>
   );

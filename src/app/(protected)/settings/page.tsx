@@ -86,8 +86,7 @@ interface ApiKeyItem {
   id: string;
   provider: ProviderId;
   keyLast4: string;
-  label?: string | null;
-  status: 'UNVERIFIED' | 'VALID' | 'INVALID' | 'QUOTA_EXHAUSTED' | 'REVOKED';
+  status: 'UNVERIFIED' | 'VALID' | 'INVALID' | 'QUOTA_EXHAUSTED';
   lastVerifiedAt?: string | null;
   lastUsedAt?: string | null;
 }
@@ -108,7 +107,7 @@ export default function SettingsPage() {
 
   // Defaults state - default pre-selected options
   const [defaultChatProvider, setDefaultChatProvider] = React.useState<ProviderId>('OPENAI');
-  const [defaultChatModel, setDefaultChatModel] = React.useState<string>('gpt-4o');
+  const [defaultChatModel, setDefaultChatModel] = React.useState<string>('gpt-6.1-sol');
   const [defaultEmbeddingProvider, setDefaultEmbeddingProvider] = React.useState<'GEMINI' | 'OPENAI'>('OPENAI');
   const [savingDefaults, setSavingDefaults] = React.useState(false);
 

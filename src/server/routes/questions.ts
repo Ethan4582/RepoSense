@@ -186,7 +186,11 @@ export const questionsRoutes = new Hono<AuthContext>()
 
         return c.json({
           answer: result.answer,
-          fileReferences: result.scannedFiles,
+          fileReferences: result.chunks.map((chunk) => ({
+            fileName: chunk.filePath,
+            sourceCode: chunk.chunkContent,
+            summary: `Lines ${chunk.startLine}-${chunk.endLine}`,
+          })),
           threadId: result.threadId,
         });
       } catch (err) {
@@ -201,10 +205,17 @@ export const questionsRoutes = new Hono<AuthContext>()
   .get("/:id/questions", async (c) => {
     const projectId = c.req.param("id");
     const db = c.get("db");
+    const userId = c.get("userId");
 
     if (projectId === "general" || projectId === "unlinked") {
       return c.json({ questions: [] });
     }
+
+    const member = await db.userToProject.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      select: { id: true },
+    });
+    if (!member) return c.json({ error: "Project not found" }, 404);
 
     const questions = await db.question.findMany({
       where: { projectId },
@@ -256,6 +267,12 @@ export const questionsRoutes = new Hono<AuthContext>()
           projectId = created.id;
         }
       }
+
+      const member = await db.userToProject.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: "Project not found" }, 404);
 
       const saved = await db.question.create({
         data: {

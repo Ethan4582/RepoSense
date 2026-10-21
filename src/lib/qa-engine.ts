@@ -14,6 +14,7 @@ export interface QaAnswerResult {
   threadId: string;
   answer: string;
   scannedFiles: ScannedFileRange[];
+  chunks: MatchedChunk[];
   modelUsed: string;
 }
 
@@ -197,6 +198,7 @@ export async function answerQuestionOnce(opts: QaContext): Promise<QaAnswerResul
     threadId: prepared.threadId,
     answer: text,
     scannedFiles: prepared.scannedFiles,
+    chunks: prepared.chunks,
     modelUsed: prepared.keys.chatModel,
   };
 }

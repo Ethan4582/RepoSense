@@ -1,14 +1,23 @@
-import { pollCommits, getPullRequestsForProject } from "~/lib/github";
+import { getPullRequestsForProject } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { indexGithubRepo } from "~/lib/github-loader";
+import { encryptKeyWithIv } from "~/lib/providers";
+import { alignChatModel, resolveProjectKeys } from "~/lib/providers/guard";
+import { GitHubAccessError, getRepoMetadata, parseRepoUrl } from "~/lib/github";
+import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
+import { writesPaused } from "~/lib/emergency";
+import { withoutProjectSecrets } from "~/lib/project";
 
 const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
 
+const getEncryptionSecret = (): string =>
+  process.env.ENCRYPTION_KEY ||
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 export const projectRouter = createTRPCRouter({
   getProjects: protectedProcedure.query(async ({ ctx }) => {
-    return await ctx.db.project.findMany({
+    const projects = await ctx.db.project.findMany({
       where: {
         userToProjects: {
           some: {
@@ -21,134 +30,112 @@ export const projectRouter = createTRPCRouter({
         createdAt: "desc",
       },
     });
+    return projects.map(withoutProjectSecrets);
   }),
 
   createProject: protectedProcedure
     .input(
       z.object({
         name: z.string().optional(),
-        repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid, public GitHub repository URL."),
+        repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid GitHub repository URL."),
         githubToken: z.string().optional(),
         chatProvider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).optional().default("OPENAI"),
-        chatModel: z.string().optional().default("gpt-4o"),
+        chatModel: z.string().optional(),
         embeddingProvider: z.enum(["OPENAI", "GEMINI"]).optional().default("OPENAI"),
+        isPublicWiki: z.boolean().optional().default(true),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const match = input.repoUrl.trim().match(GITHUB_REPO_REGEX);
-      if (!match || !match[1] || !match[2]) {
+      if (writesPaused()) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Repository indexing is temporarily paused." });
+      }
+
+      const coordinates = parseRepoUrl(input.repoUrl.trim());
+      const userId = ctx.user.userId!;
+
+      let meta;
+      try {
+        meta = await getRepoMetadata(coordinates.repoUrl, input.githubToken);
+      } catch (err) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Please provide a valid, public GitHub repository URL.",
+          message: err instanceof GitHubAccessError ? err.message : "Could not read this GitHub repository.",
         });
       }
 
-      const owner = match[1];
-      const repo = match[2];
+      const existing = await ctx.db.project.findFirst({
+        where: {
+          repoOwner: coordinates.owner,
+          repoName: coordinates.repo,
+          userToProjects: { some: { userId } },
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
 
-      const headers: Record<string, string> = {
-        "User-Agent": "reposense-app",
-        Accept: "application/vnd.github.v3+json",
-      };
-      const token = input.githubToken || process.env.GITHUB_TOKEN;
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
-      if (res.status === 401 && headers["Authorization"]) {
-        delete headers["Authorization"];
-        const fallbackRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
-        if (fallbackRes.ok) {
-          res = fallbackRes;
-        } else {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "GitHub authentication failed (401 Bad credentials). Your Personal Access Token may be expired or invalid. Please provide a new token.",
-          });
-        }
-      }
-
-      if (!res.ok) {
+      if (existing) {
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Please provide a valid, accessible GitHub repository URL or a valid token if private.",
+          code: "CONFLICT",
+          message: "You have already added this repository.",
         });
       }
 
-      const derivedProjectName = input.name?.trim() || `${owner}/${repo}`;
+      let encryptedGithubToken: string | null = null;
+      let githubTokenIv: string | null = null;
+      if (input.githubToken?.trim()) {
+        const encrypted = await encryptKeyWithIv(input.githubToken.trim(), getEncryptionSecret());
+        encryptedGithubToken = encrypted.encryptedKey;
+        githubTokenIv = encrypted.iv;
+      }
+
       const embeddingModel = input.embeddingProvider === "OPENAI" ? "text-embedding-3-small" : "gemini-embedding-001";
       const embeddingDimensions = input.embeddingProvider === "OPENAI" ? 1536 : 768;
 
       const project = await ctx.db.project.create({
         data: {
-          name: derivedProjectName,
-          repoUrl: input.repoUrl.trim(),
-          gitHubToken: input.githubToken?.trim() || null,
+          name: `${coordinates.owner}/${coordinates.repo}`,
+          repoOwner: coordinates.owner,
+          repoName: coordinates.repo,
+          repoUrl: coordinates.repoUrl,
+          encryptedGithubToken,
+          githubTokenIv,
+          isPrivateRepo: meta.isPrivate,
+          isPublicWiki: meta.isPrivate ? false : input.isPublicWiki,
           chatProvider: input.chatProvider,
-          chatModel: input.chatModel,
+          chatModel: alignChatModel(input.chatProvider, input.chatModel),
           embeddingProvider: input.embeddingProvider,
           embeddingModel,
           embeddingDimensions,
-          userToProjects: {
-            create: {
-              userId: ctx.user.userId!,
-            },
-          },
+          userToProjects: { create: { userId } },
         },
       });
 
-      await indexGithubRepo(
-        input.repoUrl.trim(),
-        input.githubToken ?? process.env.GITHUB_TOKEN,
-        project.id
-      );
-      await pollCommits(project.id);
+      try {
+        await resolveProjectKeys(userId, project);
+        const job = await ctx.db.indexingJob.create({
+          data: { projectId: project.id, status: "QUEUED", currentStep: "LOADING_REPO" },
+        });
+        runIndexingWorkflow({
+          projectId: project.id,
+          jobId: job.id,
+          userId,
+          step: inlineStepRunner,
+          db: ctx.db,
+        }).catch((err) => console.error("[createProject] indexing failed:", err));
+      } catch (err) {
+        console.warn("[createProject] indexing deferred:", err instanceof Error ? err.message : err);
+      }
 
-      return project;
+      return withoutProjectSecrets(project);
     }),
-
   getCommits: protectedProcedure
     .input(
       z.object({
         projectId: z.string().optional(),
       }).optional()
     )
-    .query(async ({ ctx, input }) => {
-      const pid = input?.projectId;
-      if (pid && pid !== "all") {
-        pollCommits(pid).then().catch(console.error);
-        return await ctx.db.commit.findMany({
-          where: {
-            projectId: pid,
-          },
-          orderBy: {
-            commmitDate: "desc",
-          },
-        });
-      }
-
-      const userProjects = await ctx.db.project.findMany({
-        where: {
-          userToProjects: {
-            some: {
-              userId: ctx.user.userId!,
-            },
-          },
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
-      const projectIds = userProjects.map((p) => p.id);
-
-      return await ctx.db.commit.findMany({
-        where: {
-          projectId: { in: projectIds },
-        },
-        orderBy: {
-          commmitDate: "desc",
-        },
-      });
+    .query(async () => {
+      return [];
     }),
 
   getPullRequests: protectedProcedure
@@ -441,6 +428,12 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
+      const member = await ctx.db.userToProject.findUnique({
+        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        select: { id: true },
+      });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.userToProject.findMany({
         where: {
           projectId: input.projectId,
@@ -458,7 +451,13 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await ctx.db.project.update({
+      const member = await ctx.db.userToProject.findUnique({
+        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        select: { id: true },
+      });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const project = await ctx.db.project.update({
         where: {
           id: input.projectId,
         },
@@ -466,5 +465,7 @@ export const projectRouter = createTRPCRouter({
           deletedAt: new Date(),
         },
       });
+      return withoutProjectSecrets(project);
     }),
 });
+

@@ -327,14 +327,17 @@ export const projectsRoutes = new Hono<AuthContext>()
         wikiPages: {
           orderBy: [{ sectionOrder: "asc" }, { pageOrder: "asc" }],
         },
-        userToProjects: { select: { userId: true } },
+        userToProjects: {
+          where: { userId },
+          select: { id: true },
+        },
       },
     });
 
     if (!project) return c.json({ error: "Project not found" }, 404);
     return c.json({
       project: withoutProjectSecrets(project),
-      isOwner: project.userToProjects.some((member) => member.userId === userId),
+      isOwner: project.userToProjects.length > 0,
     });
   })
   .patch("/:id", async (c) => {
@@ -429,7 +432,18 @@ export const projectsRoutes = new Hono<AuthContext>()
 
     const members = await db.userToProject.findMany({
       where: { projectId },
-      include: { user: true },
+      select: {
+        id: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
+      },
     });
 
     return c.json({ members });

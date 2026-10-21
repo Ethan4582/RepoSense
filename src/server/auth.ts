@@ -53,13 +53,5 @@ export async function clerkAuthMiddleware(c: Context<AuthContext>, next: Next) {
     }
   }
 
-  // In Next.js local environment, Clerk middleware sets headers on the request
-  const clerkUserId = c.req.header("x-clerk-user-id");
-  if (clerkUserId) {
-    c.set("userId", clerkUserId);
-    c.set("db", db);
-    return next();
-  }
-
   return c.json({ error: "Unauthorized", message: "Valid authentication credentials are required." }, 401);
 }

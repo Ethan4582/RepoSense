@@ -29,6 +29,13 @@ export const projectRouter = createTRPCRouter({
       orderBy: {
         createdAt: "desc",
       },
+      include: {
+        indexingJobs: {
+          orderBy: { startedAt: "desc" },
+          take: 1,
+        },
+        _count: { select: { wikiPages: true } },
+      },
     });
     return projects.map(withoutProjectSecrets);
   }),
@@ -187,6 +194,12 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const member = await ctx.db.userToProject.findUnique({
+        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        select: { id: true },
+      });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.question.create({
         data: {
           answers: input.answers,
@@ -201,9 +214,19 @@ export const projectRouter = createTRPCRouter({
   getQuestions: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const member = await ctx.db.userToProject.findUnique({
+        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        select: { id: true },
+      });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.question.findMany({
         where: { projectId: input.projectId },
-        include: { user: true },
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, imageUrl: true },
+          },
+        },
         orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
       });
     }),
@@ -215,12 +238,20 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
+      const member = await ctx.db.userToProject.findUnique({
+        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        select: { id: true },
+      });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.question.findMany({
         where: {
           projectId: input.projectId,
         },
         include: {
-          user: true,
+          user: {
+            select: { id: true, firstName: true, lastName: true, imageUrl: true },
+          },
         },
         orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
       });
@@ -233,12 +264,15 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.db.question.findUnique({
-        where: { id: input.questionId },
+      const existing = await ctx.db.question.findFirst({
+        where: {
+          id: input.questionId,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
         select: { isPinned: true },
       });
       if (!existing) {
-        throw new Error("Question not found");
+        throw new TRPCError({ code: "NOT_FOUND" });
       }
       return await ctx.db.question.update({
         where: { id: input.questionId },
@@ -253,12 +287,15 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.db.question.findUnique({
-        where: { id: input.questionId },
+      const existing = await ctx.db.question.findFirst({
+        where: {
+          id: input.questionId,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
         select: { isBookmarked: true },
       });
       if (!existing) {
-        throw new Error("Question not found");
+        throw new TRPCError({ code: "NOT_FOUND" });
       }
       return await ctx.db.question.update({
         where: { id: input.questionId },
@@ -274,6 +311,15 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.question.findFirst({
+        where: {
+          id: input.questionId,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
+        select: { id: true },
+      });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.question.update({
         where: { id: input.questionId },
         data: { question: input.question },
@@ -287,6 +333,15 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.question.findFirst({
+        where: {
+          id: input.questionId,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
+        select: { id: true },
+      });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.question.delete({
         where: { id: input.questionId },
       });
@@ -323,6 +378,7 @@ export const projectRouter = createTRPCRouter({
       return await ctx.db.question.findMany({
         where: {
           projectId: projectFilter,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
           isBookmarked: true,
           ...(input?.query
             ? {
@@ -334,8 +390,12 @@ export const projectRouter = createTRPCRouter({
             : {}),
         },
         include: {
-          user: true,
-          project: true,
+          user: {
+            select: { id: true, firstName: true, lastName: true, imageUrl: true },
+          },
+          project: {
+            select: { id: true, name: true, repoUrl: true, isPublicWiki: true },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -352,6 +412,12 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const member = await ctx.db.userToProject.findUnique({
+        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        select: { id: true },
+      });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.meeting.create({
         data: {
           meetingUrl: input.meetingUrl,
@@ -390,8 +456,14 @@ export const projectRouter = createTRPCRouter({
       }
 
       return await ctx.db.meeting.findMany({
-        where: { projectId: projectFilter },
-        include: { issues: true, project: true },
+        where: {
+          projectId: projectFilter,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
+        include: {
+          issues: true,
+          project: { select: { id: true, name: true, repoUrl: true, isPublicWiki: true } },
+        },
         orderBy: { createdAt: "desc" },
       });
     }),
@@ -403,9 +475,15 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.db.meeting.findUnique({
-        where: { id: input.meetingId },
-        include: { issues: true, project: true },
+      return await ctx.db.meeting.findFirst({
+        where: {
+          id: input.meetingId,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
+        include: {
+          issues: true,
+          project: { select: { id: true, name: true, repoUrl: true, isPublicWiki: true } },
+        },
       });
     }),
 
@@ -416,6 +494,15 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.meeting.findFirst({
+        where: {
+          id: input.meetingId,
+          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+        },
+        select: { id: true },
+      });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+
       return await ctx.db.meeting.delete({
         where: { id: input.meetingId },
       });
@@ -438,8 +525,17 @@ export const projectRouter = createTRPCRouter({
         where: {
           projectId: input.projectId,
         },
-        include: {
-          user: true,
+        select: {
+          id: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              imageUrl: true,
+            },
+          },
         },
       });
     }),

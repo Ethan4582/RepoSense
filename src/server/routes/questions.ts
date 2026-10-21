@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import type { AuthContext } from "../auth";
 import type { ProviderId } from "~/lib/providers";
 import {
@@ -44,11 +45,58 @@ async function resolveKeys(
   return keys;
 }
 
+async function canReadProject(
+  db: AuthContext["Variables"]["db"],
+  userId: string,
+  projectId: string
+): Promise<boolean> {
+  const project = await db.project.findFirst({
+    where: {
+      id: projectId,
+      deletedAt: null,
+      OR: [{ isPublicWiki: true }, { userToProjects: { some: { userId } } }],
+    },
+    select: { id: true },
+  });
+  return Boolean(project);
+}
+
+async function resolveProjectId(
+  db: AuthContext["Variables"]["db"],
+  userId: string,
+  projectId: string
+): Promise<string> {
+  if (projectId !== "general" && projectId !== "unlinked") return projectId;
+
+  const userProject = await db.project.findFirst({
+    where: { userToProjects: { some: { userId } }, deletedAt: null },
+    select: { id: true },
+  });
+  if (userProject) return userProject.id;
+
+  const created = await db.project.create({
+    data: {
+      name: "General Workspace",
+      repoOwner: "general",
+      repoName: "workspace",
+      repoUrl: "https://github.com/placeholder/repo",
+      isPublicWiki: false,
+      userToProjects: { create: { userId } },
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 export const questionsRoutes = new Hono<AuthContext>()
   .get("/:id/qa/threads", async (c) => {
     const db = c.get("db");
     const userId = c.get("userId");
     const projectId = c.req.param("id");
+
+    if (!(await canReadProject(db, userId, projectId))) {
+      return c.json({ error: "Project not found" }, 404);
+    }
 
     const threads = await db.qaThread.findMany({
       where: { projectId, userId },
@@ -70,6 +118,10 @@ export const questionsRoutes = new Hono<AuthContext>()
     const userId = c.get("userId");
     const projectId = c.req.param("id");
     const threadId = c.req.param("threadId");
+
+    if (!(await canReadProject(db, userId, projectId))) {
+      return c.json({ error: "Project not found" }, 404);
+    }
 
     const thread = await db.qaThread.findFirst({
       where: { id: threadId, projectId, userId },
@@ -158,9 +210,20 @@ export const questionsRoutes = new Hono<AuthContext>()
       })
     ),
     async (c) => {
+      if (writesPaused()) {
+        return c.json(
+          {
+            error:
+              "High traffic mode: Reading existing Public & Private DeepWikis is active, new indexing is temporarily paused.",
+            code: "READ_ONLY_MODE",
+          },
+          503
+        );
+      }
+
       const db = c.get("db");
       const userId = c.get("userId");
-      const projectId = c.req.param("id");
+      const projectId = await resolveProjectId(db, userId, c.req.param("id"));
       const { query, chatProvider, chatModel, threadId } = c.req.valid("json");
 
       const project = await db.project.findFirst({
@@ -234,39 +297,29 @@ export const questionsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
+        threadId: z.string().optional(),
         question: z.string().min(1),
         answers: z.string().min(1),
         fileReference: z.any().optional(),
+        turns: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string(),
+              fileReferences: z.any().optional(),
+              createdAt: z.string().optional(),
+            })
+          )
+          .optional(),
       })
     ),
     async (c) => {
       let projectId = c.req.param("id");
       const userId = c.get("userId");
       const db = c.get("db");
-      const { question, answers, fileReference } = c.req.valid("json");
+      const { threadId, question, answers, fileReference, turns } = c.req.valid("json");
 
-      if (projectId === "general" || projectId === "unlinked") {
-        const userProject = await db.project.findFirst({
-          where: { userToProjects: { some: { userId } }, deletedAt: null },
-          select: { id: true },
-        });
-
-        if (userProject) {
-          projectId = userProject.id;
-        } else {
-          const created = await db.project.create({
-            data: {
-              name: "General Workspace",
-              repoOwner: "general",
-              repoName: "workspace",
-              repoUrl: "https://github.com/placeholder/repo",
-              isPublicWiki: false,
-              userToProjects: { create: { userId } },
-            },
-          });
-          projectId = created.id;
-        }
-      }
+      projectId = await resolveProjectId(db, userId, projectId);
 
       const member = await db.userToProject.findUnique({
         where: { userId_projectId: { userId, projectId } },
@@ -274,15 +327,38 @@ export const questionsRoutes = new Hono<AuthContext>()
       });
       if (!member) return c.json({ error: "Project not found" }, 404);
 
-      const saved = await db.question.create({
-        data: {
-          question,
-          answers,
-          fileReference: fileReference ?? null,
-          projectId,
-          userId,
-        },
-      });
+      const storedReference = turns?.length
+        ? ({
+            turns,
+            citations: Array.isArray(fileReference) ? fileReference : [],
+          } as unknown as Prisma.InputJsonValue)
+        : (fileReference ?? null);
+
+      const existing = threadId
+        ? await db.question.findFirst({
+            where: { id: threadId, projectId, userId },
+            select: { id: true },
+          })
+        : null;
+
+      const saved = existing
+        ? await db.question.update({
+            where: { id: existing.id },
+            data: {
+              question,
+              answers,
+              fileReference: storedReference,
+            },
+          })
+        : await db.question.create({
+            data: {
+              question,
+              answers,
+              fileReference: storedReference,
+              projectId,
+              userId,
+            },
+          });
 
       return c.json({ question: saved });
     }

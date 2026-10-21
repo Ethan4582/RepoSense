@@ -43,6 +43,18 @@ type CitationFile = {
   summary: string;
 };
 
+function getCitationFiles(reference: unknown): CitationFile[] {
+  if (Array.isArray(reference)) return reference as CitationFile[];
+  if (
+    reference &&
+    typeof reference === 'object' &&
+    Array.isArray((reference as { citations?: unknown }).citations)
+  ) {
+    return (reference as { citations: CitationFile[] }).citations;
+  }
+  return [];
+}
+
 export default function QaBookmarksPage() {
   const router = useRouter();
   const { projectId, project, projects, setProjectId } = useProject();
@@ -179,7 +191,7 @@ export default function QaBookmarksPage() {
         ) : (
           <div className="divide-y divide-border">
             {bookmarks.map((b) => {
-              const fileRefs = (Array.isArray(b.fileReference) ? b.fileReference : []) as unknown as CitationFile[];
+              const fileRefs = getCitationFiles(b.fileReference);
               const repoUrl = (b as any).project?.repoUrl ?? project?.repoUrl;
 
               return (
@@ -221,7 +233,7 @@ export default function QaBookmarksPage() {
                         {b.user && (
                           <>
                             <span>•</span>
-                            <span>Asked by {b.user.firstName || b.user.emailAddress}</span>
+                            <span>Asked by {b.user.firstName || 'Anonymous'}</span>
                           </>
                         )}
                       </div>

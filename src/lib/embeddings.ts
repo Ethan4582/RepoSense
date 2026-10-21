@@ -43,6 +43,7 @@ export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<
     const { embeddings } = await embedMany({
       model: embeddingModel as never,
       values: batch.map((chunk) => chunk.chunkContent),
+      abortSignal: AbortSignal.timeout(30_000),
     });
 
     const ids = batch.map(() => crypto.randomUUID());

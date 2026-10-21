@@ -30,8 +30,26 @@ app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: (origin) => origin || "*",
-    allowHeaders: ["Content-Type", "Authorization", "x-clerk-user-id"],
+    origin: (origin, c) => {
+      if (!origin) return undefined;
+
+      try {
+        const configured = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
+        const allowed = configured ? new URL(configured).origin : new URL(c.req.url).origin;
+        if (origin === allowed) return origin;
+        if (
+          process.env.NODE_ENV !== "production" &&
+          /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        ) {
+          return origin;
+        }
+      } catch {
+        // Invalid origin or configured URL.
+      }
+
+      return undefined;
+    },
+    allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })

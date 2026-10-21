@@ -22,7 +22,7 @@ export const indexingRoutes = new Hono<AuthContext>()
       orderBy: { startedAt: "desc" },
     });
 
-    return c.json({ job });
+    return c.json({ job }, 200, { "Cache-Control": "no-store" });
   })
   .post("/:id/indexing/start", async (c) => {
     const db = c.get("db");

@@ -59,7 +59,16 @@ export const publicRoutes = new Hono()
   .get('/projects/:id', async (c) => {
     const projectId = c.req.param('id');
 
-    return cachedJson(c, `public-project-${projectId}`, async () => {
+    // Gate on current visibility before reading the edge cache so a wiki that
+    // was just made private is never served from a stale entry.
+    const visible = await db.project.findFirst({
+      where: { id: projectId, isPublicWiki: true, deletedAt: null },
+      select: { id: true, updatedAt: true },
+    });
+    if (!visible) return c.json({ error: 'Wiki not found' }, 404);
+    const version = visible.updatedAt.getTime();
+
+    return cachedJson(c, `public-project-${projectId}-${version}`, async () => {
       const project = await db.project.findFirst({
         where: { id: projectId, isPublicWiki: true, deletedAt: null },
         select: {
@@ -95,7 +104,14 @@ export const publicRoutes = new Hono()
     const projectId = c.req.param('id');
     const slug = c.req.param('slug');
 
-    return cachedJson(c, `public-page-${projectId}-${slug}`, async () => {
+    const visible = await db.project.findFirst({
+      where: { id: projectId, isPublicWiki: true, deletedAt: null },
+      select: { id: true, updatedAt: true },
+    });
+    if (!visible) return c.json({ error: 'Page not found' }, 404);
+    const version = visible.updatedAt.getTime();
+
+    return cachedJson(c, `public-page-${projectId}-${slug}-${version}`, async () => {
       const page = await db.wikiPage.findFirst({
         where: {
           slug,

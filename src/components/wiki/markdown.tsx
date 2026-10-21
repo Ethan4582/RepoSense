@@ -15,11 +15,22 @@ export interface CitationTarget {
 }
 
 function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-') || 'section'
+  );
+}
+
+function nodeToText(node: React.ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).join('');
+  if (React.isValidElement(node)) {
+    return nodeToText((node.props as { children?: React.ReactNode }).children);
+  }
+  return '';
 }
 
 function renderCitations(markdown: string): string {
@@ -55,6 +66,13 @@ export function WikiMarkdown({
 }) {
   const isDark = useIsDark();
   const prepared = React.useMemo(() => renderCitations(content), [content]);
+  const headingCounts = new Map<string, number>();
+  const headingId = (text: string) => {
+    const base = slugify(text);
+    const count = headingCounts.get(base) ?? 0;
+    headingCounts.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
 
   return (
     <div className={cn('wiki-prose max-w-none text-sm leading-7 text-foreground', className)}>
@@ -67,17 +85,17 @@ export function WikiMarkdown({
             </h1>
           ),
           h2: ({ children }) => {
-            const text = String(children);
+            const text = nodeToText(children);
             return (
-              <h2 id={slugify(text)} className="mt-9 mb-3 text-xl font-semibold tracking-tight text-foreground">
+              <h2 id={headingId(text)} className="mt-9 mb-3 text-xl font-semibold tracking-tight text-foreground">
                 {children}
               </h2>
             );
           },
           h3: ({ children }) => {
-            const text = String(children);
+            const text = nodeToText(children);
             return (
-              <h3 id={slugify(text)} className="mt-7 mb-2 text-base font-semibold text-foreground">
+              <h3 id={headingId(text)} className="mt-7 mb-2 text-base font-semibold text-foreground">
                 {children}
               </h3>
             );

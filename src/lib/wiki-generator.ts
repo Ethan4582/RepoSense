@@ -57,6 +57,13 @@ function compactSkeleton(skeleton: RepoSkeleton): string {
   return lines.join('\n').slice(0, 28000);
 }
 
+function withLineNumbers(content: string): string {
+  return content
+    .split('\n')
+    .map((line, index) => `${index + 1} | ${line}`)
+    .join('\n');
+}
+
 function parseJsonPlan(raw: string): WikiPlan | null {
   const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
   const start = cleaned.indexOf('{');
@@ -203,6 +210,7 @@ ${manifest?.content.slice(0, 4000) ?? 'No manifest found.'}`;
     model: getModel(context.provider, context.model, context.apiKey) as never,
     prompt,
     temperature: 0.2,
+    abortSignal: AbortSignal.timeout(90_000),
   });
 
   const plan = parseJsonPlan(text);
@@ -259,18 +267,20 @@ export async function generateWikiPage(opts: {
   sectionOrder: number;
 }): Promise<GeneratedWikiPage> {
   const { context, page, sectionTitle, sectionOrder } = opts;
-  const relevant = page.relevantFiles.length > 0 ? page.relevantFiles : context.files.slice(0, 5).map((f) => f.path);
   const fileMap = new Map(context.files.map((file) => [file.path, file.content]));
+  const requested = page.relevantFiles.filter((path) => fileMap.has(path));
+  const relevant =
+    requested.length > 0 ? requested : context.files.slice(0, 5).map((file) => file.path);
 
   let sourceContext = '';
   let used = 0;
   for (const path of relevant) {
     const content = fileMap.get(path);
     if (!content) continue;
-    const slice = content.slice(0, 14000);
-    if (used + slice.length > 60000) break;
-    sourceContext += `\n\n===== FILE: ${path} =====\n${slice}`;
-    used += slice.length;
+    const numbered = withLineNumbers(content.slice(0, 14000));
+    if (used + numbered.length > 60000) break;
+    sourceContext += `\n\n===== FILE: ${path} =====\n${numbered}`;
+    used += numbered.length;
   }
 
   const siblings = opts.plan.sections
@@ -299,6 +309,7 @@ Write the full Markdown article for "${page.title}".`;
     system: PAGE_SYSTEM_PROMPT,
     prompt,
     temperature: 0.25,
+    abortSignal: AbortSignal.timeout(90_000),
   });
 
   return {

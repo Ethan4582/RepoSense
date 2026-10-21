@@ -116,13 +116,13 @@ export function chunkFile(file: {
   path: string;
   content: string;
 }): CodeChunk[] {
+  if (file.content.trim().length === 0) return [];
+
   const lines = file.content.split('\n');
   const totalLines = lines.length;
   const directory = file.path.includes('/')
     ? file.path.slice(0, file.path.lastIndexOf('/'))
     : '.';
-
-  if (totalLines === 0) return [];
 
   const chunks: CodeChunk[] = [];
   const step = Math.max(1, CHUNK_LINES - CHUNK_OVERLAP);
@@ -157,17 +157,30 @@ export function extractHeadings(
   const headings: Array<{ id: string; text: string; level: number }> = [];
   const used = new Map<string, number>();
 
+  let inFence = false;
   for (const line of markdown.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
     const match = /^(#{2,3})\s+(.+?)\s*$/.exec(line);
     if (!match?.[1] || !match[2]) continue;
 
     const level = match[1].length;
-    const text = match[2].replace(/[*_`]/g, '').trim();
-    const base = text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-');
+    const text = match[2]
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/<[^>]+>/g, '')
+      .replace(/[*_`~]/g, '')
+      .trim();
+    const base =
+      text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-') || 'section';
 
     const count = used.get(base) ?? 0;
     used.set(base, count + 1);

@@ -55,11 +55,17 @@ export function CodeViewer({
     setLoading(true);
     setContent(null);
 
-    fetchFile(projectId, file.filePath).then((text) => {
-      if (cancelled) return;
-      setContent(text);
-      setLoading(false);
-    });
+    void fetchFile(projectId, file.filePath)
+      .then((text) => {
+        if (cancelled) return;
+        setContent(text);
+      })
+      .catch(() => {
+        if (!cancelled) setContent(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
       cancelled = true;

@@ -3,7 +3,12 @@
  * providers a project needs, and that model IDs match their provider.
  */
 
-import { decryptKey, getDefaultChatModel, getModelInfo } from "~/lib/providers";
+import {
+  decryptKey,
+  getDefaultChatModel,
+  getDefaultEmbeddingModel,
+  getModelInfo,
+} from "~/lib/providers";
 import type { EmbeddingProviderId, ProviderId } from "~/lib/providers";
 import type { Project } from "@prisma/client";
 import { db } from "~/server/db";
@@ -29,11 +34,6 @@ export class ProviderAccessError extends Error {
     this.code = code;
   }
 }
-
-const EMBEDDING_MODEL_IDS: Record<EmbeddingProviderId, string> = {
-  OPENAI: "text-embedding-3-small",
-  GEMINI: "gemini-embedding-001",
-};
 
 export const EMBEDDING_DIMENSIONS: Record<EmbeddingProviderId, number> = {
   OPENAI: 1536,
@@ -66,6 +66,19 @@ export function alignChatModel(provider: ProviderId, modelId?: string | null): s
   const info = getModelInfo(modelId);
   if (!info || info.provider !== provider) {
     return getDefaultChatModel(provider);
+  }
+  return modelId;
+}
+
+export function alignEmbeddingModel(
+  provider: EmbeddingProviderId,
+  modelId?: string | null
+): string {
+  if (!modelId) return getDefaultEmbeddingModel(provider);
+
+  const info = getModelInfo(modelId);
+  if (!info || info.provider !== provider || !info.isEmbedding) {
+    return getDefaultEmbeddingModel(provider);
   }
   return modelId;
 }
@@ -111,7 +124,7 @@ export async function resolveProjectKeys(
     chatModel: alignChatModel(chatProvider, project.chatModel),
     chatApiKey,
     embeddingProvider,
-    embeddingModel: project.embeddingModel || EMBEDDING_MODEL_IDS[embeddingProvider],
+    embeddingModel: alignEmbeddingModel(embeddingProvider, project.embeddingModel),
     embeddingDimensions: EMBEDDING_DIMENSIONS[embeddingProvider],
     embeddingApiKey,
   };

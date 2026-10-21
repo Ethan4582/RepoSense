@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthContext } from "../auth";
+import type { ProviderId } from "~/lib/providers";
+import { alignChatModel } from "~/lib/providers/guard";
 
 const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
 
@@ -37,7 +39,6 @@ export const meRoutes = new Hono<AuthContext>()
         defaultChatProvider: z.enum(PROVIDERS).optional(),
         defaultChatModel: z.string().optional(),
         defaultEmbeddingProvider: z.enum(["GEMINI", "OPENAI"]).optional(),
-        preferences: z.any().optional(),
       })
     ),
     async (c) => {
@@ -45,19 +46,32 @@ export const meRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const data = c.req.valid("json");
 
+      const current =
+        data.defaultChatProvider === undefined && data.defaultChatModel !== undefined
+          ? await db.user.findUnique({
+              where: { id: userId },
+              select: { defaultChatProvider: true },
+            })
+          : null;
+      const chatProvider = (data.defaultChatProvider ??
+        current?.defaultChatProvider) as ProviderId | undefined;
+      const chatModel =
+        data.defaultChatProvider !== undefined || data.defaultChatModel !== undefined
+          ? alignChatModel(chatProvider ?? "OPENAI", data.defaultChatModel)
+          : undefined;
+
       const updated = await db.user.update({
         where: { id: userId },
         data: {
           ...(data.defaultChatProvider !== undefined && {
             defaultChatProvider: data.defaultChatProvider,
           }),
-          ...(data.defaultChatModel !== undefined && {
-            defaultChatModel: data.defaultChatModel,
+          ...(chatModel !== undefined && {
+            defaultChatModel: chatModel,
           }),
           ...(data.defaultEmbeddingProvider !== undefined && {
             defaultEmbeddingProvider: data.defaultEmbeddingProvider,
           }),
-          ...(data.preferences !== undefined && { preferences: data.preferences }),
         },
         select: {
           id: true,

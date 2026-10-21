@@ -108,6 +108,7 @@ async function prepare(opts: QaContext) {
   const { embedding } = await embed({
     model: embeddingModel as never,
     value: opts.question,
+    abortSignal: AbortSignal.timeout(30_000),
   });
 
   const chunks = await searchCodeChunks({
@@ -177,6 +178,7 @@ export async function answerQuestionOnce(opts: QaContext): Promise<QaAnswerResul
     system: QA_SYSTEM_PROMPT,
     prompt: prepared.prompt,
     temperature: 0.2,
+    abortSignal: AbortSignal.timeout(90_000),
   });
 
   await opts.db.qaMessage.create({
@@ -240,6 +242,7 @@ export async function streamQuestion(
           system: QA_SYSTEM_PROMPT,
           prompt: prepared.prompt,
           temperature: 0.2,
+          abortSignal: AbortSignal.timeout(90_000),
         });
 
         for await (const delta of result.textStream) {

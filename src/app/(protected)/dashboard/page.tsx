@@ -1,12 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Terminal, FolderGit2 } from 'lucide-react';
 import useProject from '~/hooks/use-project';
 import ChatView from '~/components/chat/chat-view';
-import { Button } from '~/components/ui/button';
 
 function DashboardContent() {
   const { project, projectId, setProjectId, projects } = useProject();

@@ -114,6 +114,8 @@ export function WikiReader() {
   const [shareOpen, setShareOpen] = React.useState(false);
   const [visibilityBusy, setVisibilityBusy] = React.useState(false);
   const [indexing, setIndexing] = React.useState<IndexingJob | null>(null);
+  const [reloadKey, setReloadKey] = React.useState(0);
+  const wasIndexingRef = React.useRef(false);
 
   const [question, setQuestion] = React.useState('');
   const [qaOpen, setQaOpen] = React.useState(false);
@@ -127,6 +129,30 @@ export function WikiReader() {
 
   const answerEndRef = React.useRef<HTMLDivElement | null>(null);
   const scanningRef = React.useRef<Array<{ filePath: string; startLine: number; endLine: number }>>([]);
+  const articleRef = React.useRef<HTMLElement | null>(null);
+  const [activeHeadingId, setActiveHeadingId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const container = articleRef.current;
+    if (!container) return;
+
+    const update = () => {
+      const headings = Array.from(
+        container.querySelectorAll<HTMLElement>('h2[id], h3[id]')
+      );
+      const threshold = container.getBoundingClientRect().top + 96;
+      let current = headings[0]?.id ?? null;
+      for (const heading of headings) {
+        if (heading.getBoundingClientRect().top <= threshold) current = heading.id;
+        else break;
+      }
+      setActiveHeadingId(current);
+    };
+
+    update();
+    container.addEventListener('scroll', update, { passive: true });
+    return () => container.removeEventListener('scroll', update);
+  }, [activePage?.slug, activePage?.content]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -204,7 +230,7 @@ export function WikiReader() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, isSignedIn]);
+  }, [projectId, isSignedIn, reloadKey]);
 
   React.useEffect(() => {
     if (!activeSlug || !project) return;
@@ -226,7 +252,7 @@ export function WikiReader() {
   }, [activeSlug, project, isPublic, projectId]);
 
   React.useEffect(() => {
-    if (isPublic || !isSignedIn) return;
+    if (!isSignedIn || !project?.isOwner) return;
 
     const poll = async () => {
       try {
@@ -234,9 +260,14 @@ export function WikiReader() {
         if (!res.ok) return;
         const data = (await res.json()) as { job: IndexingJob | null };
         if (data.job && (data.job.status === 'QUEUED' || data.job.status === 'RUNNING')) {
+          wasIndexingRef.current = true;
           setIndexing(data.job);
         } else {
           setIndexing(null);
+          if (wasIndexingRef.current) {
+            wasIndexingRef.current = false;
+            setReloadKey((value) => value + 1);
+          }
         }
       } catch {
         // ignore
@@ -246,7 +277,7 @@ export function WikiReader() {
     void poll();
     const timer = setInterval(poll, 3000);
     return () => clearInterval(timer);
-  }, [isPublic, isSignedIn, projectId]);
+  }, [isSignedIn, project?.isOwner, projectId]);
 
   React.useEffect(() => {
     answerEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -367,12 +398,10 @@ export function WikiReader() {
           if (payload.type === 'thread') {
             setThreadId(payload.threadId);
           } else if (payload.type === 'scanning') {
-            setScanning((prev) => {
-              if (prev.some((item) => item.filePath === payload.filePath)) return prev;
-              const next = [...prev, payload];
-              scanningRef.current = next;
-              return next;
-            });
+            if (!scanningRef.current.some((item) => item.filePath === payload.filePath)) {
+              scanningRef.current = [...scanningRef.current, payload];
+              setScanning(scanningRef.current);
+            }
           } else if (payload.type === 'token') {
             setAnswer((prev) => prev + payload.text);
             const firstScan = scanningRef.current[0];
@@ -581,7 +610,7 @@ export function WikiReader() {
             <Sun className="size-4 dark:hidden" />
             <Moon className="hidden size-4 dark:block" />
           </Button>
-          {!isPublic && isSignedIn ? (
+          {project.isOwner && isSignedIn ? (
             <Button
               variant="outline"
               size="sm"
@@ -769,7 +798,10 @@ export function WikiReader() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1">
-              <article className="min-w-0 flex-1 overflow-y-auto px-5 pb-32 pt-6 md:px-10">
+              <article
+                ref={articleRef}
+                className="min-w-0 flex-1 overflow-y-auto px-5 pb-32 pt-6 md:px-10"
+              >
                 {pageLoading && !activePage?.content ? (
                   <div className="mx-auto max-w-3xl space-y-3">
                     <div className="h-8 w-2/3 animate-pulse rounded bg-muted" />
@@ -798,6 +830,28 @@ export function WikiReader() {
                         </div>
                       </details>
                     ) : null}
+                    {(activePage.headings?.length ?? 0) > 0 ? (
+                      <details className="mb-6 rounded-lg border bg-muted/20 px-3 py-2 text-xs xl:hidden">
+                        <summary className="cursor-pointer select-none font-medium text-muted-foreground">
+                          On this page
+                        </summary>
+                        <div className="mt-2 space-y-1">
+                          {(activePage.headings ?? []).map((heading) => (
+                            <a
+                              key={heading.id}
+                              href={`#${heading.id}`}
+                              className={cn(
+                                'block border-l-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground',
+                                heading.level === 2 ? 'pl-2 font-medium' : 'pl-4',
+                                activeHeadingId === heading.id && 'border-primary text-foreground'
+                              )}
+                            >
+                              {heading.text}
+                            </a>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
                     <WikiMarkdown content={activePage.content} onCitation={openCitation} />
                   </div>
                 ) : (
@@ -807,16 +861,16 @@ export function WikiReader() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       Add your API key in Settings, then start indexing to generate documentation.
                     </p>
-                    {isSignedIn ? (
+                    {project.isOwner && isSignedIn ? (
                       <Button className="mt-4 gap-2" size="sm" onClick={startReindex} disabled={Boolean(indexing)}>
                         <Sparkles className="size-3.5" />
                         Generate wiki
                       </Button>
-                    ) : (
+                    ) : !isSignedIn ? (
                       <Link href="/sign-in">
                         <Button className="mt-4" size="sm">Sign in to index</Button>
                       </Link>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </article>
@@ -832,7 +886,8 @@ export function WikiReader() {
                       href={`#${heading.id}`}
                       className={cn(
                         'block border-l-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground',
-                        heading.level === 2 ? 'pl-2 font-medium' : 'pl-4'
+                        heading.level === 2 ? 'pl-2 font-medium' : 'pl-4',
+                        activeHeadingId === heading.id && 'border-primary text-foreground'
                       )}
                     >
                       {heading.text}

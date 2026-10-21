@@ -18,24 +18,54 @@ export class GitHubAccessError extends Error {
 }
 
 export function parseRepoUrl(repoUrl: string): RepoCoordinates {
-  const cleaned = repoUrl.trim().replace(/\.git$/, '').replace(/\/$/, '');
-  const match = /github\.com[/:]([^/]+)\/([^/]+)/i.exec(cleaned);
+  const raw = repoUrl.trim();
+  let owner: string | undefined;
+  let repo: string | undefined;
 
-  if (!match?.[1] || !match[2]) {
+  const scp = /^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i.exec(raw);
+  if (scp?.[1] && scp[2]) {
+    owner = scp[1];
+    repo = scp[2];
+  } else {
+    const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    try {
+      const url = new URL(withProtocol);
+      if (url.hostname.toLowerCase() !== 'github.com' && url.hostname.toLowerCase() !== 'www.github.com') {
+        throw new Error('not github');
+      }
+
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.length !== 2) throw new Error('not a repo path');
+      owner = parts[0];
+      repo = parts[1]?.replace(/\.git$/i, '');
+    } catch {
+      throw new GitHubAccessError(
+        'NOT_FOUND',
+        'Only GitHub repositories are supported. Use a URL like https://github.com/owner/repo.'
+      );
+    }
+  }
+
+  const validSegment = (value: string) =>
+    value.length <= 100 && /^[A-Za-z0-9_.-]+$/.test(value) && !/^\.+$/.test(value);
+
+  if (!owner || !repo || !validSegment(owner) || !validSegment(repo)) {
     throw new GitHubAccessError(
       'NOT_FOUND',
       'Only GitHub repositories are supported. Use a URL like https://github.com/owner/repo.'
     );
   }
 
-  const owner = match[1];
-  const repo = match[2];
   return { owner, repo, repoUrl: `https://github.com/${owner}/${repo}` };
 }
 
 export function getOctokit(token?: string | null) {
   const authToken = token?.trim() || process.env.GITHUB_TOKEN;
-  return new Octokit(authToken ? { auth: authToken } : {});
+  return new Octokit({
+    ...(authToken ? { auth: authToken } : {}),
+    request: { timeout: 20_000 },
+  });
 }
 
 export const octokit = getOctokit();
@@ -160,7 +190,7 @@ export async function fetchRawFile(
   const headers: Record<string, string> = { 'User-Agent': 'reposense-app' };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, { headers });
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
   if (res.ok) return await res.text();
 
   if (res.status === 404) {

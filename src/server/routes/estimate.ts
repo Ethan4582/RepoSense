@@ -3,8 +3,9 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthContext } from "../auth";
 import { estimateProjectCost, estimateRepoTokensFromTree } from "~/lib/estimate";
+import { parseRepoUrl } from "~/lib/github";
 
-const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
+const GITHUB_REQUEST_TIMEOUT = 20_000;
 
 async function checkGitHubRepo(owner: string, repo: string, userToken?: string) {
   const headers: Record<string, string> = {
@@ -17,12 +18,18 @@ async function checkGitHubRepo(owner: string, repo: string, userToken?: string) 
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+  let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers,
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT),
+  });
 
   // If token is invalid or unauthorized, retry unauthenticated for public repositories
   if (res.status === 401 && headers["Authorization"]) {
     delete headers["Authorization"];
-    const retryRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+    const retryRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers,
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT),
+    });
     if (retryRes.ok) {
       res = retryRes;
     } else {
@@ -50,14 +57,14 @@ async function fetchRepoTree(owner: string, repo: string, branch: string, userTo
 
   let res = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-    { headers }
+    { headers, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT) }
   );
 
   if (res.status === 401 && headers["Authorization"]) {
     delete headers["Authorization"];
     const retryRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-      { headers }
+      { headers, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT) }
     );
     if (retryRes.ok) {
       res = retryRes;
@@ -76,7 +83,7 @@ export const estimateRoutes = new Hono<AuthContext>().post(
   zValidator(
     "json",
     z.object({
-      repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid, public GitHub repository URL."),
+      repoUrl: z.string().min(1, "Please provide a GitHub repository URL."),
       githubToken: z.string().optional(),
       modelId: z.string().optional().default("gpt-6.1-sol"),
       embeddingModelId: z.string().optional().default("text-embedding-3-small"),
@@ -86,13 +93,15 @@ export const estimateRoutes = new Hono<AuthContext>().post(
     const { repoUrl, githubToken, modelId, embeddingModelId } = c.req.valid("json");
 
     try {
-      const match = repoUrl.trim().match(GITHUB_REPO_REGEX);
-      if (!match || !match[1] || !match[2]) {
-        return c.json({ error: "Please provide a valid, public GitHub repository URL." }, 400);
+      let coordinates: ReturnType<typeof parseRepoUrl>;
+      try {
+        coordinates = parseRepoUrl(repoUrl);
+      } catch {
+        return c.json({ error: "Please provide a valid GitHub repository URL." }, 400);
       }
 
-      const owner = match[1];
-      const repo = match[2];
+      const owner = coordinates.owner;
+      const repo = coordinates.repo;
 
       // Check reachability of the repository
       let defaultBranch = "main";

@@ -10,6 +10,13 @@ import {
   validateProviderKey,
 } from "~/lib/providers";
 
+const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
+
+function parseProvider(value: string): ProviderId | null {
+  const provider = value.toUpperCase();
+  return (PROVIDERS as readonly string[]).includes(provider) ? (provider as ProviderId) : null;
+}
+
 const getEncryptionSecret = (): string => {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) {
@@ -46,7 +53,7 @@ export const keysRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]),
+        provider: z.enum(PROVIDERS),
         apiKey: z.string().min(5, "API key is too short"),
       })
     ),
@@ -108,13 +115,16 @@ export const keysRoutes = new Hono<AuthContext>()
     async (c) => {
       const userId = c.get("userId");
       const db = c.get("db");
-      const providerParam = c.req.param("provider").toUpperCase() as ProviderId;
+      const providerParam = parseProvider(c.req.param("provider"));
+      if (!providerParam) {
+        return c.json({ error: "Unsupported provider" }, 400);
+      }
 
       const record = await db.apiKey.findUnique({
         where: {
           userId_provider: {
             userId,
-            provider: providerParam as any,
+            provider: providerParam,
           },
         },
       });
@@ -155,12 +165,15 @@ export const keysRoutes = new Hono<AuthContext>()
     async (c) => {
       const userId = c.get("userId");
       const db = c.get("db");
-      const providerParam = c.req.param("provider").toUpperCase();
+      const providerParam = parseProvider(c.req.param("provider"));
+      if (!providerParam) {
+        return c.json({ error: "Unsupported provider" }, 400);
+      }
 
       await db.apiKey.deleteMany({
         where: {
           userId,
-          provider: providerParam as any,
+          provider: providerParam,
         },
       });
 

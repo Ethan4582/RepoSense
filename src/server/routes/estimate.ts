@@ -20,13 +20,18 @@ async function checkGitHubRepo(owner: string, repo: string, userToken?: string) 
   let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
 
   // If token is invalid or unauthorized, retry unauthenticated for public repositories
-  if (res.status === 401 && !userToken && process.env.GITHUB_TOKEN) {
+  if (res.status === 401 && headers["Authorization"]) {
     delete headers["Authorization"];
-    res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+    const retryRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+    if (retryRes.ok) {
+      res = retryRes;
+    } else {
+      throw new Error("GitHub authentication failed (401 Bad credentials). The provided GitHub token may be expired or invalid. Please check your token or use a public repository.");
+    }
   }
 
   if (!res.ok) {
-    throw new Error("Repository not found or inaccessible");
+    throw new Error("Repository not found or inaccessible. Please verify the URL or provide a valid GitHub token.");
   }
 
   return await res.json();
@@ -48,12 +53,15 @@ async function fetchRepoTree(owner: string, repo: string, branch: string, userTo
     { headers }
   );
 
-  if (res.status === 401 && !userToken && process.env.GITHUB_TOKEN) {
+  if (res.status === 401 && headers["Authorization"]) {
     delete headers["Authorization"];
-    res = await fetch(
+    const retryRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
       { headers }
     );
+    if (retryRes.ok) {
+      res = retryRes;
+    }
   }
 
   if (!res.ok) {

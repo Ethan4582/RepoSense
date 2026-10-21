@@ -118,7 +118,11 @@ export function AppSideBar() {
 
   const { data: questions, refetch: refetchQuestions } = api.project.getQuestions.useQuery(
     { projectId: projectId ?? '' },
-    { enabled: !!projectId }
+    {
+      enabled: !!projectId,
+      refetchInterval: 3000,
+      refetchOnWindowFocus: true,
+    }
   );
 
   const togglePinMutation = api.project.togglePinQuestion.useMutation({
@@ -246,21 +250,24 @@ export function AppSideBar() {
                 return (
                   <SidebarMenuItem key={tab.url}>
                     <SidebarMenuButton
-                      onClick={() => router.push(tab.url)}
+                      asChild
+                      isActive={isActive}
                       tooltip={tab.title}
                       className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors w-full',
+                        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors w-full cursor-pointer',
                         isActive
-                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs hover:bg-primary hover:text-primary-foreground'
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       )}
                     >
-                      <Icon className="size-4 shrink-0" />
-                      {open && (
-                        <div className="flex flex-col text-left truncate">
-                          <span className="truncate">{tab.title}</span>
-                        </div>
-                      )}
+                      <Link href={tab.url} prefetch>
+                        <Icon className="size-4 shrink-0" />
+                        {open && (
+                          <div className="flex flex-col text-left truncate">
+                            <span className="truncate">{tab.title}</span>
+                          </div>
+                        )}
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -291,9 +298,12 @@ export function AppSideBar() {
                             ? 'bg-primary/10 text-primary font-medium'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
-                        onClick={() => router.push(`/dashboard?threadId=${q.id}`)}
                       >
-                        <div className="flex flex-col truncate min-w-0 pr-2">
+                        <Link
+                          href={`/dashboard?threadId=${q.id}`}
+                          prefetch
+                          className="flex flex-col truncate min-w-0 pr-2 flex-1 text-left"
+                        >
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="truncate">{q.question}</span>
                           </div>
@@ -302,7 +312,7 @@ export function AppSideBar() {
                               📁 {folder}
                             </span>
                           )}
-                        </div>
+                        </Link>
 
                         {/* Thread Action Dots Menu */}
                         <DropdownMenu>
@@ -392,16 +402,19 @@ export function AppSideBar() {
                             ? 'bg-primary/10 text-primary font-medium'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
-                        onClick={() => router.push(`/dashboard?threadId=${q.id}`)}
                       >
-                        <div className="flex flex-col truncate min-w-0 pr-2">
+                        <Link
+                          href={`/dashboard?threadId=${q.id}`}
+                          prefetch
+                          className="flex flex-col truncate min-w-0 pr-2 flex-1 text-left"
+                        >
                           <span className="truncate">{q.question}</span>
                           {folder && (
                             <span className="text-[10px] text-muted-foreground/70 truncate">
                               📁 {folder}
                             </span>
                           )}
-                        </div>
+                        </Link>
 
                         {/* Thread Action Dots Menu */}
                         <DropdownMenu>

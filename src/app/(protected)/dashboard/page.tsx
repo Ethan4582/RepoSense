@@ -22,35 +22,14 @@ function DashboardContent() {
     }
   }, [projectId, projects, setProjectId]);
 
-  if (!project) {
-    return (
-      <div className="flex h-[calc(100vh-4rem)] items-center justify-center p-8 text-center">
-        <div className="max-w-md space-y-3">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-            <Terminal className="size-6" />
-          </div>
-          <h2 className="text-base font-medium text-foreground">No Project Selected</h2>
-          <p className="text-xs text-muted-foreground">
-            Link a GitHub repository to ask questions and chat with your codebase.
-          </p>
-          <div className="pt-2">
-            <Link href="/create">
-              <Button size="sm" className="text-xs gap-1.5 shadow-xs">
-                <FolderGit2 className="size-3.5" />
-                <span>Link Repository</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const effectiveProjectId = project?.id ?? 'general';
+  const effectiveProjectName = project?.name ?? 'General AI';
 
   return (
     <ChatView
-      key={`${project.id}-${currentThreadId ?? 'new'}-${newChatTimestamp ?? 'init'}`}
-      projectId={project.id}
-      projectName={project.name}
+      key={`${effectiveProjectId}-${currentThreadId ?? 'new'}-${newChatTimestamp ?? 'init'}`}
+      projectId={effectiveProjectId}
+      projectName={effectiveProjectName}
       initialThreadId={isNewChat ? null : currentThreadId}
       activeThreadId={isNewChat ? null : currentThreadId}
     />

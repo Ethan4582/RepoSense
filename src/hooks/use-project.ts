@@ -5,7 +5,13 @@ import { api } from '~/trpc/react';
 import { useLocalStorage } from 'usehooks-ts';
 
 const useProject = () => {
-  const { data: projects, refetch: refetchProjects, isLoading } = api.project.getProjects.useQuery();
+  const { data: projects, refetch: refetchProjects, isLoading } = api.project.getProjects.useQuery(
+    undefined,
+    {
+      refetchInterval: 3000,
+      refetchOnWindowFocus: true,
+    }
+  );
   const [projectId, setProjectId] = useLocalStorage<string | null>('projectId', null);
 
   // Match selected project, or default to the first available project

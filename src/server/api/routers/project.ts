@@ -29,6 +29,9 @@ export const projectRouter = createTRPCRouter({
         name: z.string().optional(),
         repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid, public GitHub repository URL."),
         githubToken: z.string().optional(),
+        chatProvider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).optional().default("OPENAI"),
+        chatModel: z.string().optional().default("gpt-4o"),
+        embeddingProvider: z.enum(["OPENAI", "GEMINI"]).optional().default("OPENAI"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -53,24 +56,40 @@ export const projectRouter = createTRPCRouter({
       }
 
       let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
-      if (res.status === 401 && !input.githubToken && process.env.GITHUB_TOKEN) {
+      if (res.status === 401 && headers["Authorization"]) {
         delete headers["Authorization"];
-        res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+        const fallbackRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+        if (fallbackRes.ok) {
+          res = fallbackRes;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "GitHub authentication failed (401 Bad credentials). Your Personal Access Token may be expired or invalid. Please provide a new token.",
+          });
+        }
       }
 
       if (!res.ok) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Please provide a valid, public GitHub repository URL.",
+          message: "Please provide a valid, accessible GitHub repository URL or a valid token if private.",
         });
       }
 
       const derivedProjectName = input.name?.trim() || `${owner}/${repo}`;
+      const embeddingModel = input.embeddingProvider === "OPENAI" ? "text-embedding-3-small" : "gemini-embedding-001";
+      const embeddingDimensions = input.embeddingProvider === "OPENAI" ? 1536 : 768;
 
       const project = await ctx.db.project.create({
         data: {
           name: derivedProjectName,
           repoUrl: input.repoUrl.trim(),
+          gitHubToken: input.githubToken?.trim() || null,
+          chatProvider: input.chatProvider,
+          chatModel: input.chatModel,
+          embeddingProvider: input.embeddingProvider,
+          embeddingModel,
+          embeddingDimensions,
           userToProjects: {
             create: {
               userId: ctx.user.userId!,

@@ -82,33 +82,44 @@ export function ChatView({
   const [currentThreadId, setCurrentThreadId] = React.useState<string | null>(effectiveThreadId ?? null);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
-  const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
-    if (initialQuestions && initialQuestions.length > 0) {
-      const list: ChatMessage[] = [];
-      const questionsToLoad = effectiveThreadId
-        ? initialQuestions.filter((q: any) => q.id === effectiveThreadId)
-        : [];
+  const parseThreadMessages = (q: any): ChatMessage[] => {
+    if (!q) return [];
+    if (q.fileReference && typeof q.fileReference === 'object' && Array.isArray(q.fileReference.turns) && q.fileReference.turns.length > 0) {
+      return q.fileReference.turns.map((turn: any, idx: number) => ({
+        id: `${turn.role}-${q.id}-${idx}`,
+        dbQuestionId: q.id,
+        role: turn.role,
+        content: turn.content,
+        createdAt: turn.createdAt ? new Date(turn.createdAt) : new Date(q.createdAt),
+        fileReferences: turn.fileReferences ?? [],
+      }));
+    }
 
-      questionsToLoad.forEach((q: any) => {
-        list.push({
-          id: `u-${q.id}`,
-          role: 'user',
-          content: q.question,
-          createdAt: new Date(q.createdAt),
-        });
-        list.push({
-          id: `a-${q.id}`,
-          dbQuestionId: q.id,
-          role: 'assistant',
-          content: q.answers,
-          createdAt: new Date(q.createdAt),
-          isBookmarked: q.isBookmarked ?? false,
-          fileReferences: Array.isArray(q.fileReference)
-            ? (q.fileReference as ChatMessage['fileReferences'])
-            : [],
-        });
-      });
-      return list;
+    return [
+      {
+        id: `u-${q.id}`,
+        role: 'user',
+        content: q.question,
+        createdAt: new Date(q.createdAt),
+      },
+      {
+        id: `a-${q.id}`,
+        dbQuestionId: q.id,
+        role: 'assistant',
+        content: q.answers,
+        createdAt: new Date(q.createdAt),
+        isBookmarked: q.isBookmarked ?? false,
+        fileReferences: Array.isArray(q.fileReference) ? q.fileReference : [],
+      },
+    ];
+  };
+
+  const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
+    if (initialQuestions && initialQuestions.length > 0 && effectiveThreadId) {
+      const matched = initialQuestions.find((q: any) => q.id === effectiveThreadId);
+      if (matched) {
+        return parseThreadMessages(matched);
+      }
     }
     return [];
   });
@@ -126,25 +137,7 @@ export function ChatView({
     if (currentThreadId && initialQuestions && initialQuestions.length > 0) {
       const matched = initialQuestions.find((q: any) => q.id === currentThreadId);
       if (matched) {
-        setMessages([
-          {
-            id: `u-${matched.id}`,
-            role: 'user',
-            content: matched.question,
-            createdAt: new Date(matched.createdAt),
-          },
-          {
-            id: `a-${matched.id}`,
-            dbQuestionId: matched.id,
-            role: 'assistant',
-            content: matched.answers,
-            createdAt: new Date(matched.createdAt),
-            isBookmarked: matched.isBookmarked ?? false,
-            fileReferences: Array.isArray(matched.fileReference)
-              ? (matched.fileReference as ChatMessage['fileReferences'])
-              : [],
-          },
-        ]);
+        setMessages(parseThreadMessages(matched));
       }
     }
   }, [currentThreadId, initialQuestions]);
@@ -164,25 +157,7 @@ export function ChatView({
           if ('questions' in data && Array.isArray(data.questions)) {
             const match = data.questions.find((q: any) => q.id === currentThreadId);
             if (match) {
-              setMessages([
-                {
-                  id: `u-${match.id}`,
-                  role: 'user',
-                  content: match.question,
-                  createdAt: new Date(match.createdAt),
-                },
-                {
-                  id: `a-${match.id}`,
-                  dbQuestionId: match.id,
-                  role: 'assistant',
-                  content: match.answers,
-                  createdAt: new Date(match.createdAt),
-                  isBookmarked: match.isBookmarked ?? false,
-                  fileReferences: Array.isArray(match.fileReference)
-                    ? (match.fileReference as ChatMessage['fileReferences'])
-                    : [],
-                },
-              ]);
+              setMessages(parseThreadMessages(match));
             }
           }
         }
@@ -196,7 +171,10 @@ export function ChatView({
 
   const [input, setInput] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
-  const [chatMode, setChatMode] = React.useState<'rag' | 'simple'>('rag');
+  // Default to pure conversational General Chat Mode on fresh chat, or RAG mode on existing thread
+  const [chatMode, setChatMode] = React.useState<'rag' | 'simple'>(() => {
+    return effectiveThreadId ? 'rag' : 'simple';
+  });
   const [selectedProvider, setSelectedProvider] = React.useState<ProviderId>(
     chatProvider ?? defaultProvider
   );
@@ -315,45 +293,16 @@ export function ChatView({
 
       const data = await res.json();
       if ('answer' in data) {
+        const fullAnswer = data.answer as string;
         const fileRefs = (data.fileReferences as ChatMessage['fileReferences']) ?? [];
+        const assistantMsgId = `a-${Date.now()}`;
 
-        let savedQuestionId: string | undefined = undefined;
-        try {
-          const saveRes = await client.projects[':id'].questions.$post({
-            param: { id: projectId },
-            json: {
-              question: query,
-              answers: data.answer,
-              fileReference: fileRefs,
-            },
-          });
-          if (saveRes.ok) {
-            const savedData = await saveRes.json();
-            if ('question' in savedData && savedData.question) {
-              const savedId = savedData.question.id;
-              savedQuestionId = savedId;
-              setCurrentThreadId(savedId);
-
-              // Update URL to current thread so navigation and refresh persist
-              if (typeof window !== 'undefined') {
-                const url = new URL(window.location.href);
-                url.searchParams.set('threadId', savedId);
-                url.searchParams.delete('new');
-                window.history.replaceState(null, '', url.toString());
-              }
-
-              void utils.project.getQuestions.invalidate();
-            }
-          }
-        } catch (e) {
-          console.error('Failed to auto-save question:', e);
-        }
-
-        const assistantMsg: ChatMessage = {
-          id: `a-${Date.now()}`,
-          dbQuestionId: savedQuestionId,
+        // Initialize empty assistant message for natural streaming effect
+        const baseAssistantMsg: ChatMessage = {
+          id: assistantMsgId,
+          dbQuestionId: currentThreadId ?? undefined,
           role: 'assistant',
-          content: data.answer,
+          content: '',
           createdAt: new Date(),
           provider: selectedProvider,
           modelId: selectedModel,
@@ -362,7 +311,87 @@ export function ChatView({
           fileReferences: fileRefs,
         };
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        setMessages((prev) => [...prev, baseAssistantMsg]);
+        setIsLoading(false);
+
+        // Stream text at a natural reading pace (chunks of 4-8 chars every 16-25ms)
+        await new Promise<void>((resolve) => {
+          let streamedIndex = 0;
+          const chunkSize = Math.max(3, Math.floor(fullAnswer.length / 100));
+          const interval = setInterval(() => {
+            streamedIndex += chunkSize;
+            if (streamedIndex >= fullAnswer.length) {
+              streamedIndex = fullAnswer.length;
+              clearInterval(interval);
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId ? { ...msg, content: fullAnswer } : msg
+                )
+              );
+              resolve();
+            } else {
+              const currentSlice = fullAnswer.slice(0, streamedIndex);
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId ? { ...msg, content: currentSlice } : msg
+                )
+              );
+            }
+          }, 18);
+        });
+
+        // Save turns to DB maintaining invariant threadId across turns
+        const currentTurns = [
+          ...messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            fileReferences: m.fileReferences ?? [],
+            createdAt: m.createdAt.toISOString(),
+          })),
+          {
+            role: 'user' as const,
+            content: query,
+            createdAt: userMsg.createdAt.toISOString(),
+          },
+          {
+            role: 'assistant' as const,
+            content: fullAnswer,
+            fileReferences: fileRefs,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+
+        try {
+          const saveRes = await (client.projects[':id'].questions as any).$post({
+            param: { id: projectId },
+            json: {
+              threadId: currentThreadId ?? undefined,
+              question: messages[0]?.role === 'user' ? messages[0].content : query,
+              answers: fullAnswer,
+              fileReference: fileRefs,
+              turns: currentTurns,
+            },
+          });
+
+          if (saveRes.ok) {
+            const savedData = await saveRes.json();
+            if ('question' in savedData && savedData.question) {
+              const savedId = savedData.question.id;
+              if (!currentThreadId) {
+                setCurrentThreadId(savedId);
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('threadId', savedId);
+                  url.searchParams.delete('new');
+                  window.history.replaceState(null, '', url.toString());
+                }
+              }
+              void utils.project.getQuestions.invalidate();
+            }
+          }
+        } catch (e) {
+          console.error('Failed to auto-save question turns:', e);
+        }
       }
     } catch (err: any) {
       console.error('Chat error:', err);
@@ -406,26 +435,45 @@ export function ChatView({
               <Image src="/logo.png" alt="RepoSense" width={40} height={40} className="object-contain" priority />
             </div>
             <h2 className="text-base sm:text-lg font-medium text-foreground tracking-tight">
-              How can I help with {projectName}?
+              {chatMode === 'simple'
+                ? 'General AI Chat'
+                : `Context-Aware Chat for ${projectName}`}
             </h2>
             <p className="text-xs text-muted-foreground max-w-md mt-1 mb-6">
-              Ask anything about architecture, dependencies, algorithms, or debug specific files.
+              {chatMode === 'simple'
+                ? 'Pure conversational assistant for general programming, syntax, and concepts. Toggle RAG below to query this repository directly.'
+                : 'Full codebase-aware context retrieval grounded in indexed repository files and architecture.'}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
-              {[
-                'How does authentication work in this repo?',
-                'Where are database queries handled?',
-                'Explain the main background job queue.',
-                'What external APIs does this project depend on?',
-              ].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => setInput(suggestion)}
-                  className="text-left p-2.5 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-xs text-foreground/80 hover:text-foreground shadow-2xs"
-                >
-                  "{suggestion}"
-                </button>
-              ))}
+              {chatMode === 'simple'
+                ? [
+                    'How does optimistic UI update work in React?',
+                    'Explain difference between WebSocket and SSE.',
+                    'Best practices for database connection pooling in Node.',
+                    'How do I implement rate limiting with Redis?',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => setInput(suggestion)}
+                      className="text-left p-2.5 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-xs text-foreground/80 hover:text-foreground shadow-2xs"
+                    >
+                      "{suggestion}"
+                    </button>
+                  ))
+                : [
+                    'How does authentication work in this repo?',
+                    'Where are database queries handled?',
+                    'Explain the main background job queue.',
+                    'What external APIs does this project depend on?',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => setInput(suggestion)}
+                      className="text-left p-2.5 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-xs text-foreground/80 hover:text-foreground shadow-2xs"
+                    >
+                      "{suggestion}"
+                    </button>
+                  ))}
             </div>
           </div>
         )}
@@ -527,33 +575,33 @@ export function ChatView({
             {/* Compact Bottom Toolbar Row: Controls & Send Button */}
             <div className="flex items-center justify-between px-3 py-1.5 border-t border-border/30 bg-muted/20">
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Compact Mode Pill */}
+                {/* Mode Pill Toggle: General Chat vs Codebase RAG */}
                 <div className="flex items-center rounded-lg border bg-background/80 p-0.5 text-[10px] font-medium">
                   <button
                     type="button"
-                    onClick={() => setChatMode('rag')}
-                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
-                      chatMode === 'rag'
-                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Retrieve repository files for grounding"
-                  >
-                    <Layers className="size-2.5" />
-                    <span>RAG</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setChatMode('simple')}
-                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded transition-colors ${
                       chatMode === 'simple'
                         ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
-                    title="Direct model chat without vector retrieval"
+                    title="General Chat: Pure conversational AI without repository indexing"
                   >
                     <MessageSquare className="size-2.5" />
-                    <span>Direct</span>
+                    <span>General Chat</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChatMode('rag')}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded transition-colors ${
+                      chatMode === 'rag'
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="RAG Mode: Full codebase-aware context retrieval grounded in indexed repository files"
+                  >
+                    <Layers className="size-2.5" />
+                    <span>Codebase RAG</span>
                   </button>
                 </div>
 

@@ -72,17 +72,17 @@ export default function CreateProjectPage() {
   const [githubToken, setGithubToken] = React.useState('');
   const [urlError, setUrlError] = React.useState<string | null>(null);
 
-  // Models Selection
-  const [chatProvider, setChatProvider] = React.useState<ProviderId>('GEMINI');
-  const [chatModel, setChatModel] = React.useState<string>('gemini-2.5-flash');
-  const [embeddingProvider, setEmbeddingProvider] = React.useState<'GEMINI' | 'OPENAI'>('GEMINI');
+  // Models Selection - Default to OpenAI out-of-the-box
+  const [chatProvider, setChatProvider] = React.useState<ProviderId>('OPENAI');
+  const [chatModel, setChatModel] = React.useState<string>('gpt-4o');
+  const [embeddingProvider, setEmbeddingProvider] = React.useState<'GEMINI' | 'OPENAI'>('OPENAI');
 
   // Estimate State
   const [isEstimating, setIsEstimating] = React.useState(false);
   const [estimateData, setEstimateData] = React.useState<any>(null);
 
   // User Keys State
-  const [validProviders, setValidProviders] = React.useState<ProviderId[]>(['GEMINI']);
+  const [validProviders, setValidProviders] = React.useState<ProviderId[]>(['OPENAI']);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const createProject = api.project.createProject.useMutation();
@@ -199,6 +199,9 @@ export default function CreateProjectPage() {
           name: parsedRepo.fullName,
           repoUrl: repoUrl.trim(),
           githubToken: githubToken.trim() || undefined,
+          chatProvider,
+          chatModel,
+          embeddingProvider,
         },
         {
           onSuccess: (project: any) => {

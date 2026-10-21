@@ -129,32 +129,37 @@ export const getPullRequests = async (githubUrl: string, token?: string | null):
   }));
 };
 
-export async function fetchProjectGithubUrl(projectId: string) {
+export async function fetchProjectGithubDetails(projectId: string) {
   const project = await db.project.findUnique({
     where: { id: projectId },
-    select: { repoUrl: true },
+    select: { repoUrl: true, gitHubToken: true },
   });
 
   if (!project?.repoUrl) {
     throw new Error(`Project with ID ${projectId} not found or does not have a repository URL.`);
   }
-  return project.repoUrl;
+  return { repoUrl: project.repoUrl, gitHubToken: project.gitHubToken };
+}
+
+export async function fetchProjectGithubUrl(projectId: string) {
+  const details = await fetchProjectGithubDetails(projectId);
+  return details.repoUrl;
 }
 
 export const getPullRequestsForProject = async (projectId: string): Promise<PullRequestResponse[]> => {
-  const githubUrl = await fetchProjectGithubUrl(projectId);
-  return await getPullRequests(githubUrl);
+  const { repoUrl, gitHubToken } = await fetchProjectGithubDetails(projectId);
+  return await getPullRequests(repoUrl, gitHubToken);
 };
 
 export const pollCommits = async (projectId: string) => {
-  const githubUrl = await fetchProjectGithubUrl(projectId);
-  const commitHashes = await getCommitsHashes(githubUrl);
+  const { repoUrl, gitHubToken } = await fetchProjectGithubDetails(projectId);
+  const commitHashes = await getCommitsHashes(repoUrl, gitHubToken);
 
   const unprocessedCommits = await filterUnprocessedCommits(projectId, commitHashes);
 
   const summaryResponses = await Promise.allSettled(
     unprocessedCommits.map((commit) => {
-      return summariseCommit(githubUrl, commit.commitHash);
+      return summariseCommit(repoUrl, commit.commitHash);
     })
   );
 

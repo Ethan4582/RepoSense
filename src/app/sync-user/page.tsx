@@ -35,6 +35,9 @@ export default async function SyncUserPage() {
         imageUrl: user.imageUrl,
         firstName: user.firstName,
         lastName: user.lastName,
+        defaultChatProvider: "OPENAI",
+        defaultChatModel: "gpt-4o",
+        defaultEmbeddingProvider: "OPENAI",
       },
     });
 

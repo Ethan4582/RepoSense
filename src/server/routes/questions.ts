@@ -16,6 +16,31 @@ function extractGitHubUrl(text: string): string | null {
   return match ? match[0] : null;
 }
 
+// Helper to detect if a query is purely general / conceptual rather than codebase specific
+function isPurelyGeneralQuery(query: string): boolean {
+  const q = query.trim().toLowerCase();
+  // Question patterns like "what is ...", "how does ... work", "explain ..."
+  const generalPatterns = [
+    /^(what\s+is|what\s+are|define|explain)\s+(an?\s+)?([a-z0-9_-]+)(\?|\.|$)/i,
+    /^(how\s+does|how\s+do)\s+([a-z0-9_-]+)\s+work(\?|\.|$)/i,
+    /^(difference\s+between|compare)\s+/i,
+    /^(what\s+does\s+([a-z0-9_-]+)\s+mean)/i,
+    /^(why\s+use|when\s+to\s+use)\s+/i,
+  ];
+
+  // Specific code keywords that indicate the user wants this project's code
+  const codebaseKeywords = [
+    "this repo", "this project", "our code", "codebase", "this file", "in this app",
+    "directory", "routes", "schema", "prisma", "components", "api", "endpoint",
+    "src/", "package.json", "dockerfile", "readme", ".env", "index.ts"
+  ];
+
+  const hasCodebaseKeyword = codebaseKeywords.some((kw) => q.includes(kw));
+  if (hasCodebaseKeyword) return false;
+
+  return generalPatterns.some((pattern) => pattern.test(q));
+}
+
 export async function executeChatPipeline(opts: {
   c: Context<AuthContext>;
   projectId: string;
@@ -28,16 +53,21 @@ export async function executeChatPipeline(opts: {
   const { c, projectId, userId, question, overrideProvider, overrideModel, mode = "rag" } = opts;
   const db = c.get("db");
 
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-  });
+  const isVirtualProject = projectId === "general" || projectId === "unlinked";
+  let project = isVirtualProject
+    ? null
+    : await db.project.findUnique({
+        where: { id: projectId },
+      });
 
-  if (!project) {
+  if (!project && !isVirtualProject) {
     return c.json({ error: "Project not found" }, 404);
   }
 
+  const projectName = project?.name ?? "General AI";
+
   const detectedRepoUrl = extractGitHubUrl(question);
-  if (detectedRepoUrl && (!project.repoUrl || project.repoUrl === "https://github.com/placeholder/repo" || !project.repoUrl.includes("github.com"))) {
+  if (project && detectedRepoUrl && (!project.repoUrl || project.repoUrl === "https://github.com/placeholder/repo" || !project.repoUrl.includes("github.com"))) {
     db.project.update({
       where: { id: projectId },
       data: { repoUrl: detectedRepoUrl },
@@ -50,8 +80,8 @@ export async function executeChatPipeline(opts: {
     ).catch((err) => console.error("[RAG Repo Ingest] Error:", err));
   }
 
-  const provider = (overrideProvider || project.chatProvider || "OPENAI") as ProviderId;
-  let modelId = overrideModel || project.chatModel;
+  const provider = (overrideProvider || project?.chatProvider || "OPENAI") as ProviderId;
+  let modelId = overrideModel || project?.chatModel;
   if (!modelId) {
     try {
       modelId = getDefaultChatModel(provider);
@@ -89,10 +119,45 @@ export async function executeChatPipeline(opts: {
     );
   }
 
-  if (mode === "simple") {
-    console.log(`[Chat] Mode: Simple (Direct LLM) | Model: ${provider}/${modelId}`);
-    const prompt = `You are an expert AI software engineer assisting a developer with programming and software engineering questions.\n\nQUESTION:\n${question}\n\nAnswer concisely, cleanly, and accurately using Markdown syntax with code blocks when relevant.`;
-    
+  // Check if project has valid repository or indexed vectors
+  const hasRepoUrl = Boolean(
+    project?.repoUrl &&
+    project.repoUrl !== "https://github.com/placeholder/repo" &&
+    project.repoUrl.includes("github.com")
+  );
+
+  const embeddingCount = isVirtualProject
+    ? 0
+    : await db.sourceCodeEmbedding.count({
+        where: { projectId },
+      });
+
+  // Smart Query Routing:
+  // If mode is simple, or if query is purely general/conceptual (e.g. "What is an ORM?"),
+  // or if thread/project has no repository/embeddings, execute general conversational generation
+  const isGeneralQuery = isPurelyGeneralQuery(question);
+  const shouldBypassRAG = mode === "simple" || isGeneralQuery || !hasRepoUrl || embeddingCount === 0;
+
+  if (shouldBypassRAG) {
+    const isAntiHallucinationMode = mode === "simple" && hasRepoUrl && embeddingCount > 0;
+    console.log(`[Chat] Smart Routing: Bypassing RAG (mode=${mode}, generalQuery=${isGeneralQuery}, hasRepo=${hasRepoUrl}, embeddings=${embeddingCount})`);
+
+    const prompt = `You are a helpful, conversational AI assistant (ChatGPT style).
+
+${
+  isAntiHallucinationMode
+    ? `IMPORTANT CONSTRAINTS & BEHAVIOR:
+- You are currently in "General Chat Mode" (Direct conversational mode without codebase context).
+- You DO NOT have access to any specific repository source code, files, branches, or PRs in this mode.
+- If the user asks questions specifically about the project repository, its codebase architecture, specific files, functions, variables, commits, or implementation details of "${projectName}", DO NOT hallucinate, guess, or make up file contents or functions.
+- Instead, politely inform the user:
+  "I am currently in General Chat Mode without codebase context and do not have access to the repository files. Please switch to the **RAG** mode toggle on the chatbox to ask context-aware questions about the GitHub repository and codebase."`
+    : `Answer the following question clearly, concisely, and accurately using Markdown syntax with formatted code blocks where appropriate.`
+}
+
+QUESTION:
+${question}`;
+
     try {
       const chatModel = getModel(provider, modelId, apiKey);
       const { text } = await generateText({
@@ -112,7 +177,7 @@ export async function executeChatPipeline(opts: {
         fileReferences: [] as any[],
       });
     } catch (err: any) {
-      console.error("[Chat] Simple chat generation failed:", err);
+      console.error("[Chat] Conversational generation failed:", err);
       return c.json(
         {
           error: err?.message || "Failed to generate AI response. Please check your API key and connection.",
@@ -123,8 +188,8 @@ export async function executeChatPipeline(opts: {
     }
   }
 
-  // RAG Mode
-  const embProvider = project.embeddingProvider === "OPENAI" ? "OPENAI" : "GEMINI";
+  // RAG Mode with vector store search
+  const embProvider = project?.embeddingProvider === "OPENAI" ? "OPENAI" : "GEMINI";
   let embKey = apiKey;
 
   if (embProvider !== provider) {
@@ -152,7 +217,8 @@ export async function executeChatPipeline(opts: {
     console.log(`[RAG] Step 1/3: Embedding query with ${embProvider}...`);
     let embeddingVector: number[] | null = null;
     try {
-      const embeddingModel = getEmbeddingModel(embProvider, project.embeddingModel, embKey);
+      const defaultEmbModel = embProvider === "OPENAI" ? "text-embedding-3-small" : "text-embedding-004";
+      const embeddingModel = getEmbeddingModel(embProvider, project?.embeddingModel || defaultEmbModel, embKey);
       const { embedding } = await embed({
         model: embeddingModel as any,
         value: question,
@@ -238,6 +304,10 @@ export const questionsRoutes = new Hono<AuthContext>()
     const projectId = c.req.param("id")!;
     const db = c.get("db");
 
+    if (projectId === "general" || projectId === "unlinked") {
+      return c.json({ questions: [] });
+    }
+
     const questions = await db.question.findMany({
       where: { projectId },
       include: {
@@ -260,22 +330,90 @@ export const questionsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
+        threadId: z.string().optional(),
         question: z.string().min(1),
         answers: z.string().min(1),
         fileReference: z.any().optional(),
+        turns: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string(),
+              fileReferences: z.any().optional(),
+              createdAt: z.string().or(z.date()).optional(),
+            })
+          )
+          .optional(),
       })
     ),
     async (c) => {
-      const projectId = c.req.param("id")!;
+      let projectId = c.req.param("id")!;
       const userId = c.get("userId");
       const db = c.get("db");
-      const { question, answers, fileReference } = c.req.valid("json");
+      const { threadId, question, answers, fileReference, turns } = c.req.valid("json");
+
+      // Invariant thread persistence: if threadId already exists, update the thread's answers & turns
+      if (threadId) {
+        const existing = await db.question.findUnique({
+          where: { id: threadId },
+        });
+
+        if (existing) {
+          let updatedMetadata: any = existing.fileReference;
+          if (turns && turns.length > 0) {
+            updatedMetadata = { turns };
+          } else if (Array.isArray(fileReference)) {
+            updatedMetadata = fileReference;
+          }
+
+          const updated = await db.question.update({
+            where: { id: threadId },
+            data: {
+              answers,
+              fileReference: updatedMetadata,
+              updatedAt: new Date(),
+            },
+          });
+          return c.json({ question: updated });
+        }
+      }
+
+      // If user is in unlinked/virtual project mode, resolve or find an existing project for them
+      if (projectId === "general" || projectId === "unlinked") {
+        const userProject = await db.project.findFirst({
+          where: {
+            userToProjects: {
+              some: { userId },
+            },
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        if (userProject) {
+          projectId = userProject.id;
+        } else {
+          // Create default general workspace project if user has zero projects
+          const defaultProject = await db.project.create({
+            data: {
+              name: "General Workspace",
+              repoUrl: "https://github.com/placeholder/repo",
+              userToProjects: {
+                create: { userId },
+              },
+            },
+          });
+          projectId = defaultProject.id;
+        }
+      }
+
+      const initialMetadata = turns && turns.length > 0 ? { turns } : (fileReference ?? null);
 
       const saved = await db.question.create({
         data: {
           question,
           answers,
-          fileReference: fileReference ?? null,
+          fileReference: initialMetadata,
           projectId,
           userId,
         },

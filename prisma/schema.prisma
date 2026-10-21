@@ -2,8 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider = "prisma-client-js"
-    previewFeatures = ["postgresqlExtensions"]
+    provider        = "prisma-client-js"
+    previewFeatures = ["postgresqlExtensions", "driverAdapters"]
 }
 
 datasource db {
@@ -15,12 +15,17 @@ datasource db {
 
 enum Provider {
   OPENAI
-  ANTHROPIC
   GEMINI
+  ANTHROPIC
   META
   DEEPSEEK
   XAI
   GROQ
+}
+
+enum EmbeddingProvider {
+  OPENAI
+  GEMINI
 }
 
 enum KeyStatus {
@@ -28,46 +33,40 @@ enum KeyStatus {
   VALID
   INVALID
   QUOTA_EXHAUSTED
-  REVOKED
 }
 
-enum EmbeddingProvider {
-  GEMINI
-  OPENAI
-}
-
-enum JobStep {
-  CLONING
-  LOADING_REPO
-  SUMMARIZING
-  EMBEDDING
-  COMMITS
-  STORING
-  DONE
-}
-
-enum JobStatus {
-  PENDING
+enum IndexingStatus {
   QUEUED
   RUNNING
   COMPLETED
   FAILED
 }
 
+enum IndexingStep {
+  LOADING_REPO
+  CHUNKING_AND_EMBEDDING
+  PLANNING_WIKI
+  GENERATING_PAGES
+  FINALIZING
+  DONE
+}
+
 model User {
-  id                    String              @id @default(cuid())
-  emailAddress          String              @unique
-  firstName             String?
-  lastName              String?
-  imageUrl              String?
-  defaultChatProvider   Provider?
-  defaultChatModel      String?
-  defaultEmbeddingProvider EmbeddingProvider? @default(GEMINI)
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  userToProjects        UserToProject[]
-  questionsAsked        Question[]
-  apiKeys               ApiKey[]
+  id                      String              @id @default(cuid())
+  emailAddress            String              @unique
+  firstName               String?
+  lastName                String?
+  imageUrl                String?
+  defaultChatProvider     Provider            @default(OPENAI)
+  defaultChatModel        String              @default("gpt-6.1-sol")
+  defaultEmbeddingProvider EmbeddingProvider @default(OPENAI)
+  preferences             Json?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  userToProjects          UserToProject[]
+  questionsAsked          Question[]
+  apiKeys                 ApiKey[]
+  qaThreads               QaThread[]
 }
 
 model ApiKey {
@@ -78,7 +77,6 @@ model ApiKey {
   encryptedKey    String
   iv              String
   keyLast4        String
-  label           String?
   status          KeyStatus   @default(UNVERIFIED)
   lastVerifiedAt  DateTime?
   lastUsedAt      DateTime?
@@ -92,37 +90,119 @@ model ApiKey {
 model Project {
   id                  String             @id @default(cuid())
   name                String
+  repoOwner           String
+  repoName            String
   repoUrl             String
-  gitHubToken         String?
-  chatProvider        Provider?
-  chatModel           String?
-  embeddingProvider   EmbeddingProvider  @default(GEMINI)
-  embeddingModel      String             @default("gemini-embedding-001")
-  embeddingDimensions Int                @default(768)
+  encryptedGithubToken String?
+  githubTokenIv       String?
+  isPrivateRepo       Boolean            @default(false)
+  isPublicWiki        Boolean            @default(true)
+  chatProvider        Provider           @default(OPENAI)
+  chatModel           String             @default("gpt-6.1-sol")
+  embeddingProvider   EmbeddingProvider  @default(OPENAI)
+  embeddingModel      String             @default("text-embedding-3-small")
+  embeddingDimensions Int                @default(1536)
+  repoSkeleton        Json?
+  lastIndexedCommitSha String?
+  lastIndexedAt       DateTime?
   deletedAt           DateTime?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   userToProjects      UserToProject[]
-  commits             Commit[]
-  sourceCodeEmbedding SourceCodeEmbedding[]
+  sourceCodeEmbeddings SourceCodeEmbedding[]
+  wikiPages           WikiPage[]
+  qaThreads           QaThread[]
   savedQuestion       Question[]
   meetings            Meeting[]
   indexingJobs        IndexingJob[]
+
+  @@index([repoOwner, repoName, isPublicWiki])
+}
+
+model WikiPage {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slug           String
+  title          String
+  sectionTitle   String
+  sectionOrder   Int
+  pageOrder      Int
+  content        String   @db.Text
+  relevantFiles  String[]
+  headings       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projectId, slug])
+  @@index([projectId, sectionOrder, pageOrder])
+}
+
+model SourceCodeEmbedding {
+  id                     String                       @id @default(cuid())
+  projectId              String
+  project                Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  filePath               String
+  directory              String
+  chunkIndex             Int
+  startLine              Int
+  endLine                Int
+  chunkContent           String                       @db.Text
+  fullFileContent        String?                      @db.Text
+  embeddingOpenAI        Unsupported("vector(1536)")?
+  embeddingGemini        Unsupported("vector(768)")?
+
+  @@index([projectId, filePath])
+  @@index([embeddingOpenAI(ops: raw("vector_cosine_ops"))], type: Hnsw)
+  @@index([embeddingGemini(ops: raw("vector_cosine_ops"))], type: Hnsw)
+}
+
+model QaThread {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  messages  QaMessage[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([projectId, userId])
+}
+
+model QaMessage {
+  id           String   @id @default(cuid())
+  threadId     String
+  thread       QaThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role         String
+  content      String   @db.Text
+  scannedFiles Json?
+  modelUsed    String?
+  createdAt    DateTime @default(now())
+
+  @@index([threadId, createdAt])
 }
 
 model IndexingJob {
-  id             String     @id @default(cuid())
-  projectId      String
-  project        Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status         JobStatus  @default(PENDING)
-  currentStep    JobStep    @default(CLONING)
-  totalFiles     Int        @default(0)
-  processedFiles Int        @default(0)
-  errorMessage   String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                       String         @id @default(cuid())
+  projectId                String
+  project                  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status                   IndexingStatus @default(QUEUED)
+  currentStep              IndexingStep   @default(LOADING_REPO)
+  totalFiles               Int            @default(0)
+  processedFiles           Int            @default(0)
+  totalWikiPages           Int            @default(0)
+  completedWikiPages       Int            @default(0)
+  estimatedSecondsRemaining Int?
+  currentDetail            String?
+  errorCode                String?
+  errorMessage             String?
+  startedAt                DateTime       @default(now())
+  finishedAt               DateTime?
 
   @@index([projectId])
+  @@index([status])
 }
 
 model UserToProject {
@@ -135,17 +215,6 @@ model UserToProject {
   project   Project  @relation(fields: [projectId], references: [id])
 
   @@unique([userId, projectId])
-}
-
-model SourceCodeEmbedding {
-  id                     String                       @id @default(cuid())
-  summaryEmbeddingOpenAI Unsupported("vector(1536)")?
-  summaryEmbeddingGemini Unsupported("vector(768)")?
-  sourceCode             String
-  fileName               String
-  summary                String
-  projectId              String
-  project                Project                      @relation(fields: [projectId], references: [id])
 }
 
 model Meeting {
@@ -191,18 +260,4 @@ model Question {
   project       Project  @relation(fields: [projectId], references: [id])
   userId        String
   user          User     @relation(fields: [userId], references: [id])
-}
-
-model Commit {
-  id                 String   @id @default(cuid())
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  projectId          String
-  project            Project  @relation(fields: [projectId], references: [id])
-  commitMessage      String
-  commitHash         String
-  commitAuthorName   String
-  commitAuthorAvatar String
-  commmitDate        DateTime
-  summary            String // summary generated from ai
 }

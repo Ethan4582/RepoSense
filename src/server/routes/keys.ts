@@ -30,7 +30,6 @@ export const keysRoutes = new Hono<AuthContext>()
         id: true,
         provider: true,
         keyLast4: true,
-        label: true,
         status: true,
         lastVerifiedAt: true,
         lastUsedAt: true,
@@ -49,13 +48,12 @@ export const keysRoutes = new Hono<AuthContext>()
       z.object({
         provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]),
         apiKey: z.string().min(5, "API key is too short"),
-        label: z.string().optional(),
       })
     ),
     async (c) => {
       const userId = c.get("userId");
       const db = c.get("db");
-      const { provider, apiKey, label } = c.req.valid("json");
+      const { provider, apiKey } = c.req.valid("json");
 
       // Verify the key live with the provider
       const verifyResult = await validateProviderKey(provider, apiKey);
@@ -79,7 +77,6 @@ export const keysRoutes = new Hono<AuthContext>()
           encryptedKey,
           iv,
           keyLast4,
-          label: label ?? null,
           status,
           lastVerifiedAt: new Date(),
         },
@@ -87,7 +84,6 @@ export const keysRoutes = new Hono<AuthContext>()
           encryptedKey,
           iv,
           keyLast4,
-          label: label ?? null,
           status,
           lastVerifiedAt: new Date(),
         },
@@ -95,7 +91,6 @@ export const keysRoutes = new Hono<AuthContext>()
           id: true,
           provider: true,
           keyLast4: true,
-          label: true,
           status: true,
           lastVerifiedAt: true,
           createdAt: true,

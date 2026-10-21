@@ -78,8 +78,8 @@ export const estimateRoutes = new Hono<AuthContext>().post(
     z.object({
       repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid, public GitHub repository URL."),
       githubToken: z.string().optional(),
-      modelId: z.string().optional().default("gemini-2.5-flash"),
-      embeddingModelId: z.string().optional().default("gemini-embedding-001"),
+      modelId: z.string().optional().default("gpt-6.1-sol"),
+      embeddingModelId: z.string().optional().default("text-embedding-3-small"),
     })
   ),
   async (c) => {
@@ -144,3 +144,4 @@ export const estimateRoutes = new Hono<AuthContext>().post(
     }
   }
 );
+

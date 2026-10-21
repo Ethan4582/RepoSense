@@ -7,8 +7,23 @@ import { projectsRoutes } from "./routes/projects";
 import { keysRoutes } from "./routes/keys";
 import { meRoutes } from "./routes/me";
 import { meetingsRoutes } from "./routes/meetings";
+import { publicRoutes } from "./routes/public";
+import { maintenanceActive } from "~/lib/emergency";
 
 const app = new Hono<AuthContext>().basePath("/api");
+
+app.use("*", async (c, next) => {
+  if (maintenanceActive() && c.req.path !== "/api/health") {
+    return c.json(
+      {
+        error: "RepoSense is currently under maintenance. Please check back shortly.",
+        code: "MAINTENANCE",
+      },
+      503
+    );
+  }
+  return next();
+});
 
 // Global Middleware
 app.use("*", logger());
@@ -30,6 +45,9 @@ app.get("/health", (c) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Public wiki and explore endpoints (no Clerk, no user context)
+app.route("/public", publicRoutes);
 
 // Protect all remaining routes with Clerk authentication
 app.use("*", clerkAuthMiddleware);

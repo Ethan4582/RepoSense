@@ -147,6 +147,16 @@ export async function performHttpKeyValidation(
     }
 
     const bodyText = await res.text().catch(() => '');
+
+    // A transient 429 rate limit proves the key authenticated successfully.
+    // Only explicit quota/billing signals should mark the key as exhausted.
+    if (res.status === 429 && !isQuotaExhausted(res.status, bodyText)) {
+      return {
+        valid: true,
+        warning: `The ${opts.providerName} key is valid but currently rate limited. Please retry shortly.`,
+      };
+    }
+
     const error = mapHttpError(res.status, bodyText, opts.providerName);
     return { valid: false, error };
   } catch (err: unknown) {

@@ -78,7 +78,7 @@ export class ProviderError extends Error {
 
 /** Discriminated key verification result */
 export type VerifyResult =
-  | { readonly valid: true; readonly error?: undefined }
+  | { readonly valid: true; readonly warning?: string; readonly error?: undefined }
   | { readonly valid: false; readonly error: ProviderError };
 
 /** Static and dynamic model descriptor */

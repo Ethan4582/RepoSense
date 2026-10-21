@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthContext } from "../auth";
 
+const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
+
 export const meRoutes = new Hono<AuthContext>()
   .get("/", async (c) => {
     const userId = c.get("userId");
@@ -19,14 +21,12 @@ export const meRoutes = new Hono<AuthContext>()
         defaultChatProvider: true,
         defaultChatModel: true,
         defaultEmbeddingProvider: true,
+        preferences: true,
         createdAt: true,
       },
     });
 
-    if (!user) {
-      return c.json({ error: "User not found" }, 404);
-    }
-
+    if (!user) return c.json({ error: "User not found" }, 404);
     return c.json({ user });
   })
   .patch(
@@ -34,9 +34,10 @@ export const meRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        defaultChatProvider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).nullable().optional(),
-        defaultChatModel: z.string().nullable().optional(),
-        defaultEmbeddingProvider: z.enum(["GEMINI", "OPENAI"]).nullable().optional(),
+        defaultChatProvider: z.enum(PROVIDERS).optional(),
+        defaultChatModel: z.string().optional(),
+        defaultEmbeddingProvider: z.enum(["GEMINI", "OPENAI"]).optional(),
+        preferences: z.any().optional(),
       })
     ),
     async (c) => {
@@ -47,15 +48,23 @@ export const meRoutes = new Hono<AuthContext>()
       const updated = await db.user.update({
         where: { id: userId },
         data: {
-          ...(data.defaultChatProvider !== undefined && { defaultChatProvider: data.defaultChatProvider }),
-          ...(data.defaultChatModel !== undefined && { defaultChatModel: data.defaultChatModel }),
-          ...(data.defaultEmbeddingProvider !== undefined && { defaultEmbeddingProvider: data.defaultEmbeddingProvider }),
+          ...(data.defaultChatProvider !== undefined && {
+            defaultChatProvider: data.defaultChatProvider,
+          }),
+          ...(data.defaultChatModel !== undefined && {
+            defaultChatModel: data.defaultChatModel,
+          }),
+          ...(data.defaultEmbeddingProvider !== undefined && {
+            defaultEmbeddingProvider: data.defaultEmbeddingProvider,
+          }),
+          ...(data.preferences !== undefined && { preferences: data.preferences }),
         },
         select: {
           id: true,
           defaultChatProvider: true,
           defaultChatModel: true,
           defaultEmbeddingProvider: true,
+          preferences: true,
         },
       });
 

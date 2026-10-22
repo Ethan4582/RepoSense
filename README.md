@@ -42,11 +42,6 @@ For a thorough description of the ingestion pipeline, capacity math, schema defi
 
 ### Environment configuration
 
-Create a `.env` file in the root directory:
-
-```bash
-cp .env.example .env
-```
 
 Populate the required environment variables:
 

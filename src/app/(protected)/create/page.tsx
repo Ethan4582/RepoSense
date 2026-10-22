@@ -47,9 +47,10 @@ import {
 } from '~/lib/providers/catalog';
 import type { ProviderId } from '~/lib/providers/types';
 import { cn } from '~/lib/utils';
+import { IndexingLoader } from '~/components/indexing-loader';
 
 const GITHUB_REPO_REGEX =
-  /^https:\/\/(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/;
+  /^https:\/\/(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/tree\/[^\s?#]+)?\/?$/;
 
 const CHAT_PROVIDERS: ProviderId[] = [
   'OPENAI',
@@ -71,7 +72,7 @@ interface Verification {
     sizeKb: number;
     repoUrl: string;
   };
-  existingWiki: { id: string; name: string } | null;
+  existingWiki: { id: string; name: string; lastIndexedBranch?: string | null } | null;
 }
 
 interface Estimate {
@@ -81,9 +82,26 @@ interface Estimate {
   estimatedCostUsd: { min: number; max: number };
 }
 
+interface IndexingSession {
+  projectId: string;
+  jobId?: string | null;
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  currentStep?: string | null;
+  errorMessage?: string | null;
+}
+
 function parsedRepo(url: string) {
   const match = GITHUB_REPO_REGEX.exec(url.trim());
   return match ? match[0].replace(/\/$/, '') : null;
+}
+
+function branchFromRepoUrl(url: string): string | undefined {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    return parts[2] === 'tree' && parts.length > 3 ? decodeURIComponent(parts.slice(3).join('/')) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export default function CreateProjectPage() {
@@ -105,8 +123,10 @@ export default function CreateProjectPage() {
   const [embeddingProvider, setEmbeddingProvider] = React.useState<'OPENAI' | 'GEMINI'>('OPENAI');
   const [validProviders, setValidProviders] = React.useState<ProviderId[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [indexingSession, setIndexingSession] = React.useState<IndexingSession | null>(null);
 
   const repoBase = React.useMemo(() => parsedRepo(repoUrl), [repoUrl]);
+  const requestedBranch = React.useMemo(() => branchFromRepoUrl(repoBase ?? ''), [repoBase]);
   const models = React.useMemo(() => getModelsByProvider(chatProvider), [chatProvider]);
   const isPrivateRepo = verification?.repository.isPrivate ?? false;
   const hasEmbeddingKey = validProviders.includes(embeddingProvider);
@@ -144,6 +164,40 @@ export default function CreateProjectPage() {
     void loadData();
   }, []);
 
+  React.useEffect(() => {
+    if (!indexingSession) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/projects/${indexingSession.projectId}/indexing/status`, { cache: 'no-store' });
+        const data = (await response.json()) as { job?: IndexingSession | null };
+        if (cancelled || !data.job) return;
+        setIndexingSession((current) => current ? { ...current, ...data.job } : current);
+        if (data.job.status === 'COMPLETED') {
+          void refetch();
+          setProjectId(indexingSession.projectId);
+          router.push(`/wiki/${indexingSession.projectId}`);
+          return;
+        }
+        if (data.job.status === 'FAILED') {
+          setIsSubmitting(false);
+          return;
+        }
+      } catch {
+        // Keep polling transient network failures while the indexing screen is open.
+      }
+      if (!cancelled) timer = setTimeout(poll, 1500);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [indexingSession?.projectId, refetch, router, setProjectId]);
+
   const resetVerification = () => {
     setVerification(null);
     setEstimate(null);
@@ -171,8 +225,6 @@ export default function CreateProjectPage() {
 
       setVerification(data);
       setIsPublicWiki(!data.repository.isPrivate);
-      if (data.existingWiki) return;
-
       setEstimating(true);
       const estimateRes = await client.projects.estimate.$post({
         json: {
@@ -219,7 +271,7 @@ export default function CreateProjectPage() {
     try {
       const res = await client.projects.$post({
         json: {
-          repoUrl: verification.repository.repoUrl,
+          repoUrl: repoBase ?? verification.repository.repoUrl,
           githubToken: githubToken.trim() || undefined,
           chatProvider,
           chatModel,
@@ -229,19 +281,40 @@ export default function CreateProjectPage() {
       });
       const data = (await res.json()) as {
         project?: { id: string };
+        indexingJobId?: string | null;
         error?: string;
+        code?: string;
         projectId?: string;
       };
 
       if (!res.ok) {
+        const requestedBranch = repoBase ? branchFromRepoUrl(repoBase) : undefined;
+        if (data.code === 'DUPLICATE_PROJECT' && data.projectId && requestedBranch) {
+          const branchRes = await fetch(`/api/projects/${data.projectId}/indexing/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ branch: requestedBranch }),
+          });
+          const branchData = (await branchRes.json().catch(() => ({}))) as { error?: string; code?: string };
+          if (!branchRes.ok && branchData.code !== 'BRANCH_ALREADY_INDEXED') {
+            throw new Error(branchData.error ?? 'Could not start indexing this branch.');
+          }
+          setProjectId(data.projectId);
+          void refetch();
+          toast.success(branchData.code === 'BRANCH_ALREADY_INDEXED' ? 'This branch is already indexed.' : 'Feature branch indexing has started.');
+          router.push(`/wiki/${data.projectId}?branch=${encodeURIComponent(requestedBranch)}`);
+          return;
+        }
         throw new Error(data.error ?? 'Could not create this wiki.');
       }
 
       const projectId = data.project?.id ?? data.projectId;
       toast.success('Wiki created. Indexing has started.');
-      void refetch();
-      if (projectId) setProjectId(projectId);
-      router.push(projectId ? `/wiki/${projectId}` : '/dashboard');
+      if (projectId) {
+        setIndexingSession({ projectId, jobId: data.indexingJobId, status: 'QUEUED', currentStep: 'LOADING_REPO' });
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err) {
       setIsSubmitting(false);
       toast.error(err instanceof Error ? err.message : 'Could not create this wiki.');
@@ -252,6 +325,20 @@ export default function CreateProjectPage() {
   const avgTokens = estimate
     ? Math.round((estimate.inputTokens.min + estimate.inputTokens.max) / 2)
     : null;
+
+  if (indexingSession) {
+    return (
+      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl flex-col items-center justify-center px-4">
+        <IndexingLoader step={indexingSession.currentStep} />
+        {indexingSession.status === 'FAILED' ? (
+          <div className="mt-2 text-center">
+            <p className="text-sm text-destructive">{indexingSession.errorMessage ?? 'Indexing failed. No wiki was generated.'}</p>
+            <Button className="mt-4" variant="outline" onClick={() => setIndexingSession(null)}>Back to setup</Button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-8">
@@ -324,7 +411,7 @@ export default function CreateProjectPage() {
 
             <p className="pt-0.5 text-[11px] text-muted-foreground">
               Examples: <code className="font-mono">https://github.com/facebook/react</code>,{' '}
-              <code className="font-mono">https://github.com/vercel/next.js</code>
+              <code className="font-mono">https://github.com/owner/repo/tree/feature/my-branch</code>
             </p>
           </div>
 
@@ -380,10 +467,14 @@ export default function CreateProjectPage() {
                 <BookOpen className="mt-0.5 size-4 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-foreground">
-                    This repository has already been converted into a Public DeepWiki.
+                    {requestedBranch && requestedBranch !== verification.repository.defaultBranch
+                      ? `The existing wiki has already indexed ${verification.existingWiki.lastIndexedBranch ?? verification.repository.defaultBranch}.`
+                      : 'This repository has already been converted into a Public DeepWiki.'}
                   </p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    View the existing wiki now, or continue to re-index it with your own key and model.
+                    {requestedBranch && requestedBranch !== verification.repository.defaultBranch
+                      ? `The requested feature branch “${requestedBranch}” is separate. Review its estimate below, then generate its documentation.`
+                      : 'View the existing wiki now, or continue to re-index it with your own key and model.'}
                   </p>
                   <div className="mt-2.5 flex flex-wrap gap-2">
                     <Link href={`/wiki/${verification.existingWiki.id}`}>
@@ -397,7 +488,7 @@ export default function CreateProjectPage() {
                       className="h-7 text-[11px]"
                       onClick={() => setVerification({ ...verification, existingWiki: null })}
                     >
-                      Convert again with my key & model
+                      {requestedBranch ? 'Continue to branch setup' : 'Convert again with my key & model'}
                     </Button>
                   </div>
                 </div>
@@ -407,7 +498,7 @@ export default function CreateProjectPage() {
         </CardContent>
       </Card>
 
-      {verification && !verification.existingWiki ? (
+      {verification && (!verification.existingWiki || Boolean(requestedBranch)) ? (
         <>
           <Card className="shadow-xs">
             <CardHeader>

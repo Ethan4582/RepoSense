@@ -5,10 +5,8 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import {
-  ArrowLeft,
   BookOpen,
   ChevronRight,
-  Clock,
   Check,
   FileCode2,
   FolderTree,
@@ -16,13 +14,10 @@ import {
   GitPullRequest,
   Globe2,
   Loader2,
-  Lock,
-  Menu,
   Moon,
+  PanelLeft,
   Pencil,
-  RefreshCw,
   Save,
-  Send,
   Share2,
   Sparkles,
   Sun,
@@ -30,7 +25,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { SidebarProvider } from '~/components/ui/sidebar';
 import { AppSideBar } from '~/app/app-sidebar';
@@ -96,15 +90,6 @@ interface IndexingJob {
   errorMessage?: string | null;
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
 function groupSections(pages: WikiPageMeta[]) {
   const map = new Map<string, WikiPageMeta[]>();
   for (const page of pages) {
@@ -132,7 +117,7 @@ export function WikiReader() {
   const [loading, setLoading] = React.useState(true);
   const [pageLoading, setPageLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const [appNavOpen, setAppNavOpen] = React.useState(false);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [visibilityBusy, setVisibilityBusy] = React.useState(false);
@@ -189,16 +174,17 @@ export function WikiReader() {
   const articleRef = React.useRef<HTMLElement | null>(null);
   const [activeHeadingId, setActiveHeadingId] = React.useState<string | null>(null);
 
-  // In-page Wiki Editing State
   const [isEditing, setIsEditing] = React.useState(searchParams.get('mode') === 'edit');
   const [editContent, setEditContent] = React.useState('');
   const [editTitle, setEditTitle] = React.useState('');
+  const [editHeadings, setEditHeadings] = React.useState<Array<{ id: string; text: string; level: number }>>([]);
   const [isSavingPage, setIsSavingPage] = React.useState(false);
 
   React.useEffect(() => {
     if (activePage?.content !== undefined) {
       setEditContent(activePage.content ?? '');
       setEditTitle(activePage.title ?? '');
+      setEditHeadings(activePage.headings ? [...activePage.headings] : []);
     }
   }, [activePage?.id, activePage?.content, activePage?.title]);
 
@@ -223,6 +209,15 @@ export function WikiReader() {
     container.addEventListener('scroll', update, { passive: true });
     return () => container.removeEventListener('scroll', update);
   }, [activePage?.slug, activePage?.content]);
+
+  const scrollToHeading = React.useCallback((id: string) => {
+    const container = articleRef.current;
+    const target = document.getElementById(id);
+    if (!container || !target || !container.contains(target)) return;
+    container.scrollTo({ top: Math.max(0, target.offsetTop - 24), behavior: 'smooth' });
+    setActiveHeadingId(id);
+    window.history.replaceState(null, '', `#${id}`);
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -631,7 +626,7 @@ export function WikiReader() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center gap-2 bg-background text-sm text-muted-foreground">
-        <Loader2 className="size-5 animate-spin text-primary" />
+        <Loader2 className="size-5 animate-spin" />
         Loading wiki...
       </div>
     );
@@ -657,129 +652,26 @@ export function WikiReader() {
     );
   }
 
-  const branchInfo = project.branches?.find(
-    (entry) => entry.branch === activeBranch
-  );
-  const lastIndexed = formatDate(branchInfo?.updatedAt ?? project.lastIndexedAt);
-  const shortSha = (branchInfo?.commitSha ?? project.lastIndexedCommitSha)?.slice(0, 6);
-  const modelInfo = project.chatModel ? getModelInfo(project.chatModel) : undefined;
-  const providerMeta = project.chatProvider
-    ? PROVIDER_METADATA[project.chatProvider as ProviderId]
-    : undefined;
+  const displayHeadings = isEditing ? editHeadings : (activePage?.headings ?? []);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-[86px] shrink-0 items-center justify-between gap-3 border-b px-6 md:px-11">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((open) => !open)}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted lg:hidden"
-          >
-            <Menu className="size-4" />
-          </button>
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <a
-                href={project.repoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="truncate text-lg text-foreground hover:text-primary"
-              >
-                {project.repoOwner}/{project.repoName}
-              </a>
-              {isPublic ? (
-                <Badge variant="outline" className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-600">
-                  <Globe2 className="size-2.5" /> Public
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="gap-1 text-[10px]">
-                  <Lock className="size-2.5" /> Private
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              {lastIndexed ? (
-                <span className="flex items-center gap-1">
-                  <Clock className="size-2.5" />
-                  Last indexed: {lastIndexed}
-                  {shortSha ? ` (${shortSha})` : ''}
-                </span>
-              ) : (
-                <span>Not indexed yet</span>
-              )}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex max-w-44 items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-foreground transition-colors hover:border-primary/40"
-                    title="Switch branch"
-                  >
-                    <GitBranch className="size-2.5 shrink-0 text-primary" />
-                    <span className="truncate">{activeBranch}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-72 space-y-2 p-2">
-                  <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Indexed branches
-                  </div>
-                  <div className="max-h-56 space-y-0.5 overflow-y-auto">
-                    {(project.branches ?? []).map((entry) => (
-                      <button
-                        key={entry.branch}
-                        type="button"
-                        onClick={() => switchBranch(entry.branch)}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
-                          entry.branch === activeBranch
-                            ? 'bg-primary/10 font-medium text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                      >
-                        <GitBranch className="size-3 shrink-0" />
-                        <span className="truncate font-mono">{entry.branch}</span>
-                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">
-                          {entry.pageCount} pages
-                        </span>
-                      </button>
-                    ))}
-                    {(project.branches ?? []).length === 0 ? (
-                      <p className="px-2 py-2 text-[11px] text-muted-foreground">
-                        No branches indexed yet.
-                      </p>
-                    ) : null}
-                  </div>
-                  {project.isOwner && isSignedIn ? (
-                    <form
-                      onSubmit={indexRequestedBranch}
-                      className="space-y-1.5 border-t pt-2"
-                    >
-                      <label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Index a branch or PR
-                      </label>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          value={branchInput}
-                          onChange={(event) => setBranchInput(event.target.value)}
-                          placeholder="feature/name or #42"
-                          className="h-7 min-w-0 flex-1 rounded-md border bg-background px-2 font-mono text-[11px] outline-none focus:border-primary/50"
-                        />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          className="h-7 shrink-0 text-[11px]"
-                          disabled={!branchInput.trim() || branchBusy}
-                        >
-                          {branchBusy ? <Loader2 className="size-3 animate-spin" /> : 'Index'}
-                        </Button>
-                      </div>
-                    </form>
-                  ) : null}
-                </PopoverContent>
-              </Popover>
-            </div>
+      {/* ── Header ── */}
+      <header
+        style={{ height: 56 }}
+        className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 md:px-8 xl:px-12"
+      >
+        <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <a
+              href={project.repoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="truncate text-sm font-medium text-foreground hover:text-primary"
+            >
+              {project.repoOwner}/{project.repoName}
+            </a>
           </div>
-        </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
           {project.isOwner && isSignedIn ? (
@@ -787,21 +679,21 @@ export function WikiReader() {
               variant={isEditing ? 'default' : 'outline'}
               size="sm"
               onClick={() => setIsEditing(!isEditing)}
-              className="h-8 gap-1.5 text-xs"
+              className="h-8 gap-1.5 rounded-md border border-border/60 text-xs"
             >
               <Pencil className="size-3.5" />
               <span>{isEditing ? 'Reading Mode' : 'Edit Wiki'}</span>
             </Button>
           ) : null}
           <Link href={`/pulls?projectId=${project.id}`}>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md border border-border/60 text-xs">
               <GitPullRequest className="size-3.5" />
               <span className="hidden sm:inline">Pull Requests</span>
             </Button>
           </Link>
           <Popover open={shareOpen} onOpenChange={setShareOpen}>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md border border-border/60 text-xs">
                 <Share2 className="size-3.5" />
                 <span className="hidden sm:inline">Share</span>
               </Button>
@@ -861,10 +753,9 @@ export function WikiReader() {
               ) : null}
             </PopoverContent>
           </Popover>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
+          <button
+            type="button"
+            className="inline-flex size-8 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             title="Toggle theme"
             onClick={() => {
               const isDark = document.documentElement.classList.toggle('dark');
@@ -875,13 +766,15 @@ export function WikiReader() {
           >
             <Sun className="size-4 dark:hidden" />
             <Moon className="hidden size-4 dark:block" />
-          </Button>
+          </button>
+        </div>
         </div>
       </header>
 
+      {/* ── Indexing progress banner ── */}
       {indexing ? (
-        <div className="flex shrink-0 items-center gap-3 border-b border-primary/20 bg-primary/5 px-4 py-2 text-xs text-foreground">
-          <Sparkles className="size-3.5 animate-pulse text-primary" />
+        <div className="flex shrink-0 items-center gap-3 border-b border-border/40 bg-muted/40 px-4 py-2 text-xs text-foreground">
+          <Sparkles className="size-3.5 animate-pulse text-muted-foreground" />
           <span className="font-medium">
             {indexing.currentDetail ??
               `${indexing.currentStep.replaceAll('_', ' ').toLowerCase()} — ${indexing.processedFiles}/${indexing.totalFiles} files`}
@@ -894,40 +787,31 @@ export function WikiReader() {
         </div>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden px-0 xl:px-11">
-        <aside
-          className="scrollbar-none z-20 hidden basis-[380px] w-[380px] max-w-[380px] shrink-0 overflow-y-auto border-r border-border/60 bg-sidebar/95 backdrop-blur-sm xl:block"
-        >
-          <div className="w-full px-10 py-10">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Wiki pages
-              </span>
-              <button
-                type="button"
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                onClick={() => setSidebarOpen(false)}
-              >
-                <X className="size-3.5" />
-              </button>
+      {/* ── Body: Floating Centered 3-Column Stage (10-14vw side space) ── */}
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-4 md:px-8 xl:px-12">
+        <div className="flex min-h-0 w-full max-w-[1280px] flex-1 overflow-hidden">
+
+          {/* Left column: Wiki Pages (Permanent Hierarchy) */}
+          <aside className="scrollbar-none z-10 w-[210px] shrink-0 overflow-y-auto border-r border-border/60 py-6 pr-3 pl-1">
+            <div className="mb-4 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Wiki Pages
             </div>
 
             <nav className="space-y-4">
               {sections.map(([sectionTitle, pages]) => (
                 <div key={sectionTitle}>
-                  <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] font-semibold text-foreground">
-                    <FolderTree className="size-3 text-primary" />
+                  <div className="mb-1 px-2 text-[12px] font-semibold text-foreground/80">
                     {isEditing ? (
                       <input
                         value={sectionTitle}
                         onChange={(event) => {
                           setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.sectionTitle === sectionTitle ? { ...item, sectionTitle: event.target.value } : item) } : current);
                         }}
-                        className="min-w-0 flex-1 bg-transparent text-[11px] font-semibold outline-none"
+                        className="min-w-0 w-full bg-transparent text-[12px] font-semibold outline-none"
                       />
                     ) : sectionTitle}
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-[2px]">
                     {pages
                       .slice()
                       .sort((a, b) => a.pageOrder - b.pageOrder)
@@ -939,14 +823,14 @@ export function WikiReader() {
                             type="button"
                             onClick={() => {
                               setActiveSlug(page.slug);
-                              setSidebarOpen(false);
+                              setSidebarOpen(true);
                               setQaOpen(false);
                             }}
                             className={cn(
-                              'flex w-full items-center justify-between gap-1 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+                              'group flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[13px] transition-all duration-150',
                               isActive
-                                ? 'bg-primary/10 font-medium text-primary'
-                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                ? 'bg-muted/80 font-medium text-foreground backdrop-blur-sm'
+                                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                             )}
                           >
                             {isEditing ? (
@@ -954,10 +838,11 @@ export function WikiReader() {
                                 value={page.title}
                                 onClick={(event) => event.stopPropagation()}
                                 onChange={(event) => setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.id === page.id ? { ...item, title: event.target.value } : item) } : current)}
-                                className="min-w-0 flex-1 bg-transparent outline-none"
+                                className="min-w-0 w-full bg-transparent text-[13px] outline-none"
                               />
-                            ) : <span className="truncate">{page.title}</span>}
-                            {isActive ? <ChevronRight className="size-3 shrink-0" /> : null}
+                            ) : (
+                              <span className="truncate">{page.title}</span>
+                            )}
                           </button>
                         );
                       })}
@@ -965,10 +850,13 @@ export function WikiReader() {
                 </div>
               ))}
             </nav>
-          </div>
-        </aside>
+          </aside>
 
-        <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Main content */}
+        <main
+          style={{ transition: 'all 200ms ease' }}
+          className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
+        >
           {qaOpen ? (
             <WikiQaView
               projectId={projectId}
@@ -992,169 +880,198 @@ export function WikiReader() {
             />
           ) : (
             <div className="flex min-h-0 flex-1 overflow-hidden">
+              {/* Documentation article — scrollable, fills space between sidebar and ToC */}
               <article
                 ref={articleRef}
-                className="scrollbar-none min-w-0 flex-1 overflow-y-auto px-16 pb-36 pt-11"
+                className="scrollbar-none min-w-0 flex-1 overflow-y-auto pb-36 pt-10"
               >
-                {pageLoading && !activePage?.content ? (
-                  <div className="mx-auto max-w-3xl space-y-3">
-                    <div className="h-8 w-2/3 animate-pulse rounded bg-muted" />
-                    <div className="h-4 w-full animate-pulse rounded bg-muted" />
-                    <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
-                  </div>
-                ) : activePage?.content ? (
-                  <div className="max-w-[840px]">
-                    {activePage.relevantFiles && activePage.relevantFiles.length > 0 ? (
-                      <details className="mb-6 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
-                        <summary className="cursor-pointer select-none font-medium text-muted-foreground">
-                          Relevant source files ({activePage.relevantFiles.length})
-                        </summary>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {activePage.relevantFiles.map((path) => (
-                            <button
-                              key={path}
-                              type="button"
-                              onClick={() => {
-                                setActiveFile({ filePath: path });
-                                setQaOpen(true);
-                              }}
-                              className="inline-flex items-center gap-1 rounded border border-border/80 bg-background px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-                            >
-                              <FileCode2 className="size-2.5 text-primary" />
-                              {path}
-                            </button>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
-                    {(activePage.headings?.length ?? 0) > 0 ? (
-                      <details className="mb-6 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs xl:hidden">
-                        <summary className="cursor-pointer select-none font-medium text-muted-foreground">
-                          On this page
-                        </summary>
-                        <div className="mt-2 space-y-1">
-                          {(activePage.headings ?? []).map((heading) => (
-                            <a
-                              key={heading.id}
-                              href={`#${heading.id}`}
-                              className={cn(
-                                'block border-l-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground',
-                                heading.level === 2 ? 'pl-2 font-medium' : 'pl-4',
-                                activeHeadingId === heading.id && 'border-primary text-foreground'
-                              )}
-                            >
-                              {heading.text}
-                            </a>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
-                    {isEditing ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-3 border-b pb-3">
-                          <input
-                            type="text"
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            placeholder="Page title"
-                            className="w-full text-2xl font-bold tracking-tight bg-transparent border-none outline-none focus:ring-0 text-foreground"
-                          />
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setIsEditing(false);
-                                setEditContent(activePage.content ?? '');
-                                setEditTitle(activePage.title ?? '');
-                              }}
-                              className="h-8 text-xs"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={isSavingPage}
-                              onClick={() => void saveEditedPage()}
-                              className="h-8 gap-1.5 text-xs"
-                            >
-                              {isSavingPage ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <Save className="size-3.5" />
-                              )}
-                              <span>Save</span>
-                            </Button>
+                {/* Inner wrapper: centered, max-720px, with generous side gutters */}
+                <div className="mx-auto w-full max-w-[720px] px-6">
+                  {pageLoading && !activePage?.content ? (
+                    <div className="space-y-3">
+                      <div className="h-8 w-2/3 animate-pulse rounded bg-muted" />
+                      <div className="h-4 w-full animate-pulse rounded bg-muted" />
+                      <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
+                    </div>
+                  ) : activePage?.content ? (
+                    <>
+                      {activePage.relevantFiles && activePage.relevantFiles.length > 0 ? (
+                        <details className="mb-4 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-sm">
+                          <summary className="cursor-pointer select-none text-muted-foreground">
+                            ▶ Relevant source files ({activePage.relevantFiles.length})
+                          </summary>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {activePage.relevantFiles.map((path) => (
+                              <button
+                                key={path}
+                                type="button"
+                                onClick={() => {
+                                  setActiveFile({ filePath: path });
+                                  setQaOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                              >
+                                <FileCode2 className="size-2.5 shrink-0" />
+                                {path}
+                              </button>
+                            ))}
                           </div>
-                        </div>
+                        </details>
+                      ) : null}
 
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          placeholder="Write markdown documentation here..."
-                          rows={24}
-                          className="w-full resize-y rounded-lg border border-border bg-muted/20 p-4 font-mono text-xs leading-relaxed text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                      {/* Mobile ToC (hidden on xl+) */}
+                      {(activePage.headings?.length ?? 0) > 0 ? (
+                        <details className="mb-4 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs xl:hidden">
+                          <summary className="cursor-pointer select-none font-medium text-muted-foreground">
+                            On this page
+                          </summary>
+                          <div className="mt-2 space-y-1.5">
+                            {(activePage.headings ?? []).map((heading) => (
+                              <a
+                                key={heading.id}
+                                href={`#${heading.id}`}
+                                onClick={(event) => { event.preventDefault(); scrollToHeading(heading.id); }}
+                                className={cn(
+                                  'block border-l-2 border-transparent py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground',
+                                  heading.level === 2 ? 'pl-2 font-medium' : 'pl-4',
+                                  activeHeadingId === heading.id && 'border-primary/60 text-foreground'
+                                )}
+                              >
+                                {heading.text}
+                              </a>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+
+                      {isEditing ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between gap-3 border-b pb-4">
+                            <input
+                              type="text"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              placeholder="Page title"
+                              className="w-full bg-transparent text-[32px] font-semibold leading-tight tracking-tight text-foreground outline-none"
+                            />
+                            <div className="flex shrink-0 items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setIsEditing(false);
+                                  setEditContent(activePage.content ?? '');
+                                  setEditTitle(activePage.title ?? '');
+                                  setEditHeadings(activePage.headings ? [...activePage.headings] : []);
+                                }}
+                                className="h-8 text-xs"
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isSavingPage}
+                                onClick={() => void saveEditedPage()}
+                                className="h-8 gap-1.5 text-xs"
+                              >
+                                {isSavingPage ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                  <Save className="size-3.5" />
+                                )}
+                                <span>Save</span>
+                              </Button>
+                            </div>
+                          </div>
+                          <textarea
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            placeholder="Write markdown documentation here..."
+                            rows={28}
+                            className="w-full resize-y rounded-lg border border-border bg-muted/20 p-4 font-mono text-xs leading-relaxed text-foreground outline-none focus:border-primary/40 focus:ring-0"
+                          />
+                        </div>
+                      ) : (
+                        <WikiMarkdown
+                          content={activePage.content}
+                          onCitation={openCitation}
+                          githubRepo={{ owner: project.repoOwner, repo: project.repoName }}
+                          commitSha={project.lastIndexedCommitSha}
                         />
-                      </div>
-                    ) : (
-                      <WikiMarkdown
-                        content={activePage.content}
-                        onCitation={openCitation}
-                        githubRepo={{ owner: project.repoOwner, repo: project.repoName }}
-                        commitSha={project.lastIndexedCommitSha}
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <div className="mx-auto max-w-3xl rounded-xl border border-dashed p-10 text-center">
-                    <BookOpen className="mx-auto mb-3 size-8 text-muted-foreground/40" />
-                    <h2 className="text-sm font-semibold">This wiki has no pages yet</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Add your API key in Settings, then start indexing to generate documentation.
-                    </p>
-                    {project.isOwner && isSignedIn ? (
-                      <Button className="mt-4 gap-2" size="sm" onClick={startReindex} disabled={Boolean(indexing) || branchBusy}>
-                        <Sparkles className="size-3.5" />
-                        Generate wiki
-                      </Button>
-                    ) : null}
-                  </div>
-                )}
+                      )}
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-dashed p-10 text-center">
+                      <BookOpen className="mx-auto mb-3 size-8 text-muted-foreground/40" />
+                      <h2 className="text-sm font-semibold">This wiki has no pages yet</h2>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Add your API key in Settings, then start indexing to generate documentation.
+                      </p>
+                      {project.isOwner && isSignedIn ? (
+                        <Button className="mt-4 gap-2" size="sm" onClick={startReindex} disabled={Boolean(indexing) || branchBusy}>
+                          <Sparkles className="size-3.5" />
+                          Generate wiki
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </article>
 
-              <aside className="scrollbar-none hidden w-[350px] shrink-0 overflow-y-auto border-l border-border/60 px-8 py-16 xl:block">
-                <div className="mb-4 text-xl font-medium tracking-tight text-foreground">
-                  On this page
-                </div>
-                <div className="space-y-1">
-                  {(activePage?.headings ?? []).map((heading) => (
-                    isEditing ? (
-                    <input
-                      key={heading.id}
-                      value={heading.text}
-                      onChange={(event) => setEditContent((value) => value.replace(new RegExp(`^(#{${heading.level}}\\s+)${heading.text.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}$`, 'm'), `$1${event.target.value}`))}
-                      className="mb-1 w-full border-l-2 border-primary/40 bg-transparent py-0.5 pl-2 text-[11px] outline-none"
-                    />
-                    ) : <a
-                      key={heading.id}
-                      href={`#${heading.id}`}
-                      className={cn(
-                        'block border-l-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground',
-                        heading.level === 2 ? 'pl-2 font-medium' : 'pl-4',
-                        activeHeadingId === heading.id && 'border-primary text-foreground'
-                      )}
-                    >
-                      {heading.text}
-                    </a>
-                  ))}
+              {/* Right "On this page" panel — fixed 200px, sticky */}
+              <aside
+                className="scrollbar-none hidden w-[200px] shrink-0 overflow-y-auto border-l border-border/60 xl:block"
+                style={{ paddingTop: 40, paddingLeft: 20, paddingRight: 16 }}
+              >
+                <div className="sticky top-10">
+                  <div className="mb-3 text-[13px] font-semibold text-foreground">
+                    On this page
+                  </div>
+                  <div className="space-y-[6px]">
+                    {displayHeadings.map((heading, idx) =>
+                      isEditing ? (
+                        <input
+                          key={heading.id}
+                          value={heading.text}
+                          onChange={(event) => {
+                            const newText = event.target.value;
+                            setEditHeadings((prev) => prev.map((h, i) => i === idx ? { ...h, text: newText } : h));
+                            setEditContent((value) =>
+                              value.replace(
+                                new RegExp(`^(#{${heading.level}}\\s+)${heading.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'),
+                                `$1${newText}`
+                              )
+                            );
+                          }}
+                          className={cn(
+                            'mb-1 w-full border-l-2 border-border/40 bg-transparent py-0.5 text-[12px] text-muted-foreground outline-none focus:border-primary/40',
+                            heading.level === 2 ? 'pl-2 font-medium' : 'pl-4'
+                          )}
+                        />
+                      ) : (
+                        <a
+                          key={heading.id}
+                          href={`#${heading.id}`}
+                          onClick={(event) => { event.preventDefault(); scrollToHeading(heading.id); }}
+                          className={cn(
+                            'block border-l-2 border-transparent py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground',
+                            heading.level === 2 ? 'pl-2' : 'pl-4',
+                            activeHeadingId === heading.id && 'border-primary text-foreground'
+                          )}
+                        >
+                          {heading.text}
+                        </a>
+                      )
+                    )}
+                  </div>
                 </div>
               </aside>
             </div>
           )}
 
-          {/* Floating Translucent WikiComposer */}
+          {/* Floating composer — docked within the center column */}
           <WikiComposer
             question={question}
             onQuestionChange={setQuestion}
@@ -1169,6 +1086,23 @@ export function WikiReader() {
         </main>
       </div>
 
+      {/* Code Viewer Drawer / Overlay when citation or file is clicked */}
+      {activeFile && !qaOpen ? (
+        <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-border/80 bg-background/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-right duration-200">
+          <div className="flex h-full flex-col">
+            <CodeViewer
+              projectId={projectId}
+              branch={activeBranch}
+              file={activeFile}
+              onClose={() => setActiveFile(null)}
+              className="h-full border-none shadow-none"
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+
+      {/* App nav hover zone */}
       {isSignedIn ? (
         <>
           <button

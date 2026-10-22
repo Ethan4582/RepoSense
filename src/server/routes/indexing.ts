@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AuthContext } from "../auth";
 import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { resolveProjectKeys } from "~/lib/providers/guard";
-import { GitHubAccessError, decryptProjectToken, resolveRepoRef } from "~/lib/github";
+import { GitHubAccessError, decryptProjectToken, parseRepoUrlRef, resolveRepoRef } from "~/lib/github";
 import { writesPaused } from "~/lib/emergency";
 
 export const indexingRoutes = new Hono<AuthContext>()
@@ -33,7 +33,7 @@ export const indexingRoutes = new Hono<AuthContext>()
       branch?: unknown;
       pullRequestNumber?: unknown;
     };
-    const requestedBranch =
+    let requestedBranch =
       typeof body.branch === "string" && body.branch.trim()
         ? body.branch.trim()
         : undefined;
@@ -65,6 +65,22 @@ export const indexingRoutes = new Hono<AuthContext>()
 
     if (!project) {
       return c.json({ error: "Project not found" }, 404);
+    }
+
+    if (requestedBranch?.includes("github.com/")) {
+      try {
+        const parsed = parseRepoUrlRef(requestedBranch);
+        if (
+          parsed.owner.toLowerCase() !== project.repoOwner.toLowerCase() ||
+          parsed.repo.toLowerCase() !== project.repoName.toLowerCase() ||
+          !parsed.branch
+        ) {
+          return c.json({ error: "Use a branch from this repository.", code: "INVALID_BRANCH" }, 400);
+        }
+        requestedBranch = parsed.branch;
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : "Invalid GitHub branch URL.", code: "INVALID_BRANCH" }, 400);
+      }
     }
 
     const activeJobs = await db.indexingJob.count({
@@ -116,6 +132,26 @@ export const indexingRoutes = new Hono<AuthContext>()
           code: err instanceof GitHubAccessError ? err.code : "KEY_MISSING",
         },
         400
+      );
+    }
+
+    const completed = await db.indexingJob.findFirst({
+      where: {
+        projectId,
+        branch: target.branch,
+        commitSha: target.commitSha,
+        status: "COMPLETED",
+      },
+      select: { id: true },
+    });
+    if (completed) {
+      return c.json(
+        {
+          error: `The branch "${target.branch}" is already indexed at its latest commit.`,
+          code: "BRANCH_ALREADY_INDEXED",
+          branch: target.branch,
+        },
+        409
       );
     }
 

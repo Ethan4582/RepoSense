@@ -7,6 +7,10 @@ export interface RepoCoordinates {
   repoUrl: string;
 }
 
+export interface RepoUrlRef extends RepoCoordinates {
+  branch?: string;
+}
+
 export class GitHubAccessError extends Error {
   readonly code: 'INVALID_TOKEN' | 'NOT_FOUND' | 'UNKNOWN';
 
@@ -36,7 +40,7 @@ export function parseRepoUrl(repoUrl: string): RepoCoordinates {
       }
 
       const parts = url.pathname.split('/').filter(Boolean);
-      if (parts.length !== 2) throw new Error('not a repo path');
+      if (parts.length < 2) throw new Error('not a repo path');
       owner = parts[0];
       repo = parts[1]?.replace(/\\.git$/i, '');
     } catch {
@@ -58,6 +62,24 @@ export function parseRepoUrl(repoUrl: string): RepoCoordinates {
   }
 
   return { owner, repo, repoUrl: `https://github.com/${owner}/${repo}` };
+}
+
+/** Parse a repository URL and preserve the selected branch from /tree/<branch>. */
+export function parseRepoUrlRef(repoUrl: string): RepoUrlRef {
+  const coordinates = parseRepoUrl(repoUrl);
+  const raw = repoUrl.trim();
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const parts = new URL(withProtocol).pathname.split('/').filter(Boolean);
+    if (parts[2] === 'tree' && parts.length > 3) {
+      return { ...coordinates, branch: decodeURIComponent(parts.slice(3).join('/')) };
+    }
+  } catch {
+    // parseRepoUrl already validates the URL shape.
+  }
+
+  return coordinates;
 }
 
 export function getOctokit(token?: string | null) {

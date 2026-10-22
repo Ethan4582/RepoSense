@@ -1,95 +1,154 @@
-# UI Refinement Prompt — Match DeepWiki Layout Precisely
+eepWiki Frontend UI Realignment Specification (plan.md)
 
-Analyze the two attached screenshots carefully before making any changes:
+This specification provides the authoritative UI instructions for Anti-Gravity / Claude CLI to match the exact geometry drawn in the architectural layout wireframe.
 
-- **Reference image:** DeepWiki's documentation page.
-- **Current image:** Our RepoSense wiki page.
+The core requirement is a floating, centered 3-column stage with generous empty gutters on both sides of the browser window, distinct vertical divider borders, and a tightly constrained center content width.
 
-Your task is to make our existing wiki UI match the reference as closely as possible in layout, proportions, spacing, typography, content hierarchy, and interaction behaviour, while retaining RepoSense's existing blue accent theme.
+1. Layout & Geometry (Wireframe Parity)
 
-This is a precision UI refinement, not a redesign from scratch.
+  [Left Browser Margin: 10-14vw]                                                     [Right Browser Margin: 10-14vw]
+◄──────────────────────────────►                                                  ◄──────────────────────────────►
+                               ┌─────────────────────────────────────────────────┐
+                               │ owner / repo  [Public]   [Edit Wiki] [PRs] [Share][ dark/light button]  │
+                               ├───────────────┬─────────────────┬───────────────┤
+                               │               │                 │               │
+                               │  Different    │   Center        │  Content      │
+                               │  pages in     │   Article       │  on the       │
+                               │  the wiki     │   Content       │  page (TOC)   │
+                               │               │   (Constrained) │               │
+                               │  (Scrollable) │                 │  (Scrollable) │
+                               │               │                 │               │
+                               │               │ ┌─────────────┐ │               │
+                               │               │ │ Chat Dock   │ │               │
+                               │               │ └─────────────┘ │               │
+                               └───────────────┴─────────────────┴───────────────┘
 
-## 1. Match the Overall Layout
 
-Replicate the reference's three-column documentation layout:
+1.1 The Floating Centered Stage
 
-- **Left sidebar:** A narrow, independently scrollable navigation column with clear hierarchy between page groups, parent headings, and nested pages.
-- **Main content:** A centered, readable documentation column with generous horizontal padding and consistent vertical rhythm.
-- **Right sidebar:** A narrow table of contents aligned with the main content, with sufficient separation from the browser's right edge.
+Never Bleed to Browser Edges: The entire 3-column documentation application must float in the middle of the viewport.
 
-The reference uses substantial outer margins and whitespace. Our current layout feels stretched and crowded against the viewport edges.
+Stage Wrapper:
 
-Use the reference screenshot to establish the proportions. At a comparable desktop viewport, match the column widths, outer margins, gutters, and content alignment as closely as practical. Do not simply apply arbitrary padding or shrink the entire page.
+Width constraint: max-w-[1240px] xl:max-w-[1280px] mx-auto
 
-The main content should have a readable maximum width rather than expanding across all available space. The left and right navigation areas must feel visually separate from the central documentation.
+Viewport inset padding: px-6 md:px-10 lg:px-12
 
-## 2. Rebuild the Documentation Hierarchy Visually
+This guarantees that wide screens have massive whitespace margins on the left and right (matching the wireframe).
 
-Our documentation content is already correct. Preserve its content, citations, links, source references, and functionality.
+Grid Architecture:
 
-Improve its presentation to match the reference:
+Define three distinct columns with clean vertical hairline separators:
 
-- Clear distinction between the page title, section headings, subheadings, paragraphs, lists, and inline code.
-- Consistent heading sizes, font weights, line heights, and spacing.
-- Nested navigation items indented according to their actual hierarchy.
-- Consistent paragraph widths and vertical spacing.
-- Clean, subtle source-reference chips and inline code styling.
-- A compact, understated relevant-source-files disclosure.
-- A right-side table of contents with clear hierarchy and subtle active-section indication.
+<div className="w-full max-w-[1280px] mx-auto grid grid-cols-[210px_minmax(0,1fr)_200px] h-[calc(100vh-3.5rem)]">
+  <!-- Left Column: Wiki Hierarchy -->
+  <aside className="border-r border-border/50 px-4 py-6 overflow-y-auto scrollbar-thin">
+    ...
+  </aside>
 
-Do not render every item as an equally weighted line of text. Respect the actual document structure and heading levels.
+  <!-- Center Column: Main Reading Stage -->
+  <main className="px-8 lg:px-12 py-6 overflow-y-auto scrollbar-thin relative scroll-smooth pb-32">
+    ...
+  </main>
 
-Avoid excessive borders, unnecessary metadata, oversized headings, decorative cards around ordinary content, and strong blue backgrounds. Use blue selectively for links, active navigation, and meaningful interactive states.
+  <!-- Right Column: Table of Contents / On this page -->
+  <aside className="border-l border-border/50 px-4 py-6 overflow-y-auto scrollbar-thin">
+    ...
+  </aside>
+</div>
 
-## 3. Sidebar Behaviour
 
-The left sidebar should support the intended hidden-navigation experience.
+1.2 Permanent Left Hierarchy (Zero Close Button)
 
-- Keep the sidebar hidden when the user is reading the documentation, where appropriate.
-- Reveal it through a subtle, discoverable control or the intended left-edge interaction.
-- When revealed, preserve the main content's usability and avoid unwanted horizontal overflow.
-- Keep nested pages readable, properly indented, and independently scrollable when necessary.
-- Provide an obvious way to dismiss or collapse the sidebar.
+Remove the ✕ close button entirely.
 
-The right table of contents should remain independently usable. Do not let either sidebar unnecessarily cover the central content or create multiple competing scrollbars.
+The left column (Different pages in the wiki) remains permanently visible and anchored to its slot.
 
-## 4. Preserve the Chat Composer
+Do not allow the left sidebar to collapse or overlay onto the center content.
 
-Keep the existing bottom chat composer, but retain the cleaner, translucent treatment specified in our existing `design.md` and the previous reference screenshots.
+1.3 Floating Dock Restricted to Center Column
 
-It should be visually integrated with the documentation without obscuring important text. Preserve the existing multi-model selector so users can choose any configured, available model.
+As drawn in the wireframe, the bottom chat dock is docked strictly within the center reading column, never spanning across the left or right columns.
 
-Remove unnecessary metadata from the composer. Preserve model selection, submission, loading states, follow-up questions, and existing RAG interactions.
+Container positioning:
 
-## 5. Implementation Constraints
+Anchor within the center column: sticky bottom-4 mx-auto w-full max-w-xl
 
-Before editing, inspect the current layout components, CSS, responsive breakpoints, sidebar state, documentation renderer, and existing `design.md`.
+Surface styling: bg-background/90 backdrop-blur-md border border-border/70 shadow-lg rounded-2xl p-2.5 flex items-center gap-3
 
-- Reuse the existing architecture and components where practical.
-- Prefer targeted layout and styling changes over a wholesale rewrite.
-- Do not modify backend logic, APIs, database schemas, indexing, RAG, or source-generation behaviour.
-- Do not replace correct documentation content or remove existing functionality.
-- Avoid adding dependencies unless absolutely necessary.
-- Preserve the existing light/dark theme behaviour and blue accent palette.
+2. Top Navigation Bar (Minimal & Clean)
 
-## 6. Responsive Behaviour
+No RepoSense Logo or Brand Wordmark: Remove the logo icon and the "RepoSense" wordmark completely.
 
-Match the reference at desktop sizes first, then ensure the layout adapts sensibly to narrower screens.
+Repository Coordinates (Left):
 
-On smaller screens, collapse navigation into accessible controls, prioritize the main documentation, and prevent horizontal overflow. Do not force desktop column widths onto mobile layouts.
+Display only owner / repo in clean medium-weight type.
 
-## 7. Implementation and Verification
+Followed by the status badge (Public / Private) and branch tag (main).
 
-Implement the changes rather than only describing them.
+Action Buttons (Right):
 
-After implementation:
+[Edit Wiki] — Ghost/outline pill button to toggle edit mode.
 
-1. Compare screenshots of the updated page against the reference at the same viewport dimensions.
-2. Check outer margins, column widths, gutters, content width, typography, heading hierarchy, and vertical rhythm.
-3. Verify sidebar opening, closing, scrolling, and nested navigation.
-4. Verify the table of contents, source citations, code formatting, and relevant-source-files disclosure.
-5. Verify the chat composer, configured model selection, submission, and loading behaviour.
-6. Check dark mode and responsive layouts.
-7. Confirm that backend and RAG functionality remain unchanged.
+[Pull Requests] — Outline pill button routing directly to the repository PRs page.
 
-**Acceptance criterion:** The result should reproduce the reference's clean, spacious documentation layout and visual proportions as closely as possible, using RepoSense's own theme and preserving all existing functionality. Do not stop at superficial CSS changes; correct the underlying layout structure wherever necessary.
+[Share] — Pill button to copy the shareable link.
+
+[☼] — Theme toggle button (light/dark mode).
+
+Eliminate Header Bloat: Remove the "Enter email to refresh" box, account gear icons, and unnecessary metadata from the header.
+
+3. Left-Margin Hover App Drawer
+
+The global workspace navigation (Dashboard, Repositories, Meetings, API Keys) lives in the empty left margin of the browser.
+
+Place an invisible hover detector along the far-left browser margin (fixed left-0 top-0 bottom-0 w-8 z-40).
+
+Hovering slides out an off-canvas navigation drawer (w-72 bg-background border-r shadow-2xl z-50).
+
+Leaving the drawer closes it smoothly without reflowing or shifting the centered 3-column stage.
+
+4. "On This Page" Anchor Jump & Scroll-Spy
+
+4.1 Working Click-to-Scroll
+
+Inject slugified IDs into all markdown h2 and h3 tags using rehype-slug.
+
+Add scroll-mt-20 on all headings so the fixed top navigation does not occlude the heading text upon jump.
+
+Clicking any item in the right column triggers smooth scrolling:
+
+const target = document.getElementById(slug);
+if (target) {
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
+4.2 Dynamic Scroll-Spy
+
+Attach an IntersectionObserver to all headings in the center scrollable container.
+
+Highlight the active section in the right TOC with text-primary font-medium border-l-2 border-primary -ml-[1px] pl-2.
+
+5. Interactive Citation Badges (CitationPill.tsx)
+
+Parse all markdown occurrences of [[filepath:start-end]] and [[filepath:line]] into interactive pill components:
+
+GitHub icon + monospace relative path + shaded line range tag (1-48).
+
+Click Action:
+
+Opens the GitHub permalink in a new tab:
+https://github.com/{owner}/{repo}/blob/{commitHash}/{filePath}#L{startLine}-L{endLine}
+
+Or opens the split-pane Code Viewer scrolled directly to that line range.
+
+Zero raw brackets ([[...]]) must leak into the rendered prose.
+
+6. Modern Split-Pane Code Inspector
+
+When inspecting code, replace the right column or open a split pane.
+
+Remove Yellow Highlighting: Replace #fff9db line highlighting with a clean, theme-aware blue tint: rgba(18, 109, 251, 0.08) and a 2px solid #126dfb left border.
+
+Header Tabs: Display clean tabs for multiple files with active file paths and line ranges.

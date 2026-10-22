@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthContext } from "../auth";
 import { estimateProjectCost, estimateRepoTokensFromTree } from "~/lib/estimate";
-import { parseRepoUrl } from "~/lib/github";
+import { parseRepoUrlRef } from "~/lib/github";
 
 const GITHUB_REQUEST_TIMEOUT = 20_000;
 
@@ -121,9 +121,9 @@ export const estimateRoutes = new Hono<AuthContext>().post(
     const { repoUrl, githubToken, modelId, embeddingModelId } = c.req.valid("json");
 
     try {
-      let coordinates: ReturnType<typeof parseRepoUrl>;
+      let coordinates: ReturnType<typeof parseRepoUrlRef>;
       try {
-        coordinates = parseRepoUrl(repoUrl);
+        coordinates = parseRepoUrlRef(repoUrl);
       } catch {
         return c.json({ error: "Please provide a valid GitHub repository URL." }, 400);
       }
@@ -148,7 +148,7 @@ export const estimateRoutes = new Hono<AuthContext>().post(
       let treeEntries: Array<{ path?: string; size?: number }> = [];
 
       try {
-        const treeData = await fetchRepoTree(owner, repo, defaultBranch, githubToken?.trim() ?? undefined);
+        const treeData = await fetchRepoTree(owner, repo, coordinates.branch ?? defaultBranch, githubToken?.trim() ?? undefined);
 
         if (treeData && Array.isArray(treeData.tree)) {
           treeEntries = treeData.tree

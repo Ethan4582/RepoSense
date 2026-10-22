@@ -9,6 +9,8 @@ import {
   decryptProjectToken,
   getRepoMetadata,
   parseRepoUrl,
+  parseRepoUrlRef,
+  resolveRepoRef,
   getRepoGithubDetails,
 } from "~/lib/github";
 import { getFullFileContent } from "~/lib/embeddings";
@@ -103,9 +105,9 @@ export const projectsRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const input = c.req.valid("json");
 
-      let coordinates: ReturnType<typeof parseRepoUrl>;
+      let coordinates: ReturnType<typeof parseRepoUrlRef>;
       try {
-        coordinates = parseRepoUrl(input.repoUrl);
+        coordinates = parseRepoUrlRef(input.repoUrl);
       } catch (err) {
         return c.json(
           {
@@ -128,6 +130,23 @@ export const projectsRoutes = new Hono<AuthContext>()
           {
             error: message,
             code: err instanceof GitHubAccessError ? err.code : "GITHUB_ERROR",
+          },
+          400
+        );
+      }
+
+      let initialRef: Awaited<ReturnType<typeof resolveRepoRef>>;
+      try {
+        initialRef = await resolveRepoRef(
+          coordinates.repoUrl,
+          { branch: coordinates.branch },
+          input.githubToken
+        );
+      } catch (err) {
+        return c.json(
+          {
+            error: err instanceof Error ? err.message : 'The requested GitHub branch could not be found.',
+            code: err instanceof GitHubAccessError ? err.code : 'GITHUB_ERROR',
           },
           400
         );
@@ -230,9 +249,9 @@ export const projectsRoutes = new Hono<AuthContext>()
           isPrivateRepo: meta.isPrivate,
           isPublicWiki: meta.isPrivate ? false : input.isPublicWiki,
           defaultBranch: meta.defaultBranch,
-          lastIndexedBranch: meta.defaultBranch,
-          lastIndexedBranchKind: "MAIN",
-          lastIndexedCommitSha: meta.commitSha,
+          lastIndexedBranch: initialRef.branch,
+          lastIndexedBranchKind: initialRef.branchKind,
+          lastIndexedCommitSha: initialRef.commitSha,
           chatProvider: input.chatProvider,
           chatModel,
           embeddingProvider: input.embeddingProvider,
@@ -251,9 +270,10 @@ export const projectsRoutes = new Hono<AuthContext>()
         const job = await db.indexingJob.create({
           data: {
             projectId: project.id,
-            branch: meta.defaultBranch,
-            branchKind: "MAIN",
-            commitSha: meta.commitSha,
+            branch: initialRef.branch,
+            branchKind: initialRef.branchKind,
+            pullRequestNumber: initialRef.pullRequestNumber,
+            commitSha: initialRef.commitSha,
             status: "QUEUED",
             currentStep: "LOADING_REPO",
             startedAt: new Date(),
@@ -322,9 +342,9 @@ export const projectsRoutes = new Hono<AuthContext>()
       const { repoUrl, githubToken } = c.req.valid("json");
       const db = c.get("db");
 
-      let coordinates: ReturnType<typeof parseRepoUrl>;
+      let coordinates: ReturnType<typeof parseRepoUrlRef>;
       try {
-        coordinates = parseRepoUrl(repoUrl);
+        coordinates = parseRepoUrlRef(repoUrl);
       } catch (err) {
         return c.json(
           { error: err instanceof Error ? err.message : "Please enter a valid GitHub repository URL." },
@@ -342,7 +362,7 @@ export const projectsRoutes = new Hono<AuthContext>()
             deletedAt: null,
             lastIndexedAt: { not: null },
           },
-          select: { id: true, name: true },
+          select: { id: true, name: true, lastIndexedBranch: true },
         });
 
         return c.json({

@@ -17,6 +17,8 @@ interface WikiComposerProps {
   onModelSelect: (modelId: string) => void;
   availableKeys?: string[];
   placeholder?: string;
+  tocWidth?: number;
+  navigationWidth?: number;
 }
 
 export function WikiComposer({
@@ -29,6 +31,8 @@ export function WikiComposer({
   onModelSelect,
   availableKeys = [],
   placeholder,
+  tocWidth = 0,
+  navigationWidth = 0,
 }: WikiComposerProps) {
   const [modelOpen, setModelOpen] = React.useState(false);
   const [providerFilter, setProviderFilter] = React.useState<string>('FAVORITES');
@@ -84,8 +88,8 @@ export function WikiComposer({
   };
 
   return (
-    <div className="fixed bottom-5 left-1/2 z-30 w-full max-w-[920px] -translate-x-1/2 px-4 transition-all">
-      <div className="group rounded-2xl border border-border/60 bg-background/70 shadow-xl backdrop-blur-xl transition-all focus-within:border-border dark:bg-card/65">
+    <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-30 flex justify-center px-6 xl:pr-[216px]">
+      <div className="pointer-events-auto w-full max-w-[640px] group rounded-2xl border border-border/70 bg-background/90 shadow-[0_4px_20px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all focus-within:border-border dark:bg-card/90">
         <textarea
           ref={textareaRef}
           value={question}

@@ -92,7 +92,7 @@ export function WikiMarkdown({
           h2: ({ children }) => {
             const text = nodeToText(children);
             return (
-              <h2 id={headingId(text)} className="mt-9 mb-3 text-xl font-semibold tracking-tight text-foreground">
+              <h2 id={headingId(text)} className="scroll-mt-6 mt-9 mb-3 text-xl font-semibold tracking-tight text-foreground">
                 {children}
               </h2>
             );
@@ -100,7 +100,7 @@ export function WikiMarkdown({
           h3: ({ children }) => {
             const text = nodeToText(children);
             return (
-              <h3 id={headingId(text)} className="mt-7 mb-2 text-base font-semibold text-foreground">
+              <h3 id={headingId(text)} className="scroll-mt-6 mt-7 mb-2 text-base font-semibold text-foreground">
                 {children}
               </h3>
             );

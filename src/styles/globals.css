@@ -173,3 +173,61 @@
 }
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+@keyframes indexing-cube-wave {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  45% { transform: translate3d(0, -16px, 0); }
+  65% { transform: translate3d(0, -7px, 0); }
+}
+
+.indexing-cube-scene {
+  width: 230px;
+  height: 155px;
+  perspective: 640px;
+}
+
+.indexing-cube-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform: rotateX(58deg) rotateZ(45deg);
+  transform-style: preserve-3d;
+}
+
+.indexing-cube-column {
+  --cube-size: 26px;
+  position: absolute;
+  left: calc(54px + var(--cube-x) * var(--cube-size));
+  top: calc(8px + var(--cube-y) * var(--cube-size));
+  width: var(--cube-size);
+  height: var(--cube-size);
+  transform-style: preserve-3d;
+  animation: indexing-cube-wave 2.9s ease-in-out infinite;
+  animation-delay: var(--cube-delay);
+}
+
+.indexing-cube {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform: translateZ(calc(var(--cube-level) * 17px));
+  transform-style: preserve-3d;
+}
+
+.indexing-cube i,
+.indexing-cube b,
+.indexing-cube em {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+  background: color-mix(in oklab, var(--background) 96%, var(--foreground));
+}
+
+.indexing-cube i { inset: 0; transform: translateZ(17px); }
+.indexing-cube b { width: 100%; height: 17px; top: 100%; transform-origin: top; transform: rotateX(-90deg); background: color-mix(in oklab, var(--muted) 60%, var(--background)); }
+.indexing-cube em { width: 17px; height: 100%; left: 100%; transform-origin: left; transform: rotateY(90deg); background: color-mix(in oklab, var(--muted) 38%, var(--background)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .indexing-cube-column { animation: none; }
+}

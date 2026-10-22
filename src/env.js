@@ -12,10 +12,13 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-    GEMINI_API_KEY: z.string().min(1),
-    HUGGING_FACE_API_KEY: z.string().optional(),
-    GITHUB_TOKEN: z.string().min(1),
+    ENCRYPTION_KEY: z.string().optional(),
+    GEMINI_API_KEY: z.string().optional(),
+    GITHUB_TOKEN: z.string().optional(),
     CLERK_SECRET_KEY: z.string().min(1),
+    ASSEMBLYAI_API_KEY: z.string().optional(),
+    CLOUDINARY_API_KEY: z.string().optional(),
+    CLOUDINARY_API_SECRET: z.string().optional(),
   },
 
   /**
@@ -29,7 +32,9 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().min(1),
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: z.string().min(1),
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+    NEXT_PUBLIC_API_URL: z.string().url().optional(),
     NEXT_PUBLIC_LANDING_PAGE_URL: z.string().url().optional(),
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().optional(),
   },
 
   /**
@@ -40,16 +45,21 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     DIRECT_URL: process.env.DIRECT_URL,
     NODE_ENV: process.env.NODE_ENV,
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-    HUGGING_FACE_API_KEY: process.env.HUGGING_FACE_API_KEY,
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+    ASSEMBLYAI_API_KEY: process.env.ASSEMBLYAI_API_KEY,
+    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_LANDING_PAGE_URL: process.env.NEXT_PUBLIC_LANDING_PAGE_URL,
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

@@ -78,7 +78,7 @@ export class ProviderError extends Error {
 
 /** Discriminated key verification result */
 export type VerifyResult =
-  | { readonly valid: true; readonly error?: undefined }
+  | { readonly valid: true; readonly warning?: string; readonly error?: undefined }
   | { readonly valid: false; readonly error: ProviderError };
 
 /** Static and dynamic model descriptor */
@@ -118,10 +118,10 @@ export interface ProviderMetadata {
 /** Chat model instance types produced by supported providers */
 export type AnyChatModel =
   | ReturnType<ReturnType<typeof createOpenAI>>
-  | ReturnType<ReturnType<typeof createAnthropic>>
+   
   | ReturnType<ReturnType<typeof createGoogleGenerativeAI>>
-  | ReturnType<ReturnType<typeof createDeepSeek>>
-  | ReturnType<ReturnType<typeof createXai>>;
+   
+   ;
 
 /** Embedding model instance types produced by supported embedding providers */
 export type AnyEmbeddingModel =

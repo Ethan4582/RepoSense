@@ -131,3 +131,118 @@
     @apply bg-background text-foreground ;
   }
 }
+
+/* Dynamic Light & Dark Mode Markdown and Code Formatting */
+.wmde-markdown {
+  background-color: transparent !important;
+  color: inherit !important;
+  font-family: inherit !important;
+}
+
+.wmde-markdown pre {
+  background-color: var(--secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.5rem !important;
+  padding: 0.875rem !important;
+  color: var(--foreground) !important;
+  overflow-x: auto !important;
+}
+
+.wmde-markdown code {
+  color: inherit !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.wmde-markdown :not(pre) > code {
+  background-color: var(--muted) !important;
+  color: var(--foreground) !important;
+  padding: 0.15rem 0.35rem !important;
+  border-radius: 0.25rem !important;
+  font-size: 0.85em !important;
+}
+
+.wmde-markdown blockquote {
+  border-left: 3px solid var(--primary) !important;
+  color: var(--muted-foreground) !important;
+  padding-left: 0.875rem !important;
+}
+
+.wmde-markdown a {
+  color: var(--primary) !important;
+  text-decoration: underline !important;
+}
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* Suppress Mermaid default global error popups/bombs */
+[id^="dmermaid"], svg[aria-roledescription="error"] {
+  display: none !important;
+}
+
+@keyframes indexing-cube-wave {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  45% { transform: translate3d(0, -16px, 0); }
+  65% { transform: translate3d(0, -7px, 0); }
+}
+
+.indexing-cube-scene {
+  width: 230px;
+  height: 155px;
+  perspective: 640px;
+}
+
+.indexing-cube-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform: rotateX(58deg) rotateZ(45deg);
+  transform-style: preserve-3d;
+}
+
+.indexing-cube-column {
+  --cube-size: 26px;
+  position: absolute;
+  left: calc(54px + var(--cube-x) * var(--cube-size));
+  top: calc(8px + var(--cube-y) * var(--cube-size));
+  width: var(--cube-size);
+  height: var(--cube-size);
+  transform-style: preserve-3d;
+  animation: indexing-cube-wave 2.9s ease-in-out infinite;
+  animation-delay: var(--cube-delay);
+}
+
+.indexing-cube {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform: translateZ(calc(var(--cube-level) * 17px));
+  transform-style: preserve-3d;
+}
+
+.indexing-cube i,
+.indexing-cube b,
+.indexing-cube em {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+  background: color-mix(in oklab, var(--background) 96%, var(--foreground));
+}
+
+.indexing-cube i { inset: 0; transform: translateZ(17px); background: color-mix(in oklab, var(--primary) 72%, var(--foreground)); }
+.indexing-cube b { width: 100%; height: 17px; top: 100%; transform-origin: top; transform: rotateX(-90deg); background: color-mix(in oklab, var(--primary) 50%, var(--background)); }
+.indexing-cube em { width: 17px; height: 100%; left: 100%; transform-origin: left; transform: rotateY(90deg); background: color-mix(in oklab, var(--primary) 35%, var(--background)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .indexing-cube-column { animation: none; }
+}

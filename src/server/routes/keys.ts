@@ -6,18 +6,17 @@ import type { ProviderId } from "~/lib/providers";
 import {
   encryptKeyWithIv,
   decryptKey,
+  getEncryptionSecret,
   getKeyLast4,
   validateProviderKey,
 } from "~/lib/providers";
 
-const getEncryptionSecret = (): string => {
-  const secret = process.env.ENCRYPTION_KEY;
-  if (!secret) {
-    // Development fallback to prevent crashes if not set
-    return "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-  }
-  return secret;
-};
+const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
+
+function parseProvider(value: string): ProviderId | null {
+  const provider = value.toUpperCase();
+  return (PROVIDERS as readonly string[]).includes(provider) ? (provider as ProviderId) : null;
+}
 
 export const keysRoutes = new Hono<AuthContext>()
   .get("/", async (c) => {
@@ -30,7 +29,6 @@ export const keysRoutes = new Hono<AuthContext>()
         id: true,
         provider: true,
         keyLast4: true,
-        label: true,
         status: true,
         lastVerifiedAt: true,
         lastUsedAt: true,
@@ -47,18 +45,17 @@ export const keysRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]),
-        apiKey: z.string().min(5, "API key is too short"),
-        label: z.string().optional(),
+        provider: z.enum(PROVIDERS),
+        apiKey: z.string().min(5, "API key is too short").max(500),
       })
     ),
     async (c) => {
       const userId = c.get("userId");
       const db = c.get("db");
-      const { provider, apiKey, label } = c.req.valid("json");
+      const { provider, apiKey } = c.req.valid("json");
 
       // Verify the key live with the provider
-      const verifyResult = await validateProviderKey(provider as ProviderId, apiKey);
+      const verifyResult = await validateProviderKey(provider, apiKey);
       const status = verifyResult.valid ? "VALID" : verifyResult.error?.code === "QUOTA_EXHAUSTED" ? "QUOTA_EXHAUSTED" : "INVALID";
 
       // Encrypt the key
@@ -79,7 +76,6 @@ export const keysRoutes = new Hono<AuthContext>()
           encryptedKey,
           iv,
           keyLast4,
-          label: label ?? null,
           status,
           lastVerifiedAt: new Date(),
         },
@@ -87,7 +83,6 @@ export const keysRoutes = new Hono<AuthContext>()
           encryptedKey,
           iv,
           keyLast4,
-          label: label ?? null,
           status,
           lastVerifiedAt: new Date(),
         },
@@ -95,7 +90,6 @@ export const keysRoutes = new Hono<AuthContext>()
           id: true,
           provider: true,
           keyLast4: true,
-          label: true,
           status: true,
           lastVerifiedAt: true,
           createdAt: true,
@@ -113,13 +107,16 @@ export const keysRoutes = new Hono<AuthContext>()
     async (c) => {
       const userId = c.get("userId");
       const db = c.get("db");
-      const providerParam = c.req.param("provider").toUpperCase() as ProviderId;
+      const providerParam = parseProvider(c.req.param("provider"));
+      if (!providerParam) {
+        return c.json({ error: "Unsupported provider" }, 400);
+      }
 
       const record = await db.apiKey.findUnique({
         where: {
           userId_provider: {
             userId,
-            provider: providerParam as any,
+            provider: providerParam,
           },
         },
       });
@@ -160,12 +157,15 @@ export const keysRoutes = new Hono<AuthContext>()
     async (c) => {
       const userId = c.get("userId");
       const db = c.get("db");
-      const providerParam = c.req.param("provider").toUpperCase();
+      const providerParam = parseProvider(c.req.param("provider"));
+      if (!providerParam) {
+        return c.json({ error: "Unsupported provider" }, 400);
+      }
 
       await db.apiKey.deleteMany({
         where: {
           userId,
-          provider: providerParam as any,
+          provider: providerParam,
         },
       });
 

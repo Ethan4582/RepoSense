@@ -1,6 +1,6 @@
-import { Context } from "hono";
+import { type Context } from "hono";
 import type { Next } from "hono";
-import { verifyToken } from "@clerk/backend";
+import { verifyToken } from "@clerk/nextjs/server";
 import { db } from "~/server/db";
 
 export type AuthContext = {
@@ -28,7 +28,7 @@ export async function clerkAuthMiddleware(c: Context<AuthContext>, next: Next) {
   if (!token) {
     const cookieHeader = c.req.header("cookie");
     if (cookieHeader) {
-      const match = cookieHeader.match(/__session=([^;]+)/);
+      const match = /__session=([^;]+)/.exec(cookieHeader);
       if (match?.[1]) {
         token = match[1];
       }
@@ -43,7 +43,7 @@ export async function clerkAuthMiddleware(c: Context<AuthContext>, next: Next) {
         secretKey,
       });
 
-      if (verified && verified.sub) {
+      if (verified?.sub) {
         c.set("userId", verified.sub);
         c.set("db", db);
         return next();
@@ -51,14 +51,6 @@ export async function clerkAuthMiddleware(c: Context<AuthContext>, next: Next) {
     } catch {
       // Token verification failed, fallback to Next.js headers if available
     }
-  }
-
-  // In Next.js local environment, Clerk middleware sets headers on the request
-  const clerkUserId = c.req.header("x-clerk-user-id");
-  if (clerkUserId) {
-    c.set("userId", clerkUserId);
-    c.set("db", db);
-    return next();
   }
 
   return c.json({ error: "Unauthorized", message: "Valid authentication credentials are required." }, 401);

@@ -1,31 +1,26 @@
-import { UserButton } from "@clerk/nextjs"
-import { SidebarProvider } from "~/components/ui/sidebar"
-import { AppSideBar } from "../app-sidebar"
+'use client';
 
+import * as React from "react";
+import { usePathname } from "next/navigation";
+import { SidebarProvider } from "~/components/ui/sidebar";
+import { AppSideBar } from "../app-sidebar";
 
-type Props ={
- children: React.ReactNode // it what every that render inside the main page 
-}
+type Props = {
+  children: React.ReactNode;
+};
 
-export default function SideBarLayout({children}: Props) {
-   return(
-      <SidebarProvider>
-         < AppSideBar/>
-         <main className="w-full m-2">
-            <div className="flex items-center gap-2 border-sidebar-border bg-sidebar border shadow rounded-md px-2 py-2">
-               <span className="text-lg font-semibold text-blue-500">
-                 🚀 Welcome to Reposense — Search, Summarize, and Collaborate on Your Code!
-               </span>
-               <div className="ml-auto"></div>
-               <UserButton/>
-            </div>
-            <div className="h-4"></div>
-            {/* mian contednt */}
+export default function SideBarLayout({ children }: Props) {
 
-            <div className="border-sidebar-border  bg-sidebar border shadow rounded-md overflow-auto overflow-y-scroll h-[calc(102.5vh-6rem)] p-4">
-               {children}
-            </div>
-         </main>
-      </SidebarProvider>
-   )
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-background">
+        <React.Suspense fallback={null}>
+          <AppSideBar />
+        </React.Suspense>
+        <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </SidebarProvider>
+  );
 }

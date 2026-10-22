@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { processMeeting } from "~/lib/assembly";
 import { db } from "~/server/db";
@@ -10,24 +10,35 @@ const bodyParser = z.object({
     projectId: z.string(),
     meetingId: z.string()
 })
+interface MeetingSummary {
+    start: string;
+    end: string;
+    gist: string;
+    headline: string;
+    summary: string;
+}
+
 export const maxDuration = 300
 
 
 
 export async function POST(req: NextRequest) {
-    const { userId } = await auth()
+    const authResult = (await auth()) as { userId?: string | null }
+    const { userId } = authResult
     if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     try {
-        const body = await req.json()
-        const { meetingUrl, meetingId, projectId } = bodyParser.parse(body)
+        const body: unknown = await req.json()
+        const { meetingUrl, meetingId } = bodyParser.parse(body)
        
-        const { summaries } = await processMeeting(meetingUrl);
-        
+        const result = (await processMeeting(meetingUrl)) as unknown as {
+            summaries?: MeetingSummary[];
+        };
+        const summaries = result.summaries ?? [];
         
         await db.issue.createMany({
-            data: summaries.map((summary:any) => ({
+            data: summaries.map((summary) => ({
                 start: summary.start,
                 end: summary.end,
                 gist: summary.gist,
@@ -49,8 +60,7 @@ export async function POST(req: NextRequest) {
             success: true, 
             meeting: updatedMeeting 
         });
-    } catch (error) {
-        console.error(error)
+    } catch {
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

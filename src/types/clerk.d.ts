@@ -7,7 +7,7 @@ declare module "@clerk/backend" {
       authorizedParties?: string[];
       issuer?: string;
     }
-  ): Promise<{ sub: string; [key: string]: any }>;
+  ): Promise<{ sub: string; [key: string]: unknown }>;
 
-  export function createClerkClient(options: { secretKey?: string; publishableKey?: string }): any;
+  export function createClerkClient(options: { secretKey?: string; publishableKey?: string }): unknown;
 }

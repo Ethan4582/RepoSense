@@ -39,7 +39,7 @@ export function getChatModel(modelId: string, apiKey: string): GeminiChatModel {
  * Resolves an embedding model for Gemini (gemini-embedding-001, 768 dims).
  */
 export function getEmbeddingModel(
-  modelId: string = 'gemini-embedding-001',
+  modelId = 'gemini-embedding-001',
   apiKey: string
 ): GeminiEmbeddingModel {
   const client = getGeminiClient(apiKey);

@@ -6,7 +6,7 @@ export async function uploadFile(file: File, setProgress?: (progress: number) =>
 
 
     if (!cloudName || !uploadPreset) {
-      reject("Cloudinary config missing");
+      reject(new Error("Cloudinary config missing"));
       return;
     }
 
@@ -28,15 +28,16 @@ export async function uploadFile(file: File, setProgress?: (progress: number) =>
 
     xhr.onload = () => {
       if (xhr.status === 200) {
-        const response = JSON.parse(xhr.responseText);
-        resolve(response.secure_url as string);
+        const response = JSON.parse(xhr.responseText) as { secure_url?: string };
+        if (response.secure_url) resolve(response.secure_url);
+        else reject(new Error("Failed to upload file"));
       } else {
-        reject("Failed to upload file");
+        reject(new Error("Failed to upload file"));
       }
     };
 
     xhr.onerror = () => {
-      reject("Failed to upload file");
+      reject(new Error("Failed to upload file"));
     };
 
     xhr.send(formData);

@@ -1,59 +1,162 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { Octokit } from "octokit";
 import type { AuthContext } from "../auth";
 import { estimateProjectCost, estimateRepoTokensFromTree } from "~/lib/estimate";
+import { parseRepoUrlRef } from "~/lib/github";
+
+const GITHUB_REQUEST_TIMEOUT = 20_000;
+
+type GitHubRepoResponse = {
+  private?: boolean;
+  default_branch?: string;
+};
+
+type GitHubTreeEntry = {
+  type?: string;
+  path?: string;
+  size?: number;
+};
+
+type GitHubTreeResponse = {
+  tree?: GitHubTreeEntry[];
+};
+
+async function checkGitHubRepo(
+  owner: string,
+  repo: string,
+  userToken?: string
+): Promise<GitHubRepoResponse> {
+  const headers: Record<string, string> = {
+    "User-Agent": "reposense-app",
+    Accept: "application/vnd.github.v3+json",
+  };
+
+  const token = userToken ?? process.env.GITHUB_TOKEN;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers,
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT),
+  });
+
+  // If token is invalid or unauthorized, retry unauthenticated for public repositories
+  if (res.status === 401 && headers.Authorization) {
+    delete headers.Authorization;
+    const retryRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers,
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT),
+    });
+    if (retryRes.ok) {
+      res = retryRes;
+    } else {
+      throw new Error("GitHub authentication failed (401 Bad credentials). The provided GitHub token may be expired or invalid. Please check your token or use a public repository.");
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error("Repository not found or inaccessible. Please verify the URL or provide a valid GitHub token.");
+  }
+
+  const data = (await res.json()) as GitHubRepoResponse;
+  if (data?.private && !userToken?.trim()) {
+    throw new Error("Repository not found or inaccessible. Please provide a GitHub token for private repositories.");
+  }
+  return data;
+}
+
+async function fetchRepoTree(
+  owner: string,
+  repo: string,
+  branch: string,
+  userToken?: string
+): Promise<GitHubTreeResponse> {
+  const headers: Record<string, string> = {
+    "User-Agent": "reposense-app",
+    Accept: "application/vnd.github.v3+json",
+  };
+
+  const token = userToken ?? process.env.GITHUB_TOKEN;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    { headers, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT) }
+  );
+
+  if (res.status === 401 && headers.Authorization) {
+    delete headers.Authorization;
+    const retryRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      { headers, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT) }
+    );
+    if (retryRes.ok) {
+      res = retryRes;
+    }
+  }
+
+  if (!res.ok) {
+    return { tree: [] };
+  }
+
+  return (await res.json()) as GitHubTreeResponse;
+}
 
 export const estimateRoutes = new Hono<AuthContext>().post(
   "/",
   zValidator(
     "json",
     z.object({
-      repoUrl: z.string().url(),
-      githubToken: z.string().optional(),
-      modelId: z.string().optional().default("gemini-2.5-flash"),
-      embeddingModelId: z.string().optional().default("gemini-embedding-001"),
+      repoUrl: z.string().min(1).max(500, "Please provide a GitHub repository URL."),
+      githubToken: z.string().max(500).optional(),
+      modelId: z.string().optional().default("gpt-6.1-sol"),
+      embeddingModelId: z.string().optional().default("text-embedding-3-small"),
     })
   ),
   async (c) => {
     const { repoUrl, githubToken, modelId, embeddingModelId } = c.req.valid("json");
 
     try {
-      const parts = repoUrl.replace(/\.git$/, "").split("/");
-      const owner = parts[parts.length - 2];
-      const repo = parts[parts.length - 1];
-
-      if (!owner || !repo) {
-        return c.json({ error: "Invalid repository URL format" }, 400);
+      let coordinates: ReturnType<typeof parseRepoUrlRef>;
+      try {
+        coordinates = parseRepoUrlRef(repoUrl);
+      } catch {
+        return c.json({ error: "Please provide a valid GitHub repository URL." }, 400);
       }
 
-      const token = githubToken || process.env.GITHUB_TOKEN;
-      const octokit = new Octokit({ auth: token });
+      const owner = coordinates.owner;
+      const repo = coordinates.repo;
+
+      // Check reachability of the repository
+      let defaultBranch = "main";
+      try {
+        const repoData = await checkGitHubRepo(owner, repo, githubToken?.trim() ?? undefined);
+        defaultBranch = repoData.default_branch ?? "main";
+      } catch {
+        return c.json(
+          { error: "Please provide a valid, public GitHub repository URL." },
+          400
+        );
+      }
 
       // Fetch repository tree (recursive)
       let fileCount = 0;
       let treeEntries: Array<{ path?: string; size?: number }> = [];
 
       try {
-        const repoData = await octokit.rest.repos.get({ owner, repo });
-        const defaultBranch = repoData.data.default_branch || "main";
+        const treeData = await fetchRepoTree(owner, repo, coordinates.branch ?? defaultBranch, githubToken?.trim() ?? undefined);
 
-        const treeData = await octokit.rest.git.getTree({
-          owner,
-          repo,
-          tree_sha: defaultBranch,
-          recursive: "1",
-        });
-
-        if (treeData.data.tree) {
-          treeEntries = treeData.data.tree
+        if (treeData && Array.isArray(treeData.tree)) {
+          treeEntries = treeData.tree
             .filter((item) => item.type === "blob")
             .map((item) => ({ path: item.path, size: item.size }));
           fileCount = treeEntries.length;
         }
       } catch {
-        // Fallback: estimate conservatively with 50 files if tree API hits rate limit
         fileCount = 50;
       }
 
@@ -78,3 +181,4 @@ export const estimateRoutes = new Hono<AuthContext>().post(
     }
   }
 );
+

@@ -9,14 +9,21 @@ export const meetingsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        projectId: z.string(),
-        meetingUrl: z.string(),
-        name: z.string(),
+        projectId: z.string().max(64),
+        meetingUrl: z.string().max(2000).url(),
+        name: z.string().min(1).max(200),
       })
     ),
     async (c) => {
       const db = c.get("db");
+      const userId = c.get("userId");
       const { projectId, meetingUrl, name } = c.req.valid("json");
+
+      const member = await db.userToProject.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: "Project not found" }, 404);
 
       const meeting = await db.meeting.create({
         data: {
@@ -32,11 +39,18 @@ export const meetingsRoutes = new Hono<AuthContext>()
   )
   .get("/", async (c) => {
     const db = c.get("db");
+    const userId = c.get("userId");
     const projectId = c.req.query("projectId");
 
     if (!projectId) {
       return c.json({ error: "projectId query parameter required" }, 400);
     }
+
+    const member = await db.userToProject.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      select: { id: true },
+    });
+    if (!member) return c.json({ error: "Project not found" }, 404);
 
     const meetings = await db.meeting.findMany({
       where: { projectId },
@@ -48,10 +62,14 @@ export const meetingsRoutes = new Hono<AuthContext>()
   })
   .get("/:meetingId", async (c) => {
     const db = c.get("db");
+    const userId = c.get("userId");
     const meetingId = c.req.param("meetingId");
 
-    const meeting = await db.meeting.findUnique({
-      where: { id: meetingId },
+    const meeting = await db.meeting.findFirst({
+      where: {
+        id: meetingId,
+        project: { userToProjects: { some: { userId } } },
+      },
       include: { issues: true },
     });
 
@@ -63,7 +81,17 @@ export const meetingsRoutes = new Hono<AuthContext>()
   })
   .delete("/:meetingId", async (c) => {
     const db = c.get("db");
+    const userId = c.get("userId");
     const meetingId = c.req.param("meetingId");
+
+    const existing = await db.meeting.findFirst({
+      where: {
+        id: meetingId,
+        project: { userToProjects: { some: { userId } } },
+      },
+      select: { id: true },
+    });
+    if (!existing) return c.json({ error: "Meeting not found" }, 404);
 
     await db.meeting.delete({
       where: { id: meetingId },

@@ -1,27 +1,17 @@
 # RepoSense
 
-RepoSense transforms any GitHub repository into an interactive, multi-page technical wiki (DeepWiki) and answers codebase queries using vector search grounded by line-level citations.
+[![Demo Video](hero_image.png)](https://www.youtube.com/watch?v=PQqPkdpA0V0)
 
-[System design document](system-design.md)
-
----
-
-## Demo video
-
-[![Demo Video](public/img2.png)](https://www.youtube.com/watch?v=PQqPkdpA0V0)
-
----
 
 ## Core capabilities
 
 - DeepWiki generation: Scans Git trees, builds light structural skeletons, and generates complete documentation across five architectural layers (entry, core logic, external integrations, data persistence, and tooling).
-- Grounded codebase QA: Ask natural-language questions about logic, data flow, or configuration. Answers include verifiable inline citations in the format `[[filePath:startLine-endLine]]`.
+- Grounded codebase QA: Ask natural-language questions about logic, data flow, or configuration. Answers include verifiable inline citations.
 - Interactive source inspector: Clicking any citation displays the file in a stacked, full-width code panel with line-level syntax highlighting.
 - Bring Your Own Key (BYOK): Connect your own API keys for OpenAI, Google Gemini, Anthropic, Groq, DeepSeek, Meta, and xAI. Keys are stored encrypted with AES-256-GCM.
 - Branch and pull request awareness: Switch between branches and pull requests to view documentation and chat against exact commit revisions.
 - Native pgvector search: Vector similarity queries run on PostgreSQL using the cosine distance operator with HNSW index acceleration.
 
----
 
 ## Technology stack
 
@@ -33,27 +23,13 @@ RepoSense transforms any GitHub repository into an interactive, multi-page techn
 - Styling and UI: Tailwind CSS, Radix UI, Lucide icons, PrismJS, Mermaid.js
 - LLM runtime: Vercel AI SDK (`ai`)
 
----
 
 ## Architecture overview
 
 For a thorough description of the ingestion pipeline, capacity math, schema definitions, and failure modes, read the [System design document](system-design.md).
 
-```mermaid
-flowchart LR
-    GH["GitHub API"] --> INGEST["Tree Filter and Ingestion"]
-    INGEST --> CHUNK["Symbol Chunker and AST Skeleton"]
-    CHUNK --> EMBED["pgvector Embeddings<br/>OpenAI or Gemini"]
-    CHUNK --> WIKI["DeepWiki Generator<br/>Parallel LLM Pages"]
-    EMBED --> PG[("PostgreSQL and pgvector")]
-    WIKI --> PG
-    USER["Developer"] --> HONO["Hono API and Next.js UI"]
-    HONO --> QA["QA Grounding Engine"]
-    PG --> QA
-    QA --> USER
-```
+![Architecture Overview](public/docs/5.png)
 
----
 
 ## Getting started
 

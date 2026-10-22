@@ -57,9 +57,6 @@ yarn-error.log*
 *.agents/
 plan/
 plans/
-interview/
-interview.md
-*interview*.md
 design.md
 *plan*.md
 *.plan.md

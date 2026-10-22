@@ -89,53 +89,7 @@ Index memory sizing (HNSW on PostgreSQL):
 
 RepoSense uses a decoupled architecture. The frontend runs on Next.js 15 with React Server Components and client-side streaming hooks. The backend API runs on Hono, mounted at `/api`, providing high-throughput routing, token validation, and Server-Sent Events (SSE). Persistent state and vector storage reside in Neon Serverless PostgreSQL with the pgvector extension.
 
-```mermaid
-flowchart TD
-    subgraph Clients["Clients"]
-        Web["Next.js 15 Web App<br/>(Wiki, QA, Explorer)"]
-        CLI["API Consumer / CI"]
-    end
-
-    subgraph Gateway["Edge Gateway and API"]
-        HonoApp["Hono HTTP Router (/api)<br/>(Auth, CORS, Rate Limits)"]
-        Vault["Crypto Vault<br/>(AES-256-GCM BYOK)"]
-    end
-
-    subgraph Ingestion["Ingestion and Documentation Pipeline"]
-        GitLoader["GitHub Tree Loader<br/>(Raw Fetch and Layer Classifier)"]
-        ChunkEngine["Symbol-Aware Chunker<br/>(AST Skeletons and Boundaries)"]
-        WikiPlanner["DeepWiki Planner and Generator<br/>(Structured LLM Prompts)"]
-    end
-
-    subgraph RetrievalEngine["Retrieval and Reasoning Engine"]
-        Embedder["Embedding Service<br/>(OpenAI and Gemini)"]
-        VectorSearch["pgvector HNSW Cosine Index<br/>(Cosine Distance Operator)"]
-        QAService["QA Inference and Grounder<br/>(Line Citation Verification)"]
-    end
-
-    subgraph Storage["Persistence Layer"]
-        Postgres[("Neon PostgreSQL<br/>and pgvector")]
-        RedisCache[("Upstash Redis<br/>Wiki Content Cache")]
-    end
-
-    Web --> HonoApp
-    CLI --> HonoApp
-    HonoApp --> Vault
-    HonoApp --> GitLoader
-    HonoApp --> QAService
-
-    GitLoader --> ChunkEngine
-    ChunkEngine --> Embedder
-    Embedder --> Postgres
-    ChunkEngine --> WikiPlanner
-    WikiPlanner --> Postgres
-    WikiPlanner --> RedisCache
-
-    QAService --> Embedder
-    Embedder --> VectorSearch
-    VectorSearch --> Postgres
-    QAService --> Web
-```
+![High-Level System Architecture](public/docs/1.png)
 
 ### Component roles
 - Hono API router: Validates session tokens from Clerk, unpacks route parameters, checks project authorization, and streams responses.
@@ -169,35 +123,7 @@ Code chunking operates in two modes depending on file length:
 
 During chunking, the system generates a `RepoSkeleton`. The skeleton records file paths, line counts, byte sizes, import statements, and exported symbol signatures. This skeleton fits within LLM context windows, allowing documentation planners to reason about whole-repo architecture without loading thousands of raw source lines.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Worker as Indexing Workflow
-    participant GH as GitHub API
-    participant Norm as Normalizer and Chunker
-    participant AI as Provider API (LLM and Embed)
-    participant DB as Postgres and pgvector
-
-    User->>Worker: Trigger repository index (branch, options)
-    Worker->>GH: Fetch recursive Git tree
-    GH-->>Worker: Tree entries (paths, shas, sizes)
-    Worker->>Worker: Filter non-source paths and check limits
-    Worker->>GH: Fetch raw contents (batches up to 20 files, 800 KB)
-    GH-->>Worker: File contents
-    Worker->>Norm: Classify layers and extract RepoSkeleton
-    Worker->>Norm: Generate code chunks (120 lines, 20 overlap)
-    Worker->>AI: Embed chunks in batches of 100
-    AI-->>Worker: Dense vectors (1536 and 768 dimensions)
-    Worker->>DB: Bulk insert chunks and UPDATE vector column
-    Worker->>AI: Plan wiki hierarchy using RepoSkeleton
-    AI-->>Worker: WikiPlan (sections and pages)
-    Worker->>AI: Generate pages in parallel (concurrency 3)
-    AI-->>Worker: Markdown page content with diagrams
-    Worker->>DB: Upsert WikiPage records
-    Worker->>DB: Mark IndexingJob as COMPLETED
-    Worker-->>User: Emit job completion event via SSE
-```
+![Repository Ingestion Workflow Sequence](public/docs/2.png)
 
 ### DeepWiki documentation generator
 Documentation generation runs in two distinct phases:
@@ -213,17 +139,7 @@ Documentation generation runs in two distinct phases:
 ### Retrieval augmented generation (RAG) and citations
 The QA engine uses a multi-stage retrieval and answer generation pipeline:
 
-```mermaid
-flowchart LR
-    Q["User Question"] --> EMB["Embed Query<br/>text-embedding-3-small"]
-    EMB --> VEC["pgvector Cosine Search<br/>Top 12 Chunks on Project/Branch"]
-    Q --> WIKI["Keyword Match<br/>Wiki Pages"]
-    VEC --> CTX["Build Grounded Context<br/>Code Chunks + Wiki + History"]
-    WIKI --> CTX
-    CTX --> LLM["LLM Generation<br/>System Prompt: Strict Citations"]
-    LLM --> PARSE["Citation Parser<br/>Verified File and Line Ranges"]
-    PARSE --> OUT["Streamed Answer<br/>Interactive Source Pills"]
-```
+![Question Answering and RAG Retrieval Pipeline](public/docs/3.png)
 
 1. Question embedding: The user query converts to a dense vector using the project's configured embedding provider.
 2. Chunk retrieval: A raw SQL query runs against PostgreSQL using the pgvector cosine distance operator:
@@ -245,114 +161,7 @@ flowchart LR
 
 The persistence layer runs on PostgreSQL with the pgvector extension. Relational tables capture repository configuration, encrypted provider credentials, multi-page wiki hierarchies, branch-scoped embeddings, and indexing state machines.
 
-```mermaid
-erDiagram
-    USER ||--o{ API_KEY : owns
-    USER ||--o{ QA_THREAD : creates
-    USER ||--o{ QUESTION : saves
-    USER ||--o{ USER_TO_PROJECT : joins
-
-    PROJECT ||--o{ USER_TO_PROJECT : assigns
-    PROJECT ||--o{ WIKI_PAGE : contains
-    PROJECT ||--o{ SOURCE_CODE_EMBEDDING : indexes
-    PROJECT ||--o{ INDEXING_JOB : runs
-    PROJECT ||--o{ QA_THREAD : stores
-    PROJECT ||--o{ QUESTION : records
-
-    QA_THREAD ||--o{ QA_MESSAGE : includes
-
-    USER {
-        string id PK
-        string emailAddress UK
-        string defaultChatProvider
-        string defaultChatModel
-        string defaultEmbeddingProvider
-    }
-
-    API_KEY {
-        string id PK
-        string userId FK
-        string provider
-        string encryptedKey
-        string iv
-        string keyLast4
-        string status
-    }
-
-    PROJECT {
-        string id PK
-        string name
-        string repoOwner
-        string repoName
-        string repoUrl
-        string defaultBranch
-        string chatProvider
-        string embeddingProvider
-        int embeddingDimensions
-        json repoSkeleton
-    }
-
-    WIKI_PAGE {
-        string id PK
-        string projectId FK
-        string branch
-        string slug
-        string title
-        string sectionTitle
-        int sectionOrder
-        int pageOrder
-        string content
-    }
-
-    SOURCE_CODE_EMBEDDING {
-        string id PK
-        string projectId FK
-        string branch
-        string filePath
-        int startLine
-        int endLine
-        string chunkContent
-        vector embeddingOpenAI
-        vector embeddingGemini
-    }
-
-    INDEXING_JOB {
-        string id PK
-        string projectId FK
-        string branch
-        string status
-        string currentStep
-        int totalFiles
-        int processedFiles
-        int totalWikiPages
-        int completedWikiPages
-    }
-
-    QA_THREAD {
-        string id PK
-        string projectId FK
-        string userId FK
-        string branch
-        string title
-    }
-
-    QA_MESSAGE {
-        string id PK
-        string threadId FK
-        string role
-        string content
-        json scannedFiles
-    }
-
-    QUESTION {
-        string id PK
-        string projectId FK
-        string userId FK
-        string question
-        string answers
-        json fileReference
-    }
-```
+![Database Entity Relationship Diagram](public/docs/4.png)
 
 ### Core table summary
 

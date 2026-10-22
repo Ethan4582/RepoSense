@@ -250,7 +250,7 @@ export default function LandingPage() {
                     </span>
                   </div>
                   <div className="rounded-md bg-[#0f172a] p-2.5 font-mono text-[10px] text-slate-300 leading-relaxed overflow-hidden">
-                    <p className="text-slate-500">// Line-exact citation</p>
+                    <p className="text-slate-500">{'// Line-exact citation'}</p>
                     <p><span className="text-[#60a5fa]">export</span> <span className="text-amber-300">function</span> <span className="text-emerald-400">verify</span>() &#123;</p>
                     <p className="pl-2 text-slate-400">return <span className="text-cyan-300">vault</span>.decrypt();</p>
                     <p>&#125;</p>

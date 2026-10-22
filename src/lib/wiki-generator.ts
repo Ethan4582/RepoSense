@@ -76,32 +76,32 @@ function requiredPages(architecture: RepoArchitecture): RequiredPage[] {
   const pages: RequiredPage[] = [
     {
       slug: 'overview',
-      title: 'Overview',
-      sectionTitle: 'Overview',
+      title: `${architecture.primaryLanguage} System Overview`,
+      sectionTitle: architecture.layers[0]?.title ?? 'Repository Runtime',
       relevantFiles: uniqueFiles([readme, ...architecture.manifests, ...entry, ...core]),
     },
     {
       slug: 'architecture',
       title: 'System Architecture',
-      sectionTitle: 'System Architecture',
+      sectionTitle: architecture.layers[0]?.title ?? 'Repository Runtime',
       relevantFiles: uniqueFiles([...entry, ...core, ...data, ...integrations, ...architecture.manifests]),
     },
     {
       slug: 'runtime-lifecycle',
       title: 'Runtime Execution & Request Lifecycle',
-      sectionTitle: 'System Architecture',
+      sectionTitle: architecture.layers[0]?.title ?? 'Repository Runtime',
       relevantFiles: uniqueFiles([...entry, ...core, ...integrations]),
     },
     {
       slug: 'data-flow',
       title: 'Data Flow & Storage',
-      sectionTitle: 'System Architecture',
+      sectionTitle: architecture.layers.find((layer) => layer.key === 'data')?.title ?? 'Persistence and State',
       relevantFiles: uniqueFiles([...data, ...core, ...integrations]),
     },
     {
       slug: 'setup-workflow',
       title: 'Setup, Scripts & Developer Workflow',
-      sectionTitle: 'Development Workflow',
+      sectionTitle: architecture.layers.find((layer) => layer.key === 'utilities')?.title ?? 'Tooling and Operations',
       relevantFiles: uniqueFiles([readme, ...architecture.manifests, ...entry, ...utilities]),
     },
   ];
@@ -110,7 +110,7 @@ function requiredPages(architecture: RepoArchitecture): RequiredPage[] {
     pages.push({
       slug: 'core-logic',
       title: 'Core Business Logic & State',
-      sectionTitle: 'Deep Dives',
+      sectionTitle: architecture.layers.find((layer) => layer.key === 'core')?.title ?? 'Domain Logic',
       relevantFiles: uniqueFiles(core),
     });
   }
@@ -119,7 +119,7 @@ function requiredPages(architecture: RepoArchitecture): RequiredPage[] {
     pages.push({
       slug: 'external-services',
       title: 'External Services, Data & Adapters',
-      sectionTitle: 'Deep Dives',
+      sectionTitle: architecture.layers.find((layer) => layer.key === 'integrations')?.title ?? 'External Integrations',
       relevantFiles: uniqueFiles([...integrations, ...data]),
     });
   }
@@ -196,51 +196,52 @@ function legacyFallbackPlan(skeleton: RepoSkeleton): WikiPlan {
 
   const coreFiles = filePaths.slice(0, 8);
 
+  const domain = (skeleton.directories.find((directory) => directory !== '.') ?? 'Repository').split('/').pop() ?? 'Repository';
   return {
     sections: [
       {
-        sectionTitle: 'Overview',
+        sectionTitle: domain,
         sectionOrder: 1,
         pages: [
           {
             slug: 'overview',
-            title: 'Overview',
+            title: `${domain} System Overview`,
             pageOrder: 1,
             relevantFiles: [readme, manifest, entry].filter(Boolean) as string[],
           },
         ],
       },
       {
-        sectionTitle: 'System Architecture',
+        sectionTitle: `${domain} Runtime`,
         sectionOrder: 2,
         pages: [
           {
             slug: 'architecture',
-            title: 'System Architecture',
+            title: `${domain} Components`,
             pageOrder: 1,
             relevantFiles: coreFiles,
           },
           {
             slug: 'runtime-lifecycle',
-            title: 'Runtime Execution & Request Lifecycle',
+            title: `${domain} Execution Lifecycle`,
             pageOrder: 2,
             relevantFiles: coreFiles.slice(0, 6),
           },
           {
             slug: 'data-flow',
-            title: 'Data Flow & Storage',
+            title: `${domain} State and Data Model`,
             pageOrder: 3,
             relevantFiles: coreFiles.slice(0, 6),
           },
         ],
       },
       {
-        sectionTitle: 'Development Workflow',
+        sectionTitle: 'Tooling and Operations',
         sectionOrder: 3,
         pages: [
           {
             slug: 'setup-workflow',
-            title: 'Setup, Scripts & Developer Workflow',
+            title: 'Build Commands and Operational Entry Points',
             pageOrder: 1,
             relevantFiles: [readme, manifest].filter(Boolean) as string[],
           },
@@ -299,45 +300,6 @@ export function ensureBlueprint(plan: WikiPlan, architecture: RepoArchitecture):
     for (const page of section.pages) existing.set(page.slug, page);
   }
 
-  for (const required of requiredPages(architecture)) {
-    const page = existing.get(required.slug);
-    if (page) {
-      page.relevantFiles = uniqueFiles([...page.relevantFiles, ...required.relevantFiles]);
-      continue;
-    }
-
-    let section = sections.find((candidate) => candidate.sectionTitle === required.sectionTitle);
-    if (!section) {
-      section = {
-        sectionTitle: required.sectionTitle,
-        sectionOrder: sections.length + 1,
-        pages: [],
-      };
-      const insertAt =
-        required.sectionTitle === 'System Architecture'
-          ? Math.min(1, sections.length)
-          : sections.length;
-      sections.splice(insertAt, 0, section);
-    }
-
-    const newPage: WikiPlanPage = {
-      slug: required.slug,
-      title: required.title,
-      pageOrder: section.pages.length + 1,
-      relevantFiles: required.relevantFiles,
-    };
-    section.pages.push(newPage);
-    existing.set(newPage.slug, newPage);
-  }
-
-  const overviewIndex = sections.findIndex((section) =>
-    section.pages.some((page) => page.slug === 'overview')
-  );
-  if (overviewIndex > 0) {
-    const [overview] = sections.splice(overviewIndex, 1);
-    if (overview) sections.unshift(overview);
-  }
-
   return {
     sections: sections
       .filter((section) => section.pages.length > 0)
@@ -386,8 +348,8 @@ Return ONLY valid JSON, no prose, no markdown fences. The shape must be:
 
 Rules:
 - 3 to 5 sections, 6 to 12 total pages.
-- Always include these pages and use these exact slugs: overview, architecture, runtime-lifecycle, data-flow, setup-workflow.
-- Additional pages must be driven by the detected logical layers and execution model.
+  - Discover 3 to 5 domain-native sections and 8 to 14 pages from the repository profile. Do not use generic taxonomy names.
+  - Start with one root overview page, then name pages after concrete subsystems, symbols, lifecycle mechanisms, or data models.
 - Slugs must be lowercase kebab-case and globally unique.
 - relevantFiles must be exact paths from the repository skeleton or normalized profile.
 - Tailor sections to this repository's real architecture, not a generic web-app template.

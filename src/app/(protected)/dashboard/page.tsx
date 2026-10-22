@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useClerk, useUser } from '@clerk/nextjs';
@@ -18,6 +19,7 @@ import {
   Lock,
   LogOut,
   Moon,
+  Pencil,
   Plus,
   Search,
   Share2,
@@ -211,103 +213,55 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Top Navbar Matching Reference Screen */}
-      <header className="sticky top-0 z-30 border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              DeepWiki
-            </span>
-          </Link>
+      {/* Top Controls */}
+      <div className="flex h-14 items-center justify-end px-4 sm:px-6">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+            title="Toggle theme"
+            onClick={toggleTheme}
+          >
+            <Moon className="size-4 hidden dark:block" />
+            <Sun className="size-4 block dark:hidden" />
+          </Button>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/create"
-              className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <span>Index your code with</span>
-              <span className="flex items-center gap-1 font-medium text-foreground">
-                <span className="inline-block size-3.5 rounded-full bg-emerald-500/20 text-[10px] text-center font-bold text-emerald-500 leading-none flex items-center justify-center">
-                  D
-                </span>
-                Devin
-              </span>
-            </Link>
-
-            <Button
-              size="sm"
-              onClick={copyDashboardShare}
-              className="h-8 gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3.5 shadow-xs"
-            >
-              <Share2 className="size-3.5" />
-              <span>Share</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
-              title="Toggle theme"
-              onClick={toggleTheme}
-            >
-              <Moon className="size-4 hidden dark:block" />
-              <Sun className="size-4 block dark:hidden" />
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="rounded-full ring-2 ring-border/50 transition-all hover:ring-primary/60 outline-none"
-                >
-                  <Avatar className="size-7">
-                    <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                      {user?.firstName?.[0] ?? 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 text-xs">
-                <div className="px-2 py-1.5 border-b border-border/50">
-                  <p className="font-semibold text-foreground truncate">{user?.fullName ?? 'Developer'}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress}</p>
-                </div>
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer">
-                  <Link href="/create">
-                    <FolderGit2 className="size-3.5" />
-                    Add Repository
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer">
-                  <Link href="/explore">
-                    <Compass className="size-3.5" />
-                    Explore Public Wikis
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer">
-                  <Link href="/settings">
-                    <KeyRound className="size-3.5" />
-                    API Keys & Settings
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openUserProfile()} className="gap-2 cursor-pointer">
-                  <UserIcon className="size-3.5" />
-                  Account Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => void signOut({ redirectUrl: '/sign-in' })}
-                  className="gap-2 text-destructive focus:text-destructive cursor-pointer"
-                >
-                  <LogOut className="size-3.5" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full ring-2 ring-border/50 transition-all hover:ring-primary/60 outline-none"
+              >
+                <Avatar className="size-7">
+                  <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                    {user?.firstName?.[0] ?? 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 text-xs">
+              <div className="px-2 py-1.5 border-b border-border/50">
+                <p className="font-semibold text-foreground truncate">{user?.fullName ?? 'Developer'}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress}</p>
+              </div>
+              <DropdownMenuItem onClick={() => openUserProfile()} className="gap-2 cursor-pointer">
+                <UserIcon className="size-3.5" />
+                Account Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => void signOut({ redirectUrl: '/sign-in' })}
+                className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+              >
+                <LogOut className="size-3.5" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </header>
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 px-4 sm:px-6 py-12 md:py-16 max-w-6xl w-full mx-auto">
@@ -400,6 +354,19 @@ export default function DashboardPage() {
                             />
                           )}
                         </div>
+
+                        {/* Edit wiki button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/wiki/${project.id}?mode=edit`);
+                          }}
+                          title="Edit wiki"
+                          className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
 
                         {/* Share link button */}
                         <button

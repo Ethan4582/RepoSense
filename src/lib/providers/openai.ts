@@ -46,9 +46,9 @@ export function getEmbeddingModel(
   return new Proxy(model, {
     get(target, prop, receiver) {
       if (prop === 'specificationVersion') return 'v1';
-      return Reflect.get(target, prop, receiver);
+      return Reflect.get(target, prop, receiver) as unknown;
     },
-  });
+  }) as OpenAIEmbeddingModel;
 }
 
 /**

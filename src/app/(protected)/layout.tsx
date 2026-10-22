@@ -10,16 +10,6 @@ type Props = {
 };
 
 export default function SideBarLayout({ children }: Props) {
-  const pathname = usePathname();
-  const isDashboard = pathname === '/dashboard';
-
-  if (isDashboard) {
-    return (
-      <div className="min-h-screen w-full bg-background flex flex-col">
-        {children}
-      </div>
-    );
-  }
 
   return (
     <SidebarProvider>

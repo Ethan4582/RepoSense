@@ -7,6 +7,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidDiagram } from './mermaid';
 import { cn } from '~/lib/utils';
+import { CitationPill } from './citation-pill';
 
 export interface CitationTarget {
   filePath: string;
@@ -34,9 +35,9 @@ function nodeToText(node: React.ReactNode): string {
 }
 
 function renderCitations(markdown: string): string {
-  return markdown.replace(/\[\[([^:\]]+):(\d+)-(\d+)\]\]/g, (_match: string, path: string, start: string, end: string) => {
-    const label = `${path}:${start}-${end}`;
-    return `[${label}](citation:${encodeURIComponent(path)}:${start}:${end})`;
+  return markdown.replace(/\[\[([^:\]]+):(\d+)(?:-(\d+))?\]\]/g, (_match: string, path: string, start: string, end?: string) => {
+    const finalLine = end ?? start;
+    return `[citation](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
   });
 }
 
@@ -58,10 +59,14 @@ function useIsDark() {
 export function WikiMarkdown({
   content,
   onCitation,
+  githubRepo,
+  commitSha,
   className,
 }: {
   content: string;
   onCitation?: (target: CitationTarget) => void;
+  githubRepo?: { owner: string; repo: string };
+  commitSha?: string | null;
   className?: string;
 }) {
   const isDark = useIsDark();
@@ -129,15 +134,11 @@ export function WikiMarkdown({
               const startLine = Number(raw.slice(secondColon + 1, lastColon));
               const endLine = Number(raw.slice(lastColon + 1));
 
-              return (
-                <button
-                  type="button"
-                  onClick={() => onCitation?.({ filePath: path, startLine, endLine })}
-                  className="mx-0.5 inline-flex items-center rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
-                >
-                  {children}
-                </button>
-              );
+              const target = { filePath: path, startLine, endLine };
+              const githubUrl = githubRepo && commitSha
+                ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${commitSha}/${path}#L${startLine}-L${endLine}`
+                : undefined;
+              return <CitationPill target={target} githubUrl={githubUrl} onCitation={onCitation} />;
             }
 
             return (

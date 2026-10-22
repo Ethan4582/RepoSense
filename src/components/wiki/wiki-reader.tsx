@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
@@ -10,6 +9,7 @@ import {
   BookOpen,
   ChevronRight,
   Clock,
+  Check,
   FileCode2,
   FolderTree,
   GitBranch,
@@ -19,7 +19,9 @@ import {
   Lock,
   Menu,
   Moon,
+  Pencil,
   RefreshCw,
+  Save,
   Send,
   Share2,
   Sparkles,
@@ -37,6 +39,9 @@ import { getModelInfo, PROVIDER_METADATA } from '~/lib/providers/catalog';
 import type { ProviderId } from '~/lib/providers/types';
 import { WikiMarkdown, type CitationTarget } from './markdown';
 import { CodeViewer, type ActiveFile } from './code-viewer';
+import { WikiComposer } from './wiki-composer';
+import { WikiQaView } from './wiki-qa-view';
+import { useSmoothStream } from '~/hooks/use-smooth-stream';
 
 interface WikiPageMeta {
   id: string;
@@ -152,11 +157,50 @@ export function WikiReader() {
   const [streaming, setStreaming] = React.useState(false);
   const [threadId, setThreadId] = React.useState<string | null>(null);
   const [activeFile, setActiveFile] = React.useState<ActiveFile | null>(null);
+  const [selectedModel, setSelectedModel] = React.useState<string>('gpt-4o-mini');
+  const [availableKeys, setAvailableKeys] = React.useState<string[]>([]);
+  const smoothStream = useSmoothStream();
+
+  React.useEffect(() => {
+    if (qaOpen) setAnswer(smoothStream.text);
+  }, [qaOpen, smoothStream.text]);
+
+  React.useEffect(() => {
+    if (project?.chatModel) {
+      setSelectedModel(project.chatModel);
+    }
+  }, [project?.chatModel]);
+
+  React.useEffect(() => {
+    if (!isSignedIn) return;
+    fetch('/api/keys')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { keys?: Array<{ provider: string }> };
+        if (data.keys) {
+          setAvailableKeys(data.keys.map((k) => k.provider));
+        }
+      })
+      .catch(() => {});
+  }, [isSignedIn]);
 
   const answerEndRef = React.useRef<HTMLDivElement | null>(null);
   const scanningRef = React.useRef<Array<{ filePath: string; startLine: number; endLine: number }>>([]);
   const articleRef = React.useRef<HTMLElement | null>(null);
   const [activeHeadingId, setActiveHeadingId] = React.useState<string | null>(null);
+
+  // In-page Wiki Editing State
+  const [isEditing, setIsEditing] = React.useState(searchParams.get('mode') === 'edit');
+  const [editContent, setEditContent] = React.useState('');
+  const [editTitle, setEditTitle] = React.useState('');
+  const [isSavingPage, setIsSavingPage] = React.useState(false);
+
+  React.useEffect(() => {
+    if (activePage?.content !== undefined) {
+      setEditContent(activePage.content ?? '');
+      setEditTitle(activePage.title ?? '');
+    }
+  }, [activePage?.id, activePage?.content, activePage?.title]);
 
   React.useEffect(() => {
     const container = articleRef.current;
@@ -449,6 +493,42 @@ export function WikiReader() {
     }
   };
 
+  const saveEditedPage = async () => {
+    if (!activePage || !project || isSavingPage) return;
+    setIsSavingPage(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/pages/${activePage.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim() || activePage.title,
+          content: editContent,
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? 'Failed to save page changes.');
+      }
+
+      const data = (await res.json()) as { page: WikiPageMeta };
+      setActivePage(data.page);
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          wikiPages: prev.wikiPages.map((p) => (p.id === data.page.id ? { ...p, ...data.page } : p)),
+        };
+      });
+      setIsEditing(false);
+      toast.success('Page changes saved');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save page changes.');
+    } finally {
+      setIsSavingPage(false);
+    }
+  };
+
   const askQuestion = async (event?: React.FormEvent) => {
     event?.preventDefault();
     const text = question.trim();
@@ -463,6 +543,7 @@ export function WikiReader() {
 
     setQaOpen(true);
     setQaQuestion(text);
+    smoothStream.reset();
     setAnswer('');
     setScanning([]);
     scanningRef.current = [];
@@ -479,6 +560,8 @@ export function WikiReader() {
           question: text,
           threadId: threadId ?? undefined,
           branch: activeBranch,
+          chatModel: selectedModel,
+          chatProvider: getModelInfo(selectedModel)?.provider,
         }),
       });
 
@@ -517,7 +600,7 @@ export function WikiReader() {
               setScanning(scanningRef.current);
             }
           } else if (payload.type === 'token') {
-            setAnswer((prev) => prev + payload.text);
+            smoothStream.push(payload.text);
             const firstScan = scanningRef.current[0];
             if (firstScan) {
               setActiveFile((prev) =>
@@ -533,6 +616,7 @@ export function WikiReader() {
           }
         }
       }
+      smoothStream.flush();
     } catch (err) {
       setQaError(err instanceof Error ? err.message : 'Could not answer this question.');
     } finally {
@@ -585,7 +669,7 @@ export function WikiReader() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3 md:px-5">
+      <header className="flex h-[86px] shrink-0 items-center justify-between gap-3 border-b px-6 md:px-11">
         <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
@@ -594,28 +678,13 @@ export function WikiReader() {
           >
             <Menu className="size-4" />
           </button>
-          <Link
-            href={isSignedIn ? '/dashboard' : '/explore'}
-            onMouseEnter={() => {
-              if (isSignedIn) setAppNavOpen(true);
-            }}
-            className="flex shrink-0 items-center gap-1.5"
-          >
-            <div className="relative size-6 overflow-hidden rounded-md">
-              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
-            </div>
-            <span className="hidden text-xs font-bold tracking-tight text-foreground sm:inline">
-              Repo<span className="text-primary">Sense</span>
-            </span>
-          </Link>
-          <span className="hidden h-4 w-px bg-border sm:block" />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
               <a
                 href={project.repoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="truncate font-mono text-xs font-semibold text-foreground hover:text-primary"
+                className="truncate text-lg text-foreground hover:text-primary"
               >
                 {project.repoOwner}/{project.repoName}
               </a>
@@ -713,6 +782,17 @@ export function WikiReader() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
+          {project.isOwner && isSignedIn ? (
+            <Button
+              variant={isEditing ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <Pencil className="size-3.5" />
+              <span>{isEditing ? 'Reading Mode' : 'Edit Wiki'}</span>
+            </Button>
+          ) : null}
           <Link href={`/pulls?projectId=${project.id}`}>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
               <GitPullRequest className="size-3.5" />
@@ -796,18 +876,6 @@ export function WikiReader() {
             <Sun className="size-4 dark:hidden" />
             <Moon className="hidden size-4 dark:block" />
           </Button>
-          {project.isOwner && isSignedIn ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
-              onClick={startReindex}
-              disabled={Boolean(indexing) || branchBusy}
-            >
-              <RefreshCw className={cn('size-3.5', indexing && 'animate-spin')} />
-              <span className="hidden sm:inline">{indexing ? 'Indexing' : 'Re-index'}</span>
-            </Button>
-          ) : null}
         </div>
       </header>
 
@@ -826,168 +894,107 @@ export function WikiReader() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden px-0 xl:px-11">
         <aside
-          className={cn(
-            'absolute inset-y-14 left-0 z-30 w-72 shrink-0 overflow-y-auto border-r bg-sidebar p-3 transition-transform lg:static lg:translate-x-0',
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-          )}
+          className="scrollbar-none z-20 hidden basis-[380px] w-[380px] max-w-[380px] shrink-0 overflow-y-auto border-r border-border/60 bg-sidebar/95 backdrop-blur-sm xl:block"
         >
-          <div className="mb-3 flex items-center justify-between px-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Wiki pages
-            </span>
-            <button type="button" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-              <X className="size-4 text-muted-foreground" />
-            </button>
-          </div>
+          <div className="w-full px-10 py-10">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Wiki pages
+              </span>
+              <button
+                type="button"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
 
-          <nav className="space-y-4">
-            {sections.map(([sectionTitle, pages]) => (
-              <div key={sectionTitle}>
-                <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] font-semibold text-foreground">
-                  <FolderTree className="size-3 text-primary" />
-                  {sectionTitle}
+            <nav className="space-y-4">
+              {sections.map(([sectionTitle, pages]) => (
+                <div key={sectionTitle}>
+                  <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] font-semibold text-foreground">
+                    <FolderTree className="size-3 text-primary" />
+                    {isEditing ? (
+                      <input
+                        value={sectionTitle}
+                        onChange={(event) => {
+                          setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.sectionTitle === sectionTitle ? { ...item, sectionTitle: event.target.value } : item) } : current);
+                        }}
+                        className="min-w-0 flex-1 bg-transparent text-[11px] font-semibold outline-none"
+                      />
+                    ) : sectionTitle}
+                  </div>
+                  <div className="space-y-0.5">
+                    {pages
+                      .slice()
+                      .sort((a, b) => a.pageOrder - b.pageOrder)
+                      .map((page) => {
+                        const isActive = page.slug === activeSlug;
+                        return (
+                          <button
+                            key={page.slug}
+                            type="button"
+                            onClick={() => {
+                              setActiveSlug(page.slug);
+                              setSidebarOpen(false);
+                              setQaOpen(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center justify-between gap-1 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+                              isActive
+                                ? 'bg-primary/10 font-medium text-primary'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            )}
+                          >
+                            {isEditing ? (
+                              <input
+                                value={page.title}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.id === page.id ? { ...item, title: event.target.value } : item) } : current)}
+                                className="min-w-0 flex-1 bg-transparent outline-none"
+                              />
+                            ) : <span className="truncate">{page.title}</span>}
+                            {isActive ? <ChevronRight className="size-3 shrink-0" /> : null}
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
-                <div className="space-y-0.5">
-                  {pages
-                    .slice()
-                    .sort((a, b) => a.pageOrder - b.pageOrder)
-                    .map((page) => {
-                      const isActive = page.slug === activeSlug;
-                      return (
-                        <button
-                          key={page.slug}
-                          type="button"
-                          onClick={() => {
-                            setActiveSlug(page.slug);
-                            setSidebarOpen(false);
-                            setQaOpen(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center justify-between gap-1 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
-                            isActive
-                              ? 'bg-primary/10 font-medium text-primary'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          <span className="truncate">{page.title}</span>
-                          {isActive ? <ChevronRight className="size-3 shrink-0" /> : null}
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
-            ))}
-          </nav>
+              ))}
+            </nav>
+          </div>
         </aside>
 
-        {sidebarOpen ? (
-          <button
-            type="button"
-            aria-label="Close navigation"
-            className="absolute inset-0 z-20 bg-background/60 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        ) : null}
-
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           {qaOpen ? (
-            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
-              <section className="min-h-0 overflow-y-auto border-r p-5 md:p-8">
-                <button
-                  type="button"
-                  onClick={() => setQaOpen(false)}
-                  className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <ArrowLeft className="size-3.5" /> Back to {project.name}
-                </button>
-                <h2 className="text-xl font-semibold leading-snug tracking-tight">{qaQuestion}</h2>
-                <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <Sparkles className="size-3 text-primary" />
-                  <span>{project.chatModel ?? 'BYOK model'}</span>
-                </div>
-
-                <div className="mt-6">
-                  {qaError ? (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-                      {qaError}
-                      {!isSignedIn ? (
-                        <div className="mt-3">
-                          <Link href="/sign-in">
-                            <Button size="sm" className="h-7 text-xs">
-                              Sign in to ask
-                            </Button>
-                          </Link>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : answer ? (
-                    <WikiMarkdown content={answer} onCitation={onTokenCitation} />
-                  ) : (
-                    <div className="space-y-2.5">
-                      {[100, 92, 96, 78, 88].map((width, index) => (
-                        <div
-                          key={index}
-                          className="h-3 animate-pulse rounded bg-muted"
-                          style={{ width: `${width}%` }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {streaming ? (
-                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Loader2 className="size-3 animate-spin text-primary" />
-                      Answering with your API key...
-                    </div>
-                  ) : null}
-                  <div ref={answerEndRef} />
-                </div>
-              </section>
-
-              <section className="min-h-0 overflow-hidden bg-muted/20 p-3 md:p-4">
-                {activeFile ? (
-                  <CodeViewer
-                    projectId={projectId}
-                    branch={activeBranch}
-                    file={activeFile}
-                    onClose={() => setActiveFile(null)}
-                    className="h-full"
-                  />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                    <div className="w-full max-w-sm space-y-2">
-                      {scanning.length === 0 ? (
-                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                          <Loader2 className="size-4 animate-spin text-primary" />
-                          Scanning the codebase...
-                        </div>
-                      ) : (
-                        scanning.map((file) => (
-                          <button
-                            key={file.filePath}
-                            type="button"
-                            onClick={() => setActiveFile(file)}
-                            className="flex w-full items-center gap-2 rounded-lg border bg-card px-3 py-2 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                          >
-                            <FileCode2 className="size-3.5 shrink-0 text-primary" />
-                            <span className="truncate">Scanning {file.filePath}</span>
-                            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">
-                              {file.startLine}-{file.endLine}
-                            </span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </section>
-            </div>
+            <WikiQaView
+              projectId={projectId}
+              projectName={project.name}
+              repoOwner={project.repoOwner}
+              repoName={project.repoName}
+              commitSha={project.lastIndexedCommitSha}
+              activeBranch={activeBranch}
+              question={qaQuestion}
+              selectedModel={selectedModel}
+              answer={answer}
+              scanning={scanning}
+              qaError={qaError}
+              streaming={streaming}
+              activeFile={activeFile}
+              isSignedIn={Boolean(isSignedIn)}
+              onBack={() => setQaOpen(false)}
+              onCitation={onTokenCitation}
+              onSelectFile={setActiveFile}
+              answerEndRef={answerEndRef}
+            />
           ) : (
-            <div className="flex min-h-0 flex-1">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
               <article
                 ref={articleRef}
-                className="min-w-0 flex-1 overflow-y-auto px-5 pb-32 pt-6 md:px-10"
+                className="scrollbar-none min-w-0 flex-1 overflow-y-auto px-16 pb-36 pt-11"
               >
                 {pageLoading && !activePage?.content ? (
                   <div className="mx-auto max-w-3xl space-y-3">
@@ -996,9 +1003,9 @@ export function WikiReader() {
                     <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
                   </div>
                 ) : activePage?.content ? (
-                  <div className="mx-auto max-w-3xl">
+                  <div className="max-w-[840px]">
                     {activePage.relevantFiles && activePage.relevantFiles.length > 0 ? (
-                      <details className="mb-6 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+                      <details className="mb-6 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
                         <summary className="cursor-pointer select-none font-medium text-muted-foreground">
                           Relevant source files ({activePage.relevantFiles.length})
                         </summary>
@@ -1007,10 +1014,13 @@ export function WikiReader() {
                             <button
                               key={path}
                               type="button"
-                              onClick={() => setActiveFile({ filePath: path })}
-                              className="inline-flex items-center gap-1 rounded border bg-background px-2 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                setActiveFile({ filePath: path });
+                                setQaOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 rounded border border-border/80 bg-background px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
                             >
-                              <FileCode2 className="size-2.5" />
+                              <FileCode2 className="size-2.5 text-primary" />
                               {path}
                             </button>
                           ))}
@@ -1018,7 +1028,7 @@ export function WikiReader() {
                       </details>
                     ) : null}
                     {(activePage.headings?.length ?? 0) > 0 ? (
-                      <details className="mb-6 rounded-lg border bg-muted/20 px-3 py-2 text-xs xl:hidden">
+                      <details className="mb-6 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs xl:hidden">
                         <summary className="cursor-pointer select-none font-medium text-muted-foreground">
                           On this page
                         </summary>
@@ -1039,7 +1049,63 @@ export function WikiReader() {
                         </div>
                       </details>
                     ) : null}
-                    <WikiMarkdown content={activePage.content} onCitation={openCitation} />
+                    {isEditing ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3 border-b pb-3">
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            placeholder="Page title"
+                            className="w-full text-2xl font-bold tracking-tight bg-transparent border-none outline-none focus:ring-0 text-foreground"
+                          />
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setIsEditing(false);
+                                setEditContent(activePage.content ?? '');
+                                setEditTitle(activePage.title ?? '');
+                              }}
+                              className="h-8 text-xs"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isSavingPage}
+                              onClick={() => void saveEditedPage()}
+                              className="h-8 gap-1.5 text-xs"
+                            >
+                              {isSavingPage ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <Save className="size-3.5" />
+                              )}
+                              <span>Save</span>
+                            </Button>
+                          </div>
+                        </div>
+
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          placeholder="Write markdown documentation here..."
+                          rows={24}
+                          className="w-full resize-y rounded-lg border border-border bg-muted/20 p-4 font-mono text-xs leading-relaxed text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                        />
+                      </div>
+                    ) : (
+                      <WikiMarkdown
+                        content={activePage.content}
+                        onCitation={openCitation}
+                        githubRepo={{ owner: project.repoOwner, repo: project.repoName }}
+                        commitSha={project.lastIndexedCommitSha}
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="mx-auto max-w-3xl rounded-xl border border-dashed p-10 text-center">
@@ -1058,13 +1124,20 @@ export function WikiReader() {
                 )}
               </article>
 
-              <aside className="hidden w-56 shrink-0 overflow-y-auto border-l px-4 py-6 xl:block">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <aside className="scrollbar-none hidden w-[350px] shrink-0 overflow-y-auto border-l border-border/60 px-8 py-16 xl:block">
+                <div className="mb-4 text-xl font-medium tracking-tight text-foreground">
                   On this page
                 </div>
                 <div className="space-y-1">
                   {(activePage?.headings ?? []).map((heading) => (
-                    <a
+                    isEditing ? (
+                    <input
+                      key={heading.id}
+                      value={heading.text}
+                      onChange={(event) => setEditContent((value) => value.replace(new RegExp(`^(#{${heading.level}}\\s+)${heading.text.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}$`, 'm'), `$1${event.target.value}`))}
+                      className="mb-1 w-full border-l-2 border-primary/40 bg-transparent py-0.5 pl-2 text-[11px] outline-none"
+                    />
+                    ) : <a
                       key={heading.id}
                       href={`#${heading.id}`}
                       className={cn(
@@ -1081,56 +1154,18 @@ export function WikiReader() {
             </div>
           )}
 
-          <div className="shrink-0 border-t bg-background/95 p-3 backdrop-blur md:p-4">
-            <form
-              onSubmit={askQuestion}
-              className="mx-auto flex max-w-3xl items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm"
-            >
-              <Sparkles className="size-4 shrink-0 text-primary" />
-              <div className="hidden shrink-0 items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-1 sm:flex">
-                {providerMeta ? (
-                  <div className="relative size-3.5">
-                    <Image
-                      src={providerMeta.logoAsset}
-                      alt={providerMeta.displayName}
-                      fill
-                      className={cn('object-contain', providerMeta.id === 'XAI' && 'dark:invert')}
-                    />
-                  </div>
-                ) : null}
-                <span className="max-w-28 truncate text-[10px] font-medium text-muted-foreground">
-                  {modelInfo?.name ?? project.chatModel ?? 'Default model'}
-                </span>
-                {modelInfo ? (
-                  <span className="rounded bg-primary/10 px-1 text-[9px] font-semibold text-primary">
-                    {modelInfo.tier}
-                  </span>
-                ) : null}
-              </div>
-              <input
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                placeholder={`Ask about ${project.repoOwner}/${project.repoName}...`}
-                className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                className="size-7 shrink-0"
-                disabled={!question.trim() || streaming}
-              >
-                {streaming ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              </Button>
-            </form>
-            <div className="mx-auto mt-1.5 flex max-w-3xl items-center justify-between px-1 text-[10px] text-muted-foreground">
-              <span>Answers use your own API key and cite exact file lines.</span>
-              {!isSignedIn ? (
-                <Link href="/sign-in" className="font-medium text-primary hover:underline">
-                  Sign in to ask
-                </Link>
-              ) : null}
-            </div>
-          </div>
+          {/* Floating Translucent WikiComposer */}
+          <WikiComposer
+            question={question}
+            onQuestionChange={setQuestion}
+            onSubmit={() => void askQuestion()}
+            streaming={streaming}
+            repoName={`${project.repoOwner}/${project.repoName}`}
+            selectedModel={selectedModel}
+            onModelSelect={setSelectedModel}
+            availableKeys={availableKeys}
+            placeholder={qaOpen ? 'Ask a follow-up question...' : undefined}
+          />
         </main>
       </div>
 

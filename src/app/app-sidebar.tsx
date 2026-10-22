@@ -51,6 +51,25 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
 import useProject from '~/hooks/use-project';
 import { cn } from '~/lib/utils';
@@ -98,6 +117,13 @@ export function AppSideBar() {
   const [profileOpen, setProfileOpen] = React.useState(false);
   const [busyProject, setBusyProject] = React.useState<string | null>(null);
 
+  // Rename Dialog State
+  const [projectToRename, setProjectToRename] = React.useState<ProjectSummary | null>(null);
+  const [renameValue, setRenameValue] = React.useState('');
+
+  // Delete Dialog State
+  const [projectToDelete, setProjectToDelete] = React.useState<ProjectSummary | null>(null);
+
   const toggleTheme = () => {
     const isDark = document.documentElement.classList.toggle('dark');
     try {
@@ -126,21 +152,38 @@ export function AppSideBar() {
     }
   };
 
-  const renameProject = (project: ProjectSummary) => {
-    const name = window.prompt('Rename wiki', project.name)?.trim();
-    if (!name || name === project.name) return;
-    void updateProject(project.id, { name });
+  const openRenameDialog = (project: ProjectSummary) => {
+    setProjectToRename(project);
+    setRenameValue(project.name);
   };
 
-  const deleteProject = async (project: ProjectSummary) => {
-    if (!window.confirm(`Delete the "${project.name}" wiki? This cannot be undone.`)) return;
-    setBusyProject(project.id);
+  const handleConfirmRename = async () => {
+    if (!projectToRename) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === projectToRename.name) {
+      setProjectToRename(null);
+      return;
+    }
+    const currentId = projectToRename.id;
+    setProjectToRename(null);
+    await updateProject(currentId, { name: trimmed });
+  };
+
+  const openDeleteDialog = (project: ProjectSummary) => {
+    setProjectToDelete(project);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+    const targetProject = projectToDelete;
+    setProjectToDelete(null);
+    setBusyProject(targetProject.id);
     try {
-      const res = await fetch(`/api/projects/${project.id}/archive`, { method: 'PATCH' });
+      const res = await fetch(`/api/projects/${targetProject.id}/archive`, { method: 'PATCH' });
       if (!res.ok) throw new Error('Could not delete wiki.');
       await refetchProjects();
       toast.success('Wiki deleted');
-      if (projectId === project.id) router.push('/');
+      if (projectId === targetProject.id) router.push('/');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not delete wiki.');
     } finally {
@@ -256,7 +299,7 @@ export function AppSideBar() {
                       <SidebarMenuItem key={project.id}>
                         <div
                           className={cn(
-                            'group relative flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors',
+                            'group relative flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors',
                             isCurrent
                               ? 'bg-primary/10 font-medium text-foreground'
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -266,20 +309,10 @@ export function AppSideBar() {
                             href={`/wiki/${project.id}`}
                             prefetch
                             onClick={() => setProjectId(project.id)}
-                            className="flex min-w-0 flex-1 flex-col gap-0.5 pr-1"
+                            className="flex min-w-0 flex-1 items-center pr-1"
                           >
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              <span className={cn('size-1.5 shrink-0 rounded-full', status.color)} />
-                              <span className="truncate text-[11.5px] font-medium">{project.name}</span>
-                            </span>
-                            <span className="flex min-w-0 items-center gap-1 pl-3 text-[9.5px] text-muted-foreground/80">
-                              {project.isPublicWiki ? (
-                                <Globe2 className="size-2.5 shrink-0" />
-                              ) : (
-                                <Lock className="size-2.5 shrink-0" />
-                              )}
-                              <span className="truncate">{project.repoOwner}/{project.repoName}</span>
-                              {isCurrent && <Check className="ml-auto size-3 shrink-0 text-primary" />}
+                            <span className="truncate text-xs font-medium text-foreground">
+                              {project.name}
                             </span>
                           </Link>
 
@@ -304,7 +337,7 @@ export function AppSideBar() {
                                   Open wiki
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => renameProject(project)} className="gap-2">
+                              <DropdownMenuItem onClick={() => openRenameDialog(project)} className="gap-2">
                                 <Pencil className="size-3.5 text-muted-foreground" />
                                 Rename
                               </DropdownMenuItem>
@@ -324,7 +357,7 @@ export function AppSideBar() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => void deleteProject(project)}
+                                onClick={() => openDeleteDialog(project)}
                                 className="gap-2 text-destructive focus:text-destructive"
                               >
                                 <Trash2 className="size-3.5" />
@@ -467,6 +500,61 @@ export function AppSideBar() {
           </PopoverContent>
         </Popover>
       </SidebarFooter>
+
+      {/* Shadcn Rename Wiki Dialog */}
+      <Dialog open={!!projectToRename} onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Wiki</DialogTitle>
+            <DialogDescription>
+              Enter a new display name for the &ldquo;{projectToRename?.name}&rdquo; repository wiki.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleConfirmRename();
+            }}
+            className="space-y-4 py-2"
+          >
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Wiki name"
+              autoFocus
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setProjectToRename(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!renameValue.trim() || renameValue.trim() === projectToRename?.name}>
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Shadcn Delete Wiki AlertDialog */}
+      <AlertDialog open={!!projectToDelete} onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete the &ldquo;{projectToDelete?.name}&rdquo; wiki and remove all its generated documentation pages. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleConfirmDelete()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete wiki
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sidebar>
   );
 }

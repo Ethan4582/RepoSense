@@ -32,7 +32,7 @@ export function pickActiveBranch(
   branches: BranchSummary[],
   project: { defaultBranch: string | null; lastIndexedBranch: string | null }
 ): string | null {
-  if (requested) return requested;
+  if (requested && requested.length <= 255) return requested;
 
   const available = new Set(branches.map((branch) => branch.branch));
   if (project.defaultBranch && available.has(project.defaultBranch)) {

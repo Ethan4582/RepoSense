@@ -22,7 +22,7 @@ export const processMeeting = async (meetingUrl: string) => {
       gist: chapter.gist,
       headline: chapter.headline,
       summary: chapter.summary
-    })) || []
+    })) ?? []
 
     if (!transcript.text) throw new Error("No transcript found")
 

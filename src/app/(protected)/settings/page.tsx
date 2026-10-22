@@ -59,10 +59,12 @@ import { Label } from '~/components/ui/label';
 import { Badge } from '~/components/ui/badge';
 import {
   PROVIDER_METADATA,
+  getDefaultChatModel,
   getModelsByProvider,
   type ProviderId,
 } from '~/lib/providers';
 import { client } from '~/lib/api-client';
+import { cn } from '~/lib/utils';
 
 const ALL_PROVIDERS: ProviderId[] = [
   'OPENAI',
@@ -89,6 +91,36 @@ interface ApiKeyItem {
   status: 'UNVERIFIED' | 'VALID' | 'INVALID' | 'QUOTA_EXHAUSTED';
   lastVerifiedAt?: string | null;
   lastUsedAt?: string | null;
+}
+
+interface VerificationResult {
+  valid: boolean;
+  error?: { code?: string; message?: string };
+}
+
+interface VerificationBody {
+  verification?: VerificationResult;
+  valid?: boolean;
+}
+
+interface ErrorBody {
+  error?: string;
+}
+
+interface KeysBody {
+  keys?: ApiKeyItem[];
+}
+
+interface MeBody {
+  user?: {
+    defaultChatProvider?: ProviderId;
+    defaultChatModel?: string;
+    defaultEmbeddingProvider?: 'GEMINI' | 'OPENAI';
+  };
+}
+
+function errorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
 }
 
 export default function SettingsPage() {
@@ -120,15 +152,15 @@ export default function SettingsPage() {
       ]);
 
       if (keysRes.ok) {
-        const data = await keysRes.json();
-        if ('keys' in data && Array.isArray(data.keys)) {
+        const data = (await keysRes.json()) as KeysBody;
+        if (data.keys) {
           setKeys(data.keys);
         }
       }
 
       if (meRes.ok) {
-        const meData = await meRes.json();
-        if ('user' in meData && meData.user) {
+        const meData = (await meRes.json()) as MeBody;
+        if (meData.user) {
           if (meData.user.defaultChatProvider) {
             setDefaultChatProvider(meData.user.defaultChatProvider);
           }
@@ -148,7 +180,7 @@ export default function SettingsPage() {
   }, []);
 
   React.useEffect(() => {
-    fetchKeysAndMe();
+    void fetchKeysAndMe();
   }, [fetchKeysAndMe]);
 
   const hasActiveEmbeddingKey = React.useMemo(() => {
@@ -181,16 +213,13 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        toast.error((err as any)?.error || 'Failed to save key');
+        const err = (await res.json()) as ErrorBody;
+        toast.error(err.error ?? 'Failed to save key');
         return;
       }
 
-      const data = await res.json();
-      const verification = ('verification' in data ? (data as any).verification : null) as {
-        valid: boolean;
-        error?: { code?: string; message?: string };
-      } | null;
+      const data = (await res.json()) as VerificationBody;
+      const verification = data.verification ?? null;
       const providerMeta = PROVIDER_METADATA[targetProvider];
 
       if (verification) {
@@ -201,7 +230,7 @@ export default function SettingsPage() {
         } else if (verification.error?.code === 'RATE_LIMITED') {
           toast.warning(`Key saved, but ${providerMeta.displayName} is temporarily rate-limited. Concurrency limit reached.`);
         } else {
-          toast.error(`Key saved, but verification failed: ${verification.error?.message || 'Invalid API key'}`);
+          toast.error(`Key saved, but verification failed: ${verification.error?.message ?? 'Invalid API key'}`);
         }
       } else {
         toast.success(`${providerMeta.displayName} key saved`);
@@ -217,8 +246,8 @@ export default function SettingsPage() {
       }
 
       await fetchKeysAndMe();
-    } catch (err: any) {
-      toast.error(err?.message || 'Error saving key');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Error saving key'));
     } finally {
       setSavingKey(false);
     }
@@ -232,17 +261,14 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        toast.error((err as any)?.error || 'Key test failed');
+        const err = (await res.json()) as ErrorBody;
+        toast.error(err.error ?? 'Key test failed');
         return;
       }
 
-      const data = await res.json();
-      const verification = ('verification' in data ? (data as any).verification : null) as {
-        valid: boolean;
-        error?: { code?: string; message?: string };
-      } | null;
-      const isKeyValid = verification ? verification.valid : (data as any).valid === true;
+      const data = (await res.json()) as VerificationBody;
+      const verification = data.verification ?? null;
+      const isKeyValid = verification ? verification.valid : data.valid === true;
       const providerMeta = PROVIDER_METADATA[provider];
 
       if (isKeyValid) {
@@ -252,11 +278,11 @@ export default function SettingsPage() {
       } else if (verification?.error?.code === 'RATE_LIMITED') {
         toast.warning(`${providerMeta.displayName} is temporarily rate-limited. Please retry shortly.`);
       } else {
-        toast.error(`${providerMeta.displayName} key test failed: ${verification?.error?.message || 'Invalid API key'}`);
+        toast.error(`${providerMeta.displayName} key test failed: ${verification?.error?.message ?? 'Invalid API key'}`);
       }
       await fetchKeysAndMe();
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to test key');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to test key'));
     } finally {
       setTestingProvider(null);
     }
@@ -269,16 +295,16 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        toast.error((err as any)?.error || 'Failed to delete key');
+        const err = (await res.json()) as ErrorBody;
+        toast.error(err.error ?? 'Failed to delete key');
         return;
       }
 
       toast.success(`${PROVIDER_METADATA[provider].displayName} key removed`);
       setRemoveConfirmProvider(null);
       await fetchKeysAndMe();
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to remove key');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to remove key'));
     }
   };
 
@@ -294,14 +320,14 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        toast.error((err as any)?.error || 'Failed to save defaults');
+        const err = (await res.json()) as ErrorBody;
+        toast.error(err.error ?? 'Failed to save defaults');
         return;
       }
 
       toast.success('Default model preferences saved');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to save defaults');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to save defaults'));
     } finally {
       setSavingDefaults(false);
     }
@@ -366,7 +392,7 @@ export default function SettingsPage() {
                             src={meta.logoAsset}
                             alt={meta.displayName}
                             fill
-                            className="object-contain"
+                            className={cn('object-contain', meta.id === 'XAI' && 'dark:invert')}
                           />
                         </div>
                         <span className="font-medium text-xs text-foreground">
@@ -477,10 +503,7 @@ export default function SettingsPage() {
                 value={defaultChatProvider}
                 onValueChange={(val: ProviderId) => {
                   setDefaultChatProvider(val);
-                  const models = getModelsByProvider(val);
-                  if (models[0]) {
-                    setDefaultChatModel(models[0].id);
-                  }
+                  setDefaultChatModel(getDefaultChatModel(val));
                 }}
               >
                 <SelectTrigger className="h-8 text-xs">

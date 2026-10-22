@@ -70,7 +70,7 @@ export const indexingRoutes = new Hono<AuthContext>()
       );
     }
 
-    const maxGlobalJobs = Number(process.env.MAX_GLOBAL_INDEXING_JOBS || 25);
+    const maxGlobalJobs = Number(process.env.MAX_GLOBAL_INDEXING_JOBS ?? 25);
     const runningJobs = await db.indexingJob.count({ where: { status: "RUNNING" } });
 
     if (Number.isFinite(maxGlobalJobs) && runningJobs >= maxGlobalJobs) {

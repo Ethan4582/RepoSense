@@ -13,14 +13,14 @@ export function MermaidDiagram({ chart }: { chart: string }) {
 
     const render = async () => {
       try {
-        if (!mermaidLoaded) mermaidLoaded = import('mermaid');
+        mermaidLoaded ??= import('mermaid');
         const mermaid = (await mermaidLoaded).default;
         const isDark = document.documentElement.classList.contains('dark');
 
         mermaid.initialize({
           startOnLoad: false,
           theme: isDark ? 'dark' : 'default',
-          securityLevel: 'loose',
+          securityLevel: 'strict',
           fontFamily: 'var(--font-geist-sans)',
         });
 

@@ -15,7 +15,7 @@ interface MessageScrollerContextType {
 
 const MessageScrollerContext = React.createContext<MessageScrollerContextType>({
   autoScroll: true,
-  scrollToBottom: () => {},
+  scrollToBottom: () => undefined,
   isAtBottom: true,
   viewportRef: { current: null },
 });

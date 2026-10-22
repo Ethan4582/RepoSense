@@ -82,7 +82,7 @@ interface Estimate {
 }
 
 function parsedRepo(url: string) {
-  const match = url.trim().match(GITHUB_REPO_REGEX);
+  const match = GITHUB_REPO_REGEX.exec(url.trim());
   return match ? match[0].replace(/\/$/, '') : null;
 }
 
@@ -122,7 +122,7 @@ export default function CreateProjectPage() {
           if ('keys' in data && Array.isArray(data.keys)) {
             const configured = data.keys
               .filter((key) => key.status === 'VALID')
-              .map((key) => key.provider as ProviderId);
+              .map((key) => key.provider);
             setValidProviders(configured);
           }
         }
@@ -185,7 +185,7 @@ export default function CreateProjectPage() {
       });
       if (estimateRes.ok) {
         const payload = await estimateRes.json();
-        if ('estimate' in payload) setEstimate(payload.estimate as Estimate);
+        if ('estimate' in payload) setEstimate(payload.estimate);
       }
     } catch (err) {
       setUrlError(err instanceof Error ? err.message : 'Repository could not be verified.');

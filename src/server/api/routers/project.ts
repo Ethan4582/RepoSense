@@ -2,18 +2,8 @@ import { getPullRequestsForProject } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { encryptKeyWithIv } from "~/lib/providers";
-import { alignChatModel, resolveProjectKeys } from "~/lib/providers/guard";
-import { GitHubAccessError, getRepoMetadata, parseRepoUrl } from "~/lib/github";
-import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
-import { writesPaused } from "~/lib/emergency";
 import { withoutProjectSecrets } from "~/lib/project";
-
-const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
-
-const getEncryptionSecret = (): string =>
-  process.env.ENCRYPTION_KEY ||
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+import type { Prisma } from "@prisma/client";
 
 export const projectRouter = createTRPCRouter({
   getProjects: protectedProcedure.query(async ({ ctx }) => {
@@ -21,7 +11,7 @@ export const projectRouter = createTRPCRouter({
       where: {
         userToProjects: {
           some: {
-            userId: ctx.user.userId!,
+            userId: ctx.user.userId,
           },
         },
         deletedAt: null,
@@ -40,101 +30,6 @@ export const projectRouter = createTRPCRouter({
     return projects.map(withoutProjectSecrets);
   }),
 
-  createProject: protectedProcedure
-    .input(
-      z.object({
-        name: z.string().optional(),
-        repoUrl: z.string().regex(GITHUB_REPO_REGEX, "Please provide a valid GitHub repository URL."),
-        githubToken: z.string().optional(),
-        chatProvider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"]).optional().default("OPENAI"),
-        chatModel: z.string().optional(),
-        embeddingProvider: z.enum(["OPENAI", "GEMINI"]).optional().default("OPENAI"),
-        isPublicWiki: z.boolean().optional().default(true),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      if (writesPaused()) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Repository indexing is temporarily paused." });
-      }
-
-      const coordinates = parseRepoUrl(input.repoUrl.trim());
-      const userId = ctx.user.userId!;
-
-      let meta;
-      try {
-        meta = await getRepoMetadata(coordinates.repoUrl, input.githubToken);
-      } catch (err) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: err instanceof GitHubAccessError ? err.message : "Could not read this GitHub repository.",
-        });
-      }
-
-      const existing = await ctx.db.project.findFirst({
-        where: {
-          repoOwner: coordinates.owner,
-          repoName: coordinates.repo,
-          userToProjects: { some: { userId } },
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
-
-      if (existing) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "You have already added this repository.",
-        });
-      }
-
-      let encryptedGithubToken: string | null = null;
-      let githubTokenIv: string | null = null;
-      if (input.githubToken?.trim()) {
-        const encrypted = await encryptKeyWithIv(input.githubToken.trim(), getEncryptionSecret());
-        encryptedGithubToken = encrypted.encryptedKey;
-        githubTokenIv = encrypted.iv;
-      }
-
-      const embeddingModel = input.embeddingProvider === "OPENAI" ? "text-embedding-3-small" : "gemini-embedding-001";
-      const embeddingDimensions = input.embeddingProvider === "OPENAI" ? 1536 : 768;
-
-      const project = await ctx.db.project.create({
-        data: {
-          name: `${coordinates.owner}/${coordinates.repo}`,
-          repoOwner: coordinates.owner,
-          repoName: coordinates.repo,
-          repoUrl: coordinates.repoUrl,
-          encryptedGithubToken,
-          githubTokenIv,
-          isPrivateRepo: meta.isPrivate,
-          isPublicWiki: meta.isPrivate ? false : input.isPublicWiki,
-          chatProvider: input.chatProvider,
-          chatModel: alignChatModel(input.chatProvider, input.chatModel),
-          embeddingProvider: input.embeddingProvider,
-          embeddingModel,
-          embeddingDimensions,
-          userToProjects: { create: { userId } },
-        },
-      });
-
-      try {
-        await resolveProjectKeys(userId, project);
-        const job = await ctx.db.indexingJob.create({
-          data: { projectId: project.id, status: "QUEUED", currentStep: "LOADING_REPO" },
-        });
-        runIndexingWorkflow({
-          projectId: project.id,
-          jobId: job.id,
-          userId,
-          step: inlineStepRunner,
-          db: ctx.db,
-        }).catch((err) => console.error("[createProject] indexing failed:", err));
-      } catch (err) {
-        console.warn("[createProject] indexing deferred:", err instanceof Error ? err.message : err);
-      }
-
-      return withoutProjectSecrets(project);
-    }),
   getCommits: protectedProcedure
     .input(
       z.object({
@@ -155,6 +50,11 @@ export const projectRouter = createTRPCRouter({
       const pid = input?.projectId;
       try {
         if (pid && pid !== "all") {
+          const member = await ctx.db.userToProject.findUnique({
+            where: { userId_projectId: { userId: ctx.user.userId, projectId: pid } },
+            select: { id: true },
+          });
+          if (!member) return [];
           return await getPullRequestsForProject(pid);
         }
 
@@ -162,7 +62,7 @@ export const projectRouter = createTRPCRouter({
           where: {
             userToProjects: {
               some: {
-                userId: ctx.user.userId!,
+                userId: ctx.user.userId,
               },
             },
             deletedAt: null,
@@ -187,15 +87,15 @@ export const projectRouter = createTRPCRouter({
   saveAnswer: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
-        question: z.string(),
-        answers: z.string(),
-        fileReference: z.any().optional(),
+        projectId: z.string().max(64),
+        question: z.string().trim().min(1).max(4000),
+        answers: z.string().trim().min(1).max(100_000),
+        fileReference: z.unknown().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
-        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
         select: { id: true },
       });
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });
@@ -205,8 +105,8 @@ export const projectRouter = createTRPCRouter({
           answers: input.answers,
           projectId: input.projectId,
           question: input.question,
-          fileReference: input.fileReference,
-          userId: ctx.user.userId!,
+          fileReference: input.fileReference as Prisma.InputJsonValue | undefined,
+          userId: ctx.user.userId,
         },
       });
     }),
@@ -215,7 +115,7 @@ export const projectRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
-        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
         select: { id: true },
       });
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });
@@ -239,7 +139,7 @@ export const projectRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
-        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
         select: { id: true },
       });
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });
@@ -267,7 +167,7 @@ export const projectRouter = createTRPCRouter({
       const existing = await ctx.db.question.findFirst({
         where: {
           id: input.questionId,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         select: { isPinned: true },
       });
@@ -290,7 +190,7 @@ export const projectRouter = createTRPCRouter({
       const existing = await ctx.db.question.findFirst({
         where: {
           id: input.questionId,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         select: { isBookmarked: true },
       });
@@ -314,7 +214,7 @@ export const projectRouter = createTRPCRouter({
       const existing = await ctx.db.question.findFirst({
         where: {
           id: input.questionId,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         select: { id: true },
       });
@@ -336,7 +236,7 @@ export const projectRouter = createTRPCRouter({
       const existing = await ctx.db.question.findFirst({
         where: {
           id: input.questionId,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         select: { id: true },
       });
@@ -356,7 +256,7 @@ export const projectRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const pid = input?.projectId;
-      let projectFilter: any;
+      let projectFilter: string | { in: string[] };
 
       if (pid && pid !== "all") {
         projectFilter = pid;
@@ -365,7 +265,7 @@ export const projectRouter = createTRPCRouter({
           where: {
             userToProjects: {
               some: {
-                userId: ctx.user.userId!,
+                userId: ctx.user.userId,
               },
             },
             deletedAt: null,
@@ -378,7 +278,7 @@ export const projectRouter = createTRPCRouter({
       return await ctx.db.question.findMany({
         where: {
           projectId: projectFilter,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
           isBookmarked: true,
           ...(input?.query
             ? {
@@ -406,14 +306,14 @@ export const projectRouter = createTRPCRouter({
   uploadMeeting: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
-        meetingUrl: z.string(),
-        name: z.string(),
+        projectId: z.string().max(64),
+        meetingUrl: z.string().max(2000).url(),
+        name: z.string().min(1).max(200),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
-        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
         select: { id: true },
       });
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });
@@ -436,7 +336,7 @@ export const projectRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const pid = input?.projectId;
-      let projectFilter: any;
+      let projectFilter: string | { in: string[] };
 
       if (pid && pid !== "all") {
         projectFilter = pid;
@@ -445,7 +345,7 @@ export const projectRouter = createTRPCRouter({
           where: {
             userToProjects: {
               some: {
-                userId: ctx.user.userId!,
+                userId: ctx.user.userId,
               },
             },
             deletedAt: null,
@@ -458,7 +358,7 @@ export const projectRouter = createTRPCRouter({
       return await ctx.db.meeting.findMany({
         where: {
           projectId: projectFilter,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         include: {
           issues: true,
@@ -478,7 +378,7 @@ export const projectRouter = createTRPCRouter({
       return await ctx.db.meeting.findFirst({
         where: {
           id: input.meetingId,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         include: {
           issues: true,
@@ -497,7 +397,7 @@ export const projectRouter = createTRPCRouter({
       const existing = await ctx.db.meeting.findFirst({
         where: {
           id: input.meetingId,
-          project: { userToProjects: { some: { userId: ctx.user.userId! } } },
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
         },
         select: { id: true },
       });
@@ -516,7 +416,7 @@ export const projectRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
-        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
         select: { id: true },
       });
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });
@@ -548,7 +448,7 @@ export const projectRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
-        where: { userId_projectId: { userId: ctx.user.userId!, projectId: input.projectId } },
+        where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
         select: { id: true },
       });
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });

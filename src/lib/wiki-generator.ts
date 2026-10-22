@@ -104,9 +104,9 @@ export function fallbackPlan(skeleton: RepoSkeleton): WikiPlan {
   const readme = filePaths.find((path) => /^readme/i.test(path));
   const manifest = filePaths.find((path) => path.endsWith('package.json'));
   const entry =
-    filePaths.find((path) => /^src\/server\/app\./.test(path)) ??
-    filePaths.find((path) => /^src\/app\//.test(path)) ??
-    filePaths.find((path) => /^src\//.test(path)) ??
+    filePaths.find((path) => path.startsWith("src/server/app.")) ??
+    filePaths.find((path) => path.startsWith("src/app/")) ??
+    filePaths.find((path) => path.startsWith("src/")) ??
     filePaths[0];
 
   const coreFiles = filePaths

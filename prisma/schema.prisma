@@ -153,8 +153,6 @@ model SourceCodeEmbedding {
   embeddingGemini        Unsupported("vector(768)")?
 
   @@index([projectId, filePath])
-  @@index([embeddingOpenAI(ops: raw("vector_cosine_ops"))], type: Hnsw)
-  @@index([embeddingGemini(ops: raw("vector_cosine_ops"))], type: Hnsw)
 }
 
 model QaThread {

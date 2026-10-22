@@ -21,11 +21,20 @@ function isQuotaExhausted(status: number, bodyText: string): boolean {
   if (status === 402) return true;
 
   try {
-    const json = JSON.parse(bodyText);
-    const err = json?.error ?? json;
+    const json = JSON.parse(bodyText) as unknown;
+    const err =
+      typeof json === 'object' && json !== null && 'error' in json
+        ? (json as { error?: unknown }).error
+        : json;
+    const errObj =
+      typeof err === 'object' && err !== null
+        ? (err as { code?: unknown; type?: unknown; status?: unknown; message?: unknown })
+        : null;
 
-    const errCode = typeof err === 'object' ? (err?.code || err?.type || err?.status || '') : '';
-    const errMessage = typeof err === 'object' ? (err?.message || '') : (typeof err === 'string' ? err : '');
+    const asText = (value: unknown) => (typeof value === 'string' ? value : '');
+    const errCode =
+      [errObj?.code, errObj?.type, errObj?.status].map(asText).find(Boolean) ?? '';
+    const errMessage = typeof err === 'string' ? err : asText(errObj?.message);
     const combined = `${errCode} ${errMessage}`.toLowerCase();
 
     // Explicit quota / balance exhaustion identifiers

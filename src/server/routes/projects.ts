@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthContext } from "../auth";
-import { encryptKeyWithIv } from "~/lib/providers";
+import { encryptKeyWithIv, getEncryptionSecret } from "~/lib/providers";
 import { alignChatModel, resolveProjectKeys } from "~/lib/providers/guard";
 import { GitHubAccessError, decryptProjectToken, getRepoMetadata, parseRepoUrl } from "~/lib/github";
 import { getFullFileContent } from "~/lib/embeddings";
@@ -16,10 +16,6 @@ import { estimateRoutes } from "./estimate";
 import { questionsRoutes } from "./questions";
 
 const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
-
-const getEncryptionSecret = (): string =>
-  process.env.ENCRYPTION_KEY ||
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 const isEmergencyMode = () => writesPaused();
 
@@ -61,9 +57,9 @@ export const projectsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        repoUrl: z.string().url("Invalid URL format"),
-        name: z.string().optional(),
-        githubToken: z.string().optional(),
+        repoUrl: z.string().max(500).url("Invalid URL format"),
+        name: z.string().max(120).optional(),
+        githubToken: z.string().max(500).optional(),
         chatProvider: z.enum(PROVIDERS).optional().default("OPENAI"),
         chatModel: z.string().optional(),
         embeddingProvider: z.enum(["OPENAI", "GEMINI"]).optional().default("OPENAI"),
@@ -117,8 +113,8 @@ export const projectsRoutes = new Hono<AuthContext>()
 
       const existing = await db.project.findFirst({
         where: {
-          repoOwner: coordinates.owner,
-          repoName: coordinates.repo,
+          repoOwner: { equals: coordinates.owner, mode: "insensitive" },
+          repoName: { equals: coordinates.repo, mode: "insensitive" },
           userToProjects: { some: { userId } },
           deletedAt: null,
         },
@@ -168,6 +164,36 @@ export const projectsRoutes = new Hono<AuthContext>()
                 : "Add valid provider API keys in Settings before creating this wiki.",
           },
           400
+        );
+      }
+
+      const activeJobs = await db.indexingJob.count({
+        where: {
+          project: { userToProjects: { some: { userId } } },
+          status: { in: ["QUEUED", "RUNNING"] },
+        },
+      });
+
+      if (activeJobs >= 1) {
+        return c.json(
+          {
+            error: "You already have a repository being indexed. Please wait for it to finish.",
+            code: "INDEXING_IN_PROGRESS",
+          },
+          429
+        );
+      }
+
+      const maxGlobalJobs = Number(process.env.MAX_GLOBAL_INDEXING_JOBS ?? 25);
+      const runningJobs = await db.indexingJob.count({ where: { status: "RUNNING" } });
+
+      if (Number.isFinite(maxGlobalJobs) && runningJobs >= maxGlobalJobs) {
+        return c.json(
+          {
+            error: "The indexing queue is at capacity right now. Please try again in a few minutes.",
+            code: "INDEXING_CAPACITY",
+          },
+          429
         );
       }
 
@@ -256,7 +282,13 @@ export const projectsRoutes = new Hono<AuthContext>()
   )
   .post(
     "/verify-repo",
-    zValidator("json", z.object({ repoUrl: z.string().min(1), githubToken: z.string().optional() })),
+    zValidator(
+      "json",
+      z.object({
+        repoUrl: z.string().min(1).max(500),
+        githubToken: z.string().max(500).optional(),
+      })
+    ),
     async (c) => {
       const { repoUrl, githubToken } = c.req.valid("json");
       const db = c.get("db");
@@ -344,7 +376,7 @@ export const projectsRoutes = new Hono<AuthContext>()
     const db = c.get("db");
     const userId = c.get("userId");
     const projectId = c.req.param("id");
-    const body = await c.req.json().catch(() => ({}));
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 
     const member = await db.userToProject.findUnique({
       where: { userId_projectId: { userId, projectId } },
@@ -370,11 +402,13 @@ export const projectsRoutes = new Hono<AuthContext>()
       data.isPublicWiki = project.isPrivateRepo ? false : body.isPublicWiki;
     }
 
+    const requestedModel = typeof body.chatModel === "string" ? body.chatModel : undefined;
+
     if (typeof body.chatProvider === "string" && (PROVIDERS as readonly string[]).includes(body.chatProvider)) {
       data.chatProvider = body.chatProvider as (typeof PROVIDERS)[number];
-      data.chatModel = alignChatModel(data.chatProvider, body.chatModel);
-    } else if (typeof body.chatModel === "string") {
-      data.chatModel = alignChatModel(project.chatProvider, body.chatModel);
+      data.chatModel = alignChatModel(data.chatProvider, requestedModel);
+    } else if (requestedModel) {
+      data.chatModel = alignChatModel(project.chatProvider, requestedModel);
     }
 
     const updated = await db.project.update({ where: { id: projectId }, data });
@@ -407,6 +441,7 @@ export const projectsRoutes = new Hono<AuthContext>()
     const filePath = c.req.query("path");
 
     if (!filePath) return c.json({ error: "path is required" }, 400);
+    if (filePath.length > 500) return c.json({ error: "File not found" }, 404);
 
     const member = await db.userToProject.findUnique({
       where: { userId_projectId: { userId, projectId } },

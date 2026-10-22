@@ -15,7 +15,8 @@ export default clerkMiddleware(async (auth, req) => {
 
   // If user visits the root path "/"
   if (url.pathname === "/") {
-    const { userId } = await auth();
+    const authResult = (await auth()) as unknown as { userId: string | null };
+    const { userId } = authResult;
     // If already logged in, go straight to the internal dashboard
     if (userId) {
       return NextResponse.redirect(new URL("/dashboard", req.url));

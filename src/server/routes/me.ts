@@ -54,7 +54,7 @@ export const meRoutes = new Hono<AuthContext>()
             })
           : null;
       const chatProvider = (data.defaultChatProvider ??
-        current?.defaultChatProvider) as ProviderId | undefined;
+        current?.defaultChatProvider);
       const chatModel =
         data.defaultChatProvider !== undefined || data.defaultChatModel !== undefined
           ? alignChatModel(chatProvider ?? "OPENAI", data.defaultChatModel)

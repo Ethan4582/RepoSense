@@ -9,9 +9,9 @@ export const meetingsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        projectId: z.string(),
-        meetingUrl: z.string(),
-        name: z.string(),
+        projectId: z.string().max(64),
+        meetingUrl: z.string().max(2000).url(),
+        name: z.string().min(1).max(200),
       })
     ),
     async (c) => {

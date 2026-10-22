@@ -90,7 +90,7 @@ export async function searchCodeChunks(opts: {
   const column = EMBEDDING_COLUMNS[provider];
   const vector = `[${embedding.join(',')}]`;
 
-  return (await db.$queryRawUnsafe(
+  return await db.$queryRawUnsafe<MatchedChunk[]>(
     `SELECT "id", "filePath", "directory", "startLine", "endLine", "chunkContent",
        1 - ("${column}" <=> $1::vector) AS similarity
      FROM "SourceCodeEmbedding"
@@ -101,7 +101,7 @@ export async function searchCodeChunks(opts: {
     vector,
     projectId,
     limit
-  )) as MatchedChunk[];
+  );
 }
 
 export async function getFullFileContent(

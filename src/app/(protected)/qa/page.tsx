@@ -192,7 +192,7 @@ export default function QaBookmarksPage() {
           <div className="divide-y divide-border">
             {bookmarks.map((b) => {
               const fileRefs = getCitationFiles(b.fileReference);
-              const repoUrl = (b as any).project?.repoUrl ?? project?.repoUrl;
+              const repoUrl = (b as unknown as { project?: { repoUrl?: string } }).project?.repoUrl ?? project?.repoUrl;
 
               return (
                 <div
@@ -213,10 +213,10 @@ export default function QaBookmarksPage() {
                         </h3>
 
                         {/* Project Badge if in All Repositories view */}
-                        {selectedProjectFilter === 'all' && (b as any).project?.name && (
+                        {selectedProjectFilter === 'all' && (b as unknown as { project?: { name?: string } }).project?.name && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
                             <FolderGit2 className="size-2.5 text-primary" />
-                            {(b as any).project.name}
+                            {(b as unknown as { project?: { name?: string } }).project?.name}
                           </Badge>
                         )}
                       </div>
@@ -233,7 +233,7 @@ export default function QaBookmarksPage() {
                         {b.user && (
                           <>
                             <span>•</span>
-                            <span>Asked by {b.user.firstName || 'Anonymous'}</span>
+                            <span>Asked by {b.user.firstName ?? 'Anonymous'}</span>
                           </>
                         )}
                       </div>

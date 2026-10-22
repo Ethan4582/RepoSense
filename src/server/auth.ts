@@ -43,7 +43,7 @@ export async function clerkAuthMiddleware(c: Context<AuthContext>, next: Next) {
         secretKey,
       });
 
-      if (verified && verified.sub) {
+      if (verified?.sub) {
         c.set("userId", verified.sub);
         c.set("db", db);
         return next();

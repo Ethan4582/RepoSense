@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Document } from "@langchain/core/documents";
 
 function getModels(apiKey?: string) {
-  const key = apiKey || process.env.GEMINI_API_KEY || '';
+  const key = apiKey ?? process.env.GEMINI_API_KEY ?? '';
   if (!key) {
     throw new Error('Gemini API key is required');
   }
@@ -60,8 +60,8 @@ Please summarise the following diff file: \n\n${diff}`
       }]
     });
     return response.response.text();
-  } catch (error: any) {
-    console.error("Commit summarization failed:", error.message);
+  } catch (error) {
+    console.error("Commit summarization failed:", error instanceof Error ? error.message : error);
     return "Failed to generate summary";
   }
 };
@@ -84,8 +84,8 @@ Please give a concise summary less than 100 words.`
       }]
     });
     return response.response.text();
-  } catch (error: any) {
-    console.error("Gemini code summarization failed:", error.message);
+  } catch (error) {
+    console.error("Gemini code summarization failed:", error instanceof Error ? error.message : error);
     return `Failed to summarize: ${doc.metadata.source}`;
   }
 }

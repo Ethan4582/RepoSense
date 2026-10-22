@@ -179,10 +179,10 @@ export default function MeetingsPage() {
                         </Link>
 
                         {/* Project Badge if viewing All Repositories */}
-                        {selectedProjectFilter === 'all' && (meeting as any).project?.name && (
+                        {selectedProjectFilter === 'all' && (meeting as unknown as { project?: { name?: string } }).project?.name && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
                             <FolderGit2 className="size-2.5 text-primary" />
-                            {(meeting as any).project.name}
+                            {(meeting as unknown as { project?: { name?: string } }).project?.name}
                           </Badge>
                         )}
 

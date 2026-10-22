@@ -7,19 +7,12 @@ import {
   decryptKey,
   getDefaultChatModel,
   getDefaultEmbeddingModel,
+  getEncryptionSecret,
   getModelInfo,
 } from "~/lib/providers";
 import type { EmbeddingProviderId, ProviderId } from "~/lib/providers";
 import type { Project } from "@prisma/client";
 import { db } from "~/server/db";
-
-const getEncryptionSecret = (): string => {
-  const secret = process.env.ENCRYPTION_KEY;
-  if (!secret) {
-    return "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-  }
-  return secret;
-};
 
 export class ProviderAccessError extends Error {
   readonly code:
@@ -48,7 +41,7 @@ export async function getDecryptedProviderKey(
     where: { userId_provider: { userId, provider } },
   });
 
-  if (!record || record.status !== "VALID") return null;
+  if (record?.status !== "VALID") return null;
 
   try {
     return await decryptKey(
@@ -64,7 +57,7 @@ export function alignChatModel(provider: ProviderId, modelId?: string | null): s
   if (!modelId) return getDefaultChatModel(provider);
 
   const info = getModelInfo(modelId);
-  if (!info || info.provider !== provider) {
+  if (info?.provider !== provider) {
     return getDefaultChatModel(provider);
   }
   return modelId;
@@ -77,7 +70,7 @@ export function alignEmbeddingModel(
   if (!modelId) return getDefaultEmbeddingModel(provider);
 
   const info = getModelInfo(modelId);
-  if (!info || info.provider !== provider || !info.isEmbedding) {
+  if (info?.provider !== provider || !info.isEmbedding) {
     return getDefaultEmbeddingModel(provider);
   }
   return modelId;
@@ -97,8 +90,8 @@ export async function resolveProjectKeys(
   userId: string,
   project: Pick<Project, "chatProvider" | "chatModel" | "embeddingProvider" | "embeddingModel">
 ): Promise<ResolvedProjectKeys> {
-  const chatProvider = project.chatProvider as ProviderId;
-  const embeddingProvider = project.embeddingProvider as EmbeddingProviderId;
+  const chatProvider = project.chatProvider;
+  const embeddingProvider = project.embeddingProvider;
 
   const [chatApiKey, embeddingApiKey] = await Promise.all([
     getDecryptedProviderKey(userId, chatProvider),
@@ -135,5 +128,5 @@ export async function getValidProviderIds(userId: string): Promise<ProviderId[]>
     where: { userId, status: "VALID" },
     select: { provider: true },
   });
-  return keys.map((k) => k.provider as ProviderId);
+  return keys.map((k) => k.provider);
 }

@@ -31,7 +31,7 @@ export function getOpenAIClient(apiKey: string): OpenAIClient {
  */
 export function getChatModel(modelId: string, apiKey: string): OpenAIChatModel {
   const client = getOpenAIClient(apiKey);
-  return (typeof client.chat === 'function' ? client.chat(modelId) : client(modelId)) as OpenAIChatModel;
+  return (typeof client.chat === 'function' ? client.chat(modelId) : client(modelId));
 }
 
 /**

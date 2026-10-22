@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- dynamic AI SDK model spec versions are untyped */
 /**
  * RepoSense Unified Provider Registry & Factory
  *
@@ -17,7 +18,6 @@ import {
   type AnyChatModel,
   type AnyEmbeddingModel,
   type EmbeddingProviderId,
-  type ModelInfo,
   type ProviderId,
   type VerifyResult,
 } from './types';

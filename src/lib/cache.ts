@@ -1,7 +1,5 @@
 import type { Context } from 'hono';
 
-export const PUBLIC_WIKI_CACHE_CONTROL = 'public, s-maxage=3600, stale-while-revalidate=86400';
-
 // Cache keys must be identical from every hostname (preview, apex, www) and from
 // background workflows, otherwise purges miss entries written through another origin.
 const EDGE_CACHE_ORIGIN = 'https://edge-cache.reposense.internal';

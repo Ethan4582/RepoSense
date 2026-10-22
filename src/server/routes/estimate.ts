@@ -7,15 +7,34 @@ import { parseRepoUrl } from "~/lib/github";
 
 const GITHUB_REQUEST_TIMEOUT = 20_000;
 
-async function checkGitHubRepo(owner: string, repo: string, userToken?: string) {
+type GitHubRepoResponse = {
+  private?: boolean;
+  default_branch?: string;
+};
+
+type GitHubTreeEntry = {
+  type?: string;
+  path?: string;
+  size?: number;
+};
+
+type GitHubTreeResponse = {
+  tree?: GitHubTreeEntry[];
+};
+
+async function checkGitHubRepo(
+  owner: string,
+  repo: string,
+  userToken?: string
+): Promise<GitHubRepoResponse> {
   const headers: Record<string, string> = {
     "User-Agent": "reposense-app",
     Accept: "application/vnd.github.v3+json",
   };
 
-  const token = userToken || process.env.GITHUB_TOKEN;
+  const token = userToken ?? process.env.GITHUB_TOKEN;
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   let res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
@@ -24,8 +43,8 @@ async function checkGitHubRepo(owner: string, repo: string, userToken?: string) 
   });
 
   // If token is invalid or unauthorized, retry unauthenticated for public repositories
-  if (res.status === 401 && headers["Authorization"]) {
-    delete headers["Authorization"];
+  if (res.status === 401 && headers.Authorization) {
+    delete headers.Authorization;
     const retryRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
       headers,
       signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT),
@@ -41,18 +60,27 @@ async function checkGitHubRepo(owner: string, repo: string, userToken?: string) 
     throw new Error("Repository not found or inaccessible. Please verify the URL or provide a valid GitHub token.");
   }
 
-  return await res.json();
+  const data = (await res.json()) as GitHubRepoResponse;
+  if (data?.private && !userToken?.trim()) {
+    throw new Error("Repository not found or inaccessible. Please provide a GitHub token for private repositories.");
+  }
+  return data;
 }
 
-async function fetchRepoTree(owner: string, repo: string, branch: string, userToken?: string) {
+async function fetchRepoTree(
+  owner: string,
+  repo: string,
+  branch: string,
+  userToken?: string
+): Promise<GitHubTreeResponse> {
   const headers: Record<string, string> = {
     "User-Agent": "reposense-app",
     Accept: "application/vnd.github.v3+json",
   };
 
-  const token = userToken || process.env.GITHUB_TOKEN;
+  const token = userToken ?? process.env.GITHUB_TOKEN;
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   let res = await fetch(
@@ -60,8 +88,8 @@ async function fetchRepoTree(owner: string, repo: string, branch: string, userTo
     { headers, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT) }
   );
 
-  if (res.status === 401 && headers["Authorization"]) {
-    delete headers["Authorization"];
+  if (res.status === 401 && headers.Authorization) {
+    delete headers.Authorization;
     const retryRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
       { headers, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT) }
@@ -75,7 +103,7 @@ async function fetchRepoTree(owner: string, repo: string, branch: string, userTo
     return { tree: [] };
   }
 
-  return await res.json();
+  return (await res.json()) as GitHubTreeResponse;
 }
 
 export const estimateRoutes = new Hono<AuthContext>().post(
@@ -83,8 +111,8 @@ export const estimateRoutes = new Hono<AuthContext>().post(
   zValidator(
     "json",
     z.object({
-      repoUrl: z.string().min(1, "Please provide a GitHub repository URL."),
-      githubToken: z.string().optional(),
+      repoUrl: z.string().min(1).max(500, "Please provide a GitHub repository URL."),
+      githubToken: z.string().max(500).optional(),
       modelId: z.string().optional().default("gpt-6.1-sol"),
       embeddingModelId: z.string().optional().default("text-embedding-3-small"),
     })
@@ -106,9 +134,9 @@ export const estimateRoutes = new Hono<AuthContext>().post(
       // Check reachability of the repository
       let defaultBranch = "main";
       try {
-        const repoData = await checkGitHubRepo(owner, repo, githubToken?.trim() || undefined);
-        defaultBranch = repoData.default_branch || "main";
-      } catch (repoErr) {
+        const repoData = await checkGitHubRepo(owner, repo, githubToken?.trim() ?? undefined);
+        defaultBranch = repoData.default_branch ?? "main";
+      } catch {
         return c.json(
           { error: "Please provide a valid, public GitHub repository URL." },
           400
@@ -120,12 +148,12 @@ export const estimateRoutes = new Hono<AuthContext>().post(
       let treeEntries: Array<{ path?: string; size?: number }> = [];
 
       try {
-        const treeData = await fetchRepoTree(owner, repo, defaultBranch, githubToken?.trim() || undefined);
+        const treeData = await fetchRepoTree(owner, repo, defaultBranch, githubToken?.trim() ?? undefined);
 
         if (treeData && Array.isArray(treeData.tree)) {
           treeEntries = treeData.tree
-            .filter((item: any) => item.type === "blob")
-            .map((item: any) => ({ path: item.path, size: item.size }));
+            .filter((item) => item.type === "blob")
+            .map((item) => ({ path: item.path, size: item.size }));
           fileCount = treeEntries.length;
         }
       } catch {

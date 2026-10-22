@@ -35,12 +35,12 @@ const MeetCard = ({ overrideProjectId }: MeetCardProps = {}) => {
   React.useEffect(() => {
     if (overrideProjectId) {
       setSelectedProjectId(overrideProjectId);
-    } else if (!selectedProjectId && (hookProjectId || projects?.[0]?.id)) {
-      setSelectedProjectId(hookProjectId || projects?.[0]?.id || null);
+    } else if (!selectedProjectId && (hookProjectId ?? projects?.[0]?.id)) {
+      setSelectedProjectId(hookProjectId ?? projects?.[0]?.id ?? null);
     }
   }, [overrideProjectId, hookProjectId, projects, selectedProjectId]);
 
-  const activeProjectId = selectedProjectId || hookProjectId || projects?.[0]?.id || null;
+  const activeProjectId = selectedProjectId ?? hookProjectId ?? projects?.[0]?.id ?? null;
 
   const [isUploading, setIsUploading] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
@@ -59,7 +59,7 @@ const MeetCard = ({ overrideProjectId }: MeetCardProps = {}) => {
         meetingId,
         projectId,
       });
-      return response.data;
+      return response.data as unknown;
     },
   });
 
@@ -69,6 +69,7 @@ const MeetCard = ({ overrideProjectId }: MeetCardProps = {}) => {
     },
     multiple: false,
     maxSize: 50_000_000,
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     onDrop: async (acceptedFiles) => {
       if (!activeProjectId) {
         toast.error("Please link a repository before uploading audio recordings.");
@@ -90,7 +91,7 @@ const MeetCard = ({ overrideProjectId }: MeetCardProps = {}) => {
             onSuccess: (meeting) => {
               toast.success("Meeting uploaded successfully");
               router.push('/meetings');
-              processMeeting.mutateAsync({
+              void processMeeting.mutateAsync({
                 meetingUrl: downloadUrl,
                 meetingId: meeting.id,
                 projectId: activeProjectId,
@@ -101,7 +102,7 @@ const MeetCard = ({ overrideProjectId }: MeetCardProps = {}) => {
             },
           }
         );
-      } catch (err) {
+      } catch {
         toast.error("Failed to upload audio file");
       } finally {
         setIsUploading(false);

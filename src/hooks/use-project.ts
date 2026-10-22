@@ -23,7 +23,7 @@ const useProject = () => {
 
   // Keep stored projectId in sync with resolved project
   React.useEffect(() => {
-    if (projects && projects.length === 0 && projectId !== null) {
+    if (projects?.length === 0 && projectId !== null) {
       setProjectId(null);
     } else if (project && project.id !== projectId) {
       setProjectId(project.id);

@@ -77,7 +77,7 @@ export function useThreadFolders(projectId?: string | null) {
   const existingFolders = React.useMemo(() => {
     const set = new Set<string>();
     Object.values(folders).forEach((f) => {
-      if (f && f.trim()) set.add(f.trim());
+      if (f?.trim()) set.add(f.trim());
     });
     return Array.from(set).sort();
   }, [folders]);

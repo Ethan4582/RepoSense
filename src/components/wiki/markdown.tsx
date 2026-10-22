@@ -34,7 +34,7 @@ function nodeToText(node: React.ReactNode): string {
 }
 
 function renderCitations(markdown: string): string {
-  return markdown.replace(/\[\[([^:\]]+):(\d+)-(\d+)\]\]/g, (_match, path, start, end) => {
+  return markdown.replace(/\[\[([^:\]]+):(\d+)-(\d+)\]\]/g, (_match: string, path: string, start: string, end: string) => {
     const label = `${path}:${start}-${end}`;
     return `[${label}](citation:${encodeURIComponent(path)}:${start}:${end})`;
   });
@@ -152,8 +152,8 @@ export function WikiMarkdown({
             );
           },
           code: ({ className: codeClassName, children, ...props }) => {
-            const language = /language-(\w+)/.exec(codeClassName || '')?.[1];
-            const raw = String(children).replace(/\n$/, '');
+            const language = /language-(\w+)/.exec(codeClassName ?? '')?.[1];
+            const raw = nodeToText(children).replace(/\n$/, '');
 
             if (language === 'mermaid') {
               return <MermaidDiagram chart={raw} />;

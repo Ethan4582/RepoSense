@@ -13,7 +13,8 @@ import { maintenanceActive } from "~/lib/emergency";
 const app = new Hono<AuthContext>().basePath("/api");
 
 app.use("*", async (c, next) => {
-  if (maintenanceActive() && c.req.path !== "/api/health") {
+  const path = c.req.path;
+  if (maintenanceActive() && path !== "/api/health" && path !== "/health") {
     return c.json(
       {
         error: "RepoSense is currently under maintenance. Please check back shortly.",

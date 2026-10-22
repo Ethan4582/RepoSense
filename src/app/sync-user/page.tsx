@@ -6,15 +6,26 @@ import { db } from "~/server/db";
 
 export default async function SyncUserPage() {
  
-  const { userId } = await auth();
+  const authResult = (await auth()) as { userId?: string | null };
+  const { userId } = authResult;
 
   
   if (!userId) {
     throw new Error("User is not found");
   }
 
-  const client = await clerkClient();
-  const  user = await client.users.getUser(userId);
+  const client = (await clerkClient()) as unknown as {
+    users: {
+      getUser: (id: string) => Promise<{
+        id: string;
+        emailAddresses: Array<{ emailAddress?: string | null }>;
+        imageUrl: string;
+        firstName: string | null;
+        lastName: string | null;
+      }>;
+    };
+  };
+  const user = await client.users.getUser(userId);
 
   if (!user.emailAddresses[0]?.emailAddress) {
     return notFound();

@@ -1,5 +1,5 @@
 import { embed, generateText, streamText } from 'ai';
-import type { PrismaClient, Project } from '@prisma/client';
+import type { Prisma, PrismaClient, Project } from '@prisma/client';
 import { getEmbeddingModel, getModel } from '~/lib/providers';
 import { resolveProjectKeys, type ResolvedProjectKeys } from '~/lib/providers/guard';
 import { searchCodeChunks, type MatchedChunk } from './embeddings';
@@ -40,6 +40,7 @@ function buildPrompt(opts: {
   question: string;
   chunks: MatchedChunk[];
   wikiPages: Array<{ title: string; content: string }>;
+  history?: Array<{ role: string; content: string }>;
 }): string {
   const codeContext = opts.chunks
     .map(
@@ -52,7 +53,11 @@ function buildPrompt(opts: {
     .map((page) => `--- WIKI: ${page.title} ---\n${page.content.slice(0, 6000)}`)
     .join('\n\n');
 
-  return `QUESTION:\n${opts.question}\n\nWIKI CONTEXT:\n${wikiContext || 'No matching wiki pages.'}\n\nSOURCE CODE CONTEXT:\n${codeContext || 'No matching source chunks.'}`;
+  const historyContext = (opts.history ?? [])
+    .map((message) => `${message.role.toUpperCase()}: ${message.content.slice(0, 2000)}`)
+    .join('\n\n');
+
+  return `CONVERSATION HISTORY:\n${historyContext || 'No previous messages.'}\n\nQUESTION:\n${opts.question}\n\nWIKI CONTEXT:\n${wikiContext || 'No matching wiki pages.'}\n\nSOURCE CODE CONTEXT:\n${codeContext || 'No matching source chunks.'}`;
 }
 
 const QA_SYSTEM_PROMPT = `You are DeepWiki, a senior codebase investigator. Answer the question using only the supplied wiki and source context.
@@ -149,6 +154,15 @@ async function prepare(opts: QaContext) {
     threadId = thread.id;
   }
 
+  const history = (
+    await opts.db.qaMessage.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { role: true, content: true },
+    })
+  ).reverse();
+
   await opts.db.qaMessage.create({
     data: {
       threadId,
@@ -159,7 +173,7 @@ async function prepare(opts: QaContext) {
   });
 
   const scannedFiles = uniqueScannedFiles(chunks);
-  const prompt = buildPrompt({ question: opts.question, chunks, wikiPages });
+  const prompt = buildPrompt({ question: opts.question, chunks, wikiPages, history });
 
   return {
     keys,
@@ -186,7 +200,7 @@ export async function answerQuestionOnce(opts: QaContext): Promise<QaAnswerResul
       threadId: prepared.threadId,
       role: 'assistant',
       content: text,
-      scannedFiles: prepared.scannedFiles as unknown as object,
+      scannedFiles: prepared.scannedFiles as unknown as Prisma.InputJsonValue,
       modelUsed: `${prepared.keys.chatProvider}/${prepared.keys.chatModel}`,
     },
   });
@@ -262,7 +276,7 @@ export async function streamQuestion(
             threadId: prepared.threadId,
             role: 'assistant',
             content: fullText,
-            scannedFiles: prepared.scannedFiles as unknown as object,
+            scannedFiles: prepared.scannedFiles as unknown as Prisma.InputJsonValue,
             modelUsed: `${prepared.keys.chatProvider}/${prepared.keys.chatModel}`,
           },
         });

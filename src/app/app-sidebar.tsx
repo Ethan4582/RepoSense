@@ -139,7 +139,7 @@ export function AppSideBar() {
       if (!res.ok) throw new Error('Could not delete wiki.');
       await refetchProjects();
       toast.success('Wiki deleted');
-      if (projectId === project.id) router.push('/dashboard');
+      if (projectId === project.id) router.push('/');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not delete wiki.');
     } finally {
@@ -153,7 +153,7 @@ export function AppSideBar() {
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar select-none">
       <SidebarHeader className="border-b border-border/40 p-3 space-y-3">
         <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
+          <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
               <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
             </div>

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { AuthContext } from "../auth";
 import type { ProviderId } from "~/lib/providers";
 import {
@@ -61,33 +61,6 @@ async function canReadProject(
   return Boolean(project);
 }
 
-async function resolveProjectId(
-  db: AuthContext["Variables"]["db"],
-  userId: string,
-  projectId: string
-): Promise<string> {
-  if (projectId !== "general" && projectId !== "unlinked") return projectId;
-
-  const userProject = await db.project.findFirst({
-    where: { userToProjects: { some: { userId } }, deletedAt: null },
-    select: { id: true },
-  });
-  if (userProject) return userProject.id;
-
-  const created = await db.project.create({
-    data: {
-      name: "General Workspace",
-      repoOwner: "general",
-      repoName: "workspace",
-      repoUrl: "https://github.com/placeholder/repo",
-      isPublicWiki: false,
-      userToProjects: { create: { userId } },
-    },
-    select: { id: true },
-  });
-  return created.id;
-}
-
 export const questionsRoutes = new Hono<AuthContext>()
   .get("/:id/qa/threads", async (c) => {
     const db = c.get("db");
@@ -136,8 +109,8 @@ export const questionsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        question: z.string().min(1),
-        threadId: z.string().optional(),
+        question: z.string().trim().min(1).max(4000),
+        threadId: z.string().max(64).optional(),
         chatProvider: z.enum(PROVIDERS).optional(),
         chatModel: z.string().optional(),
       })
@@ -203,10 +176,10 @@ export const questionsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        query: z.string().min(1),
+        query: z.string().trim().min(1).max(4000),
         chatProvider: z.enum(PROVIDERS).optional(),
         chatModel: z.string().optional(),
-        threadId: z.string().optional(),
+        threadId: z.string().max(64).optional(),
       })
     ),
     async (c) => {
@@ -223,8 +196,15 @@ export const questionsRoutes = new Hono<AuthContext>()
 
       const db = c.get("db");
       const userId = c.get("userId");
-      const projectId = await resolveProjectId(db, userId, c.req.param("id"));
+      const projectId = c.req.param("id");
       const { query, chatProvider, chatModel, threadId } = c.req.valid("json");
+
+      if (projectId === "general" || projectId === "unlinked") {
+        return c.json(
+          { error: "Select a repository wiki before chatting.", code: "PROJECT_REQUIRED" },
+          400
+        );
+      }
 
       const project = await db.project.findFirst({
         where: {
@@ -297,16 +277,16 @@ export const questionsRoutes = new Hono<AuthContext>()
     zValidator(
       "json",
       z.object({
-        threadId: z.string().optional(),
-        question: z.string().min(1),
-        answers: z.string().min(1),
-        fileReference: z.any().optional(),
+        threadId: z.string().max(64).optional(),
+        question: z.string().trim().min(1).max(4000),
+        answers: z.string().trim().min(1).max(100_000),
+        fileReference: z.unknown().optional(),
         turns: z
           .array(
             z.object({
               role: z.enum(["user", "assistant"]),
               content: z.string(),
-              fileReferences: z.any().optional(),
+              fileReferences: z.unknown().optional(),
               createdAt: z.string().optional(),
             })
           )
@@ -314,12 +294,11 @@ export const questionsRoutes = new Hono<AuthContext>()
       })
     ),
     async (c) => {
-      let projectId = c.req.param("id");
+      const projectId = c.req.param("id");
       const userId = c.get("userId");
       const db = c.get("db");
-      const { threadId, question, answers, fileReference, turns } = c.req.valid("json");
-
-      projectId = await resolveProjectId(db, userId, projectId);
+      const { threadId, question, answers, turns } = c.req.valid("json");
+      const rawReference = c.req.valid("json").fileReference;
 
       const member = await db.userToProject.findUnique({
         where: { userId_projectId: { userId, projectId } },
@@ -330,9 +309,13 @@ export const questionsRoutes = new Hono<AuthContext>()
       const storedReference = turns?.length
         ? ({
             turns,
-            citations: Array.isArray(fileReference) ? fileReference : [],
+            citations: Array.isArray(rawReference) ? rawReference : [],
           } as unknown as Prisma.InputJsonValue)
-        : (fileReference ?? null);
+        : rawReference === undefined
+          ? undefined
+          : rawReference === null
+            ? Prisma.JsonNull
+            : (rawReference as Prisma.InputJsonValue);
 
       const existing = threadId
         ? await db.question.findFirst({

@@ -1,5 +1,5 @@
 import { Octokit } from 'octokit';
-import { decryptKey } from './providers/crypto';
+import { decryptKey, getEncryptionSecret } from './providers/crypto';
 
 export interface RepoCoordinates {
   owner: string;
@@ -61,7 +61,8 @@ export function parseRepoUrl(repoUrl: string): RepoCoordinates {
 }
 
 export function getOctokit(token?: string | null) {
-  const authToken = token?.trim() || process.env.GITHUB_TOKEN;
+  const trimmedToken = token?.trim();
+  const authToken = trimmedToken ?? process.env.GITHUB_TOKEN;
   return new Octokit({
     ...(authToken ? { auth: authToken } : {}),
     request: { timeout: 20_000 },
@@ -69,13 +70,6 @@ export function getOctokit(token?: string | null) {
 }
 
 export const octokit = getOctokit();
-
-export function getEncryptionSecret(): string {
-  return (
-    process.env.ENCRYPTION_KEY ||
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-  );
-}
 
 export async function decryptProjectToken(
   project: { encryptedGithubToken?: string | null; githubTokenIv?: string | null }
@@ -100,6 +94,8 @@ function isBadCredentials(err: unknown): boolean {
 }
 
 function wrapGithubError(err: unknown, hasToken: boolean): never {
+  if (err instanceof GitHubAccessError) throw err;
+
   if (isBadCredentials(err)) {
     throw new GitHubAccessError(
       'INVALID_TOKEN',
@@ -112,7 +108,7 @@ function wrapGithubError(err: unknown, hasToken: boolean): never {
   if (e?.status === 404) {
     throw new GitHubAccessError('NOT_FOUND', 'Repository not found or you do not have access to it.');
   }
-  throw new GitHubAccessError('UNKNOWN', e?.message || 'GitHub request failed.');
+  throw new GitHubAccessError('UNKNOWN', e?.message ?? 'GitHub request failed.');
 }
 
 export async function getRepoMetadata(
@@ -132,6 +128,14 @@ export async function getRepoMetadata(
 
   try {
     const { data } = await client.rest.repos.get({ owner, repo });
+
+    if (data.private && !token?.trim()) {
+      throw new GitHubAccessError(
+        'NOT_FOUND',
+        'Repository not found or you do not have access to it. Add a GitHub token to index private repositories.'
+      );
+    }
+
     const ref = await client.rest.git.getRef({
       owner,
       repo,
@@ -186,7 +190,8 @@ export async function fetchRawFile(
   path: string,
   token?: string | null
 ): Promise<string | null> {
-  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${commitSha}/${path}`;
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${commitSha}/${encodedPath}`;
   const headers: Record<string, string> = { 'User-Agent': 'reposense-app' };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -205,7 +210,9 @@ export async function fetchRawFile(
         ref: commitSha,
       });
       if (!Array.isArray(data) && data.type === 'file' && 'content' in data) {
-        return atob(data.content.replace(/\n/g, ''));
+        const binary = atob(data.content.replace(/\n/g, ''));
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
       }
       return null;
     } catch (err) {
@@ -256,7 +263,7 @@ export const getPullRequests = async (
       state: pr.state === 'open' ? 'open' : 'closed',
       isDraft: Boolean(pr.draft),
       authorName: pr.user?.login ?? 'Unknown',
-      authorAvatar: pr.user?.avatar_url || '',
+      authorAvatar: pr.user?.avatar_url ?? '',
       createdAt: new Date(pr.created_at),
       updatedAt: new Date(pr.updated_at),
       htmlUrl: pr.html_url,

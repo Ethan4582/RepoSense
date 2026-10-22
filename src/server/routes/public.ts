@@ -3,9 +3,25 @@ import { db } from '~/server/db';
 import { getFullFileContent } from '~/lib/embeddings';
 import { cachedJson } from '~/lib/cache';
 
+function plainSummary(markdown: string | undefined): string | null {
+  if (!markdown) return null;
+  const text = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/[*_`~>#|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text ? text.slice(0, 280) : null;
+}
+
 export const publicRoutes = new Hono()
   .get('/explore', async (c) => {
-    const query = c.req.query('q')?.trim().toLowerCase() ?? 'all';
+    const rawQuery = c.req.query('q')?.trim().toLowerCase().slice(0, 120) ?? '';
+    const query = rawQuery.length > 0 ? rawQuery : 'all';
 
     return cachedJson(c, `explore-${query}`, async () => {
       const projects = await db.project.findMany({
@@ -51,7 +67,7 @@ export const publicRoutes = new Hono()
           lastIndexedAt: project.lastIndexedAt,
           lastIndexedCommitSha: project.lastIndexedCommitSha,
           pageCount: project._count.wikiPages,
-          summary: project.wikiPages[0]?.content?.slice(0, 280) ?? null,
+          summary: plainSummary(project.wikiPages[0]?.content),
         })),
       };
     }, 60);
@@ -142,6 +158,7 @@ export const publicRoutes = new Hono()
     const filePath = c.req.query('path');
 
     if (!filePath) return c.json({ error: 'path is required' }, 400);
+    if (filePath.length > 500) return c.json({ error: 'File not found' }, 404);
 
     const project = await db.project.findFirst({
       where: { id: projectId, isPublicWiki: true, deletedAt: null },

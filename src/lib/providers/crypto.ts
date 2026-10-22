@@ -5,6 +5,17 @@
  * Runtime-agnostic: fully compatible with Cloudflare Workers and Node.js 18+.
  */
 
+export function getEncryptionSecret(): string {
+  const secret = process.env.ENCRYPTION_KEY?.trim();
+  if (secret) return secret;
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('ENCRYPTION_KEY must be set in production.');
+  }
+
+  return '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+}
+
 export interface EncryptedParts {
   readonly encryptedKey: string;
   readonly iv: string;
@@ -16,11 +27,8 @@ export interface EncryptedParts {
  */
 function bytesToHex(bytes: Uint8Array): string {
   let hex = '';
-  for (let i = 0; i < bytes.length; i++) {
-    const b = bytes[i];
-    if (b !== undefined) {
-      hex += b.toString(16).padStart(2, '0');
-    }
+  for (const b of bytes) {
+    hex += b.toString(16).padStart(2, '0');
   }
   return hex;
 }

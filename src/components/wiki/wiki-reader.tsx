@@ -100,7 +100,7 @@ function groupSections(pages: WikiPageMeta[]) {
 export function WikiReader() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn } = useUser();
 
   const [project, setProject] = React.useState<WikiProject | null>(null);
   const [isPublic, setIsPublic] = React.useState(false);
@@ -275,7 +275,9 @@ export function WikiReader() {
     };
 
     void poll();
-    const timer = setInterval(poll, 3000);
+    const timer = setInterval(() => {
+      void poll();
+    }, 3000);
     return () => clearInterval(timer);
   }, [isSignedIn, project?.isOwner, projectId]);
 
@@ -866,10 +868,6 @@ export function WikiReader() {
                         <Sparkles className="size-3.5" />
                         Generate wiki
                       </Button>
-                    ) : !isSignedIn ? (
-                      <Link href="/sign-in">
-                        <Button className="mt-4" size="sm">Sign in to index</Button>
-                      </Link>
                     ) : null}
                   </div>
                 )}
@@ -907,7 +905,12 @@ export function WikiReader() {
               <div className="hidden shrink-0 items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-1 sm:flex">
                 {providerMeta ? (
                   <div className="relative size-3.5">
-                    <Image src={providerMeta.logoAsset} alt={providerMeta.displayName} fill className="object-contain" />
+                    <Image
+                      src={providerMeta.logoAsset}
+                      alt={providerMeta.displayName}
+                      fill
+                      className={cn('object-contain', providerMeta.id === 'XAI' && 'dark:invert')}
+                    />
                   </div>
                 ) : null}
                 <span className="max-w-28 truncate text-[10px] font-medium text-muted-foreground">

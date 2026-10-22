@@ -6,6 +6,7 @@ import type { ProviderId } from "~/lib/providers";
 import {
   encryptKeyWithIv,
   decryptKey,
+  getEncryptionSecret,
   getKeyLast4,
   validateProviderKey,
 } from "~/lib/providers";
@@ -16,15 +17,6 @@ function parseProvider(value: string): ProviderId | null {
   const provider = value.toUpperCase();
   return (PROVIDERS as readonly string[]).includes(provider) ? (provider as ProviderId) : null;
 }
-
-const getEncryptionSecret = (): string => {
-  const secret = process.env.ENCRYPTION_KEY;
-  if (!secret) {
-    // Development fallback to prevent crashes if not set
-    return "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-  }
-  return secret;
-};
 
 export const keysRoutes = new Hono<AuthContext>()
   .get("/", async (c) => {
@@ -54,7 +46,7 @@ export const keysRoutes = new Hono<AuthContext>()
       "json",
       z.object({
         provider: z.enum(PROVIDERS),
-        apiKey: z.string().min(5, "API key is too short"),
+        apiKey: z.string().min(5, "API key is too short").max(500),
       })
     ),
     async (c) => {

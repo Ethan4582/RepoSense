@@ -1,22 +1,16 @@
-import pLimit from 'p-limit';
+
 import type { Prisma, PrismaClient, Project } from '@prisma/client';
 import { db as defaultDb } from '~/server/db';
 import {
   buildRepoSkeleton,
   chunkFile,
   type CodeChunk,
-  type RepoSkeleton,
 } from './chunker';
 import { embedAndStoreChunks } from './embeddings';
-import {
-  GitHubAccessError,
-  decryptProjectToken,
-  parseRepoUrl,
-} from './github';
+import { GitHubAccessError, decryptProjectToken } from './github';
 import {
   loadRepoFiles,
   loadRepoTree,
-  type FilteredRepoFile,
   type LoadedRepoFile,
   type RepoSource,
 } from './repo-filter';
@@ -38,8 +32,8 @@ export const inlineStepRunner: StepRunner = {
   do: async (_name, fn) => fn(),
 };
 
-const FILE_FETCH_BATCH = 10;
-const EMBED_BATCH = 400;
+const FILE_FETCH_BATCH = 2;
+const EMBED_BATCH = 100;
 const PAGE_CONCURRENCY = 3;
 
 function errorInfo(err: unknown): { code: string; message: string } {
@@ -186,7 +180,7 @@ async function executePipeline(opts: {
     const built = buildRepoSkeleton(loadedFiles);
     await db.project.update({
       where: { id: project.id },
-      data: { repoSkeleton: built as unknown as object },
+      data: { repoSkeleton: built as unknown as Prisma.InputJsonValue },
     });
     return built;
   });
@@ -226,7 +220,7 @@ async function executePipeline(opts: {
   const context: WikiGenerationContext = {
     projectName: `${source.owner}/${source.repo}`,
     repoUrl: source.repoUrl,
-    skeleton: skeleton as RepoSkeleton,
+    skeleton: skeleton,
     files: loadedFiles.map((file) => ({ path: file.path, content: file.content })),
     provider: keys.chatProvider,
     model: keys.chatModel,
@@ -259,21 +253,22 @@ async function executePipeline(opts: {
     }))
   );
 
-  const limit = pLimit(PAGE_CONCURRENCY);
   let completedPages = 0;
 
   for (let offset = 0; offset < pageTaskList.length; offset += PAGE_CONCURRENCY) {
     const batch = pageTaskList.slice(offset, offset + PAGE_CONCURRENCY);
 
     const generated = await step.do(`generate-pages-${offset}`, async () =>
-      limit.map(batch, async (task) =>
-        generateWikiPage({
-          context,
-          plan,
-          page: task.page,
-          sectionTitle: task.sectionTitle,
-          sectionOrder: task.sectionOrder,
-        })
+      Promise.all(
+        batch.map((task) =>
+          generateWikiPage({
+            context,
+            plan,
+            page: task.page,
+            sectionTitle: task.sectionTitle,
+            sectionOrder: task.sectionOrder,
+          })
+        )
       )
     );
 
@@ -289,7 +284,7 @@ async function executePipeline(opts: {
           pageOrder: page.pageOrder,
           content: page.content,
           relevantFiles: page.relevantFiles,
-          headings: page.headings as unknown as object,
+          headings: page.headings,
         },
         update: {
           title: page.title,
@@ -298,7 +293,7 @@ async function executePipeline(opts: {
           pageOrder: page.pageOrder,
           content: page.content,
           relevantFiles: page.relevantFiles,
-          headings: page.headings as unknown as object,
+          headings: page.headings,
         },
       });
     }

@@ -80,7 +80,7 @@ export default function IssuesList({ meetingId }: Props) {
   }
 
   // Extract owner & repo for GitHub issue creation link
-  const githubRepoBase = ((meeting as any)?.project?.repoUrl ?? project?.repoUrl)?.replace(/\.git$/, '') ?? '';
+  const githubRepoBase = ((meeting as unknown as { project?: { repoUrl?: string } })?.project?.repoUrl ?? project?.repoUrl)?.replace(/\.git$/, '') ?? '';
 
   const getGithubIssueUrl = (issue: IssueType) => {
     if (!githubRepoBase) return '#';

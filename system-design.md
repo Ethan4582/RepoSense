@@ -2,10 +2,6 @@
 
 RepoSense is an open source repository intelligence platform. It analyzes Git repositories, extracts structural code skeletons, generates multi-page technical wikis (DeepWiki), and answers codebase queries using vector search with line-level source code citations.
 
-This document describes the production architecture, ingestion pipeline, chunking heuristics, pgvector storage layout, documentation generation workflow, retrieval augmented generation (RAG) system, and operational failure modes.
-
----
-
 ## 1. Goals and non-goals
 
 ### Goals
@@ -22,8 +18,6 @@ This document describes the production architecture, ingestion pipeline, chunkin
 - In-browser code editing or write-back pull request creation.
 - Real-time continuous file system watching on local client machines.
 - Persistent storage of raw source trees for long-term code hosting.
-
----
 
 ## 2. Requirements
 
@@ -42,8 +36,6 @@ This document describes the production architecture, ingestion pipeline, chunkin
 - Answer streaming: First token latency under 1.5 seconds for streamed question answers.
 - Job durability: Repository indexing jobs run asynchronously with step-level progress tracking. Uncaught worker exceptions mark jobs as failed with actionable error codes.
 - Security: Zero plaintext storage of user API keys and GitHub personal access tokens. All credentials encrypt with AES-256-GCM and random 12-byte initialization vectors.
-
----
 
 ## 3. Scale and capacity estimation
 
@@ -93,8 +85,6 @@ Index memory sizing (HNSW on PostgreSQL):
 - 1,536 dimensions vector with graph: ~7.7 KB per row.
 - 500,000 active chunks in hot cache: 500,000 * 7.7 KB = 3.85 GB RAM required in PostgreSQL `shared_buffers` and OS page cache for sub-50ms vector lookups.
 
----
-
 ## 4. High-level design
 
 RepoSense uses a decoupled architecture. The frontend runs on Next.js 15 with React Server Components and client-side streaming hooks. The backend API runs on Hono, mounted at `/api`, providing high-throughput routing, token validation, and Server-Sent Events (SSE). Persistent state and vector storage reside in Neon Serverless PostgreSQL with the pgvector extension.
@@ -102,45 +92,34 @@ RepoSense uses a decoupled architecture. The frontend runs on Next.js 15 with Re
 ```mermaid
 flowchart TD
     subgraph Clients["Clients"]
-        Web["Next.js 15 Web App
-(Wiki, QA, Explorer)"]
+        Web["Next.js 15 Web App<br/>(Wiki, QA, Explorer)"]
         CLI["API Consumer / CI"]
     end
 
-    subgraph Gateway["Edge Gateway & API"]
-        HonoApp["Hono HTTP Router (/api)
-(Auth, CORS, Rate Limits)"]
-        Vault["Crypto Vault
-(AES-256-GCM BYOK)"]
+    subgraph Gateway["Edge Gateway and API"]
+        HonoApp["Hono HTTP Router (/api)<br/>(Auth, CORS, Rate Limits)"]
+        Vault["Crypto Vault<br/>(AES-256-GCM BYOK)"]
     end
 
-    subgraph Ingestion["Ingestion & Documentation Pipeline"]
-        GitLoader["GitHub Tree Loader
-(Raw Fetch & Layer Classifier)"]
-        ChunkEngine["Symbol-Aware Chunker
-(AST Skeletons & Boundaries)"]
-        WikiPlanner["DeepWiki Planner & Generator
-(Structured LLM Prompts)"]
+    subgraph Ingestion["Ingestion and Documentation Pipeline"]
+        GitLoader["GitHub Tree Loader<br/>(Raw Fetch and Layer Classifier)"]
+        ChunkEngine["Symbol-Aware Chunker<br/>(AST Skeletons and Boundaries)"]
+        WikiPlanner["DeepWiki Planner and Generator<br/>(Structured LLM Prompts)"]
     end
 
-    subgraph RetrievalEngine["Retrieval & Reasoning Engine"]
-        Embedder["Embedding Service
-(OpenAI / Gemini)"]
-        VectorSearch["pgvector HNSW Cosine Index
-(<=> Distance Operator)"]
-        QAService["QA Inference & Citation Grounder
-([[file:start-end]])"]
+    subgraph RetrievalEngine["Retrieval and Reasoning Engine"]
+        Embedder["Embedding Service<br/>(OpenAI and Gemini)"]
+        VectorSearch["pgvector HNSW Cosine Index<br/>(Cosine Distance Operator)"]
+        QAService["QA Inference and Grounder<br/>(Line Citation Verification)"]
     end
 
     subgraph Storage["Persistence Layer"]
-        Postgres[("Neon PostgreSQL
-+ pgvector")]
-        RedisCache[("Upstash Redis
-Wiki Content Cache")]
+        Postgres[("Neon PostgreSQL<br/>and pgvector")]
+        RedisCache[("Upstash Redis<br/>Wiki Content Cache")]
     end
 
-    Web -->|HTTP / SSE| HonoApp
-    CLI -->|REST| HonoApp
+    Web --> HonoApp
+    CLI --> HonoApp
     HonoApp --> Vault
     HonoApp --> GitLoader
     HonoApp --> QAService
@@ -165,8 +144,6 @@ Wiki Content Cache")]
 - Symbol-aware chunker: Scans code for top-level declarations, computes line offsets, and extracts import and export statements into a light structural skeleton.
 - DeepWiki planner and generator: Produces a multi-section documentation outline based on repository architecture, then parallelizes individual page generation with concurrency controls.
 - Vector search and QA service: Embeds incoming questions, executes cosine similarity queries on PostgreSQL, builds prompt contexts, and streams answers with verified line-level citations.
-
----
 
 ## 5. Low-level design
 
@@ -198,24 +175,24 @@ sequenceDiagram
     actor User
     participant Worker as Indexing Workflow
     participant GH as GitHub API
-    participant Norm as Normalizer & Chunker
-    participant AI as Provider API (LLM/Embed)
-    participant DB as Postgres + pgvector
+    participant Norm as Normalizer and Chunker
+    participant AI as Provider API (LLM and Embed)
+    participant DB as Postgres and pgvector
 
     User->>Worker: Trigger repository index (branch, options)
     Worker->>GH: Fetch recursive Git tree
     GH-->>Worker: Tree entries (paths, shas, sizes)
-    Worker->>Worker: Filter non-source paths & check limits
-    Worker->>GH: Fetch raw contents (batch size <= 20, <= 800 KB)
+    Worker->>Worker: Filter non-source paths and check limits
+    Worker->>GH: Fetch raw contents (batches up to 20 files, 800 KB)
     GH-->>Worker: File contents
-    Worker->>Norm: Classify layers & extract RepoSkeleton
+    Worker->>Norm: Classify layers and extract RepoSkeleton
     Worker->>Norm: Generate code chunks (120 lines, 20 overlap)
     Worker->>AI: Embed chunks in batches of 100
-    AI-->>Worker: Dense vectors (1536 / 768 dims)
-    Worker->>DB: Bulk insert chunks & UPDATE vector column
+    AI-->>Worker: Dense vectors (1536 and 768 dimensions)
+    Worker->>DB: Bulk insert chunks and UPDATE vector column
     Worker->>AI: Plan wiki hierarchy using RepoSkeleton
-    AI-->>Worker: WikiPlan (sections & pages)
-    Worker->>AI: Generate pages in parallel (concurrency = 3)
+    AI-->>Worker: WikiPlan (sections and pages)
+    Worker->>AI: Generate pages in parallel (concurrency 3)
     AI-->>Worker: Markdown page content with diagrams
     Worker->>DB: Upsert WikiPage records
     Worker->>DB: Mark IndexingJob as COMPLETED
@@ -238,25 +215,18 @@ The QA engine uses a multi-stage retrieval and answer generation pipeline:
 
 ```mermaid
 flowchart LR
-    Q[User Question] --> EMB[Embed Query
-text-embedding-3-small]
-    EMB --> VEC[pgvector Cosine Search
-<= 12 Chunks on Project/Branch]
-    Q --> WIKI[Keyword Match
-Wiki Pages]
-    VEC --> CTX[Build Grounded Context
-Code Chunks + Wiki + History]
+    Q["User Question"] --> EMB["Embed Query<br/>text-embedding-3-small"]
+    EMB --> VEC["pgvector Cosine Search<br/>Top 12 Chunks on Project/Branch"]
+    Q --> WIKI["Keyword Match<br/>Wiki Pages"]
+    VEC --> CTX["Build Grounded Context<br/>Code Chunks + Wiki + History"]
     WIKI --> CTX
-    CTX --> LLM[LLM Generation
-System Prompt: Strict Citations]
-    LLM --> PARSE[Citation Parser
-Format: [[filePath:start-end]]]
-    PARSE --> OUT[Streamed Answer
-+ Interactive Code Inspection Pills]
+    CTX --> LLM["LLM Generation<br/>System Prompt: Strict Citations"]
+    LLM --> PARSE["Citation Parser<br/>Verified File and Line Ranges"]
+    PARSE --> OUT["Streamed Answer<br/>Interactive Source Pills"]
 ```
 
 1. Question embedding: The user query converts to a dense vector using the project's configured embedding provider.
-2. Chunk retrieval: A raw SQL query runs against PostgreSQL using the pgvector cosine distance operator `<=>`:
+2. Chunk retrieval: A raw SQL query runs against PostgreSQL using the pgvector cosine distance operator:
    ```sql
    SELECT "id", "filePath", "directory", "startLine", "endLine", "chunkContent",
           1 - ("embeddingOpenAI" <=> $1::vector) AS similarity
@@ -271,161 +241,129 @@ Format: [[filePath:start-end]]]
 4. Citation enforcement: The system prompt instructs the model to answer exclusively from the context and append inline citations in the format `[[filePath:startLine-endLine]]`.
 5. Interactive rendering: The frontend Markdown parser transforms bracketed citation strings into interactive pills. Clicking a pill loads the referenced source file into a stacked code panel, highlights the exact line range, and links directly to the repository on GitHub.
 
----
-
 ## 6. Data models and database schema
 
-The PostgreSQL database uses the Prisma ORM and the native `vector` extension.
+The persistence layer runs on PostgreSQL with the pgvector extension. Relational tables capture repository configuration, encrypted provider credentials, multi-page wiki hierarchies, branch-scoped embeddings, and indexing state machines.
 
-```prisma
-datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  directUrl  = env("DIRECT_URL")
-  extensions = [vector]
-}
+```mermaid
+erDiagram
+    USER ||--o{ API_KEY : owns
+    USER ||--o{ QA_THREAD : creates
+    USER ||--o{ QUESTION : saves
+    USER ||--o{ USER_TO_PROJECT : joins
 
-enum Provider {
-  OPENAI
-  GEMINI
-  ANTHROPIC
-  META
-  DEEPSEEK
-  XAI
-  GROQ
-}
+    PROJECT ||--o{ USER_TO_PROJECT : assigns
+    PROJECT ||--o{ WIKI_PAGE : contains
+    PROJECT ||--o{ SOURCE_CODE_EMBEDDING : indexes
+    PROJECT ||--o{ INDEXING_JOB : runs
+    PROJECT ||--o{ QA_THREAD : stores
+    PROJECT ||--o{ QUESTION : records
 
-enum EmbeddingProvider {
-  OPENAI
-  GEMINI
-}
+    QA_THREAD ||--o{ QA_MESSAGE : includes
 
-enum IndexingStatus {
-  QUEUED
-  RUNNING
-  COMPLETED
-  FAILED
-}
+    USER {
+        string id PK
+        string emailAddress UK
+        string defaultChatProvider
+        string defaultChatModel
+        string defaultEmbeddingProvider
+    }
 
-enum IndexingStep {
-  LOADING_REPO
-  CHUNKING_AND_EMBEDDING
-  PLANNING_WIKI
-  GENERATING_PAGES
-  FINALIZING
-  DONE
-}
+    API_KEY {
+        string id PK
+        string userId FK
+        string provider
+        string encryptedKey
+        string iv
+        string keyLast4
+        string status
+    }
 
-model Project {
-  id                    String                @id @default(cuid())
-  name                  String
-  repoOwner             String
-  repoName              String
-  repoUrl               String
-  encryptedGithubToken  String?
-  githubTokenIv         String?
-  isPrivateRepo         Boolean               @default(false)
-  isPublicWiki          Boolean               @default(true)
-  chatProvider          Provider              @default(OPENAI)
-  chatModel             String                @default("gpt-4o-mini")
-  embeddingProvider     EmbeddingProvider     @default(OPENAI)
-  embeddingModel        String                @default("text-embedding-3-small")
-  embeddingDimensions   Int                   @default(1536)
-  repoSkeleton          Json?
-  defaultBranch         String?
-  lastIndexedBranch     String?
-  lastIndexedCommitSha  String?
-  lastIndexedAt         DateTime?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+    PROJECT {
+        string id PK
+        string name
+        string repoOwner
+        string repoName
+        string repoUrl
+        string defaultBranch
+        string chatProvider
+        string embeddingProvider
+        int embeddingDimensions
+        json repoSkeleton
+    }
 
-  wikiPages             WikiPage[]
-  sourceCodeEmbeddings  SourceCodeEmbedding[]
-  qaThreads             QaThread[]
-  indexingJobs          IndexingJob[]
-  savedQuestions        Question[]
+    WIKI_PAGE {
+        string id PK
+        string projectId FK
+        string branch
+        string slug
+        string title
+        string sectionTitle
+        int sectionOrder
+        int pageOrder
+        string content
+    }
 
-  @@index([repoOwner, repoName, isPublicWiki])
-}
+    SOURCE_CODE_EMBEDDING {
+        string id PK
+        string projectId FK
+        string branch
+        string filePath
+        int startLine
+        int endLine
+        string chunkContent
+        vector embeddingOpenAI
+        vector embeddingGemini
+    }
 
-model WikiPage {
-  id            String    @id @default(cuid())
-  projectId     String
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  branch        String    @default("main")
-  commitSha     String?
-  slug          String
-  title         String
-  sectionTitle  String
-  sectionOrder  Int
-  pageOrder     Int
-  content       String    @db.Text
-  relevantFiles String[]
-  headings      Json?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+    INDEXING_JOB {
+        string id PK
+        string projectId FK
+        string branch
+        string status
+        string currentStep
+        int totalFiles
+        int processedFiles
+        int totalWikiPages
+        int completedWikiPages
+    }
 
-  @@unique([projectId, branch, slug])
-  @@index([projectId, branch, sectionOrder, pageOrder])
-}
+    QA_THREAD {
+        string id PK
+        string projectId FK
+        string userId FK
+        string branch
+        string title
+    }
 
-model SourceCodeEmbedding {
-  id              String                       @id @default(cuid())
-  projectId       String
-  project         Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  branch          String                       @default("main")
-  commitSha       String?
-  filePath        String
-  directory       String
-  chunkIndex      Int
-  startLine       Int
-  endLine         Int
-  chunkContent    String                       @db.Text
-  fullFileContent String?                      @db.Text
-  embeddingOpenAI Unsupported("vector(1536)")?
-  embeddingGemini Unsupported("vector(768)")?
+    QA_MESSAGE {
+        string id PK
+        string threadId FK
+        string role
+        string content
+        json scannedFiles
+    }
 
-  @@index([projectId, branch, filePath])
-}
-
-model IndexingJob {
-  id                  String         @id @default(cuid())
-  projectId           String
-  project             Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  branch              String         @default("main")
-  commitSha           String?
-  status              IndexingStatus @default(QUEUED)
-  currentStep         IndexingStep   @default(LOADING_REPO)
-  totalFiles          Int            @default(0)
-  processedFiles      Int            @default(0)
-  totalWikiPages      Int            @default(0)
-  completedWikiPages  Int            @default(0)
-  currentDetail       String?
-  errorCode           String?
-  errorMessage        String?
-  startedAt           DateTime       @default(now())
-  finishedAt          DateTime?
-
-  @@index([projectId])
-  @@index([status])
-}
-
-model ApiKey {
-  id             String    @id @default(cuid())
-  userId         String
-  provider       Provider
-  encryptedKey   String
-  iv             String
-  keyLast4       String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@unique([userId, provider])
-  @@index([userId])
-}
+    QUESTION {
+        string id PK
+        string projectId FK
+        string userId FK
+        string question
+        string answers
+        json fileReference
+    }
 ```
 
----
+### Core table summary
+
+| Table | Primary key | Scoping and foreign keys | Storage notes |
+|---|---|---|---|
+| `Project` | `id` | Indexed on `(repoOwner, repoName, isPublicWiki)` | Holds project settings, default models, and the compact `repoSkeleton` JSON. |
+| `WikiPage` | `id` | Unique `(projectId, branch, slug)` | Stores generated markdown content, section groupings, and navigation order. |
+| `SourceCodeEmbedding` | `id` | Indexed on `(projectId, branch, filePath)` | Holds chunk lines and dual vector columns (`vector(1536)` for OpenAI and `vector(768)` for Gemini). |
+| `IndexingJob` | `id` | Foreign key to `Project` | State machine tracking progress across file loading, chunking, planning, and page generation. |
+| `ApiKey` | `id` | Unique `(userId, provider)` | AES-256-GCM encrypted provider credentials with separate 12-byte initialization vectors. |
+| `QaThread` / `QaMessage` | `id` | Scoped to `(projectId, branch, userId)` | Multi-turn chat sessions with recorded line citations and model metadata. |
 
 ## 7. API design
 
@@ -526,8 +464,6 @@ Response (200 OK):
 }
 ```
 
----
-
 ## 8. Key architectural decisions
 
 ### Dual typed vector columns over a generic JSON vector table
@@ -550,8 +486,6 @@ Response (200 OK):
 - Trade-off gained: Developers can inspect different branches or pull requests simultaneously. Comparing a feature branch to `main` does not overwrite the baseline wiki.
 - Trade-off lost: Storing multiple branches of the same repository multiplies database row counts. Mitigation: Indexing defaults to the default branch; auxiliary branches index only on demand.
 
----
-
 ## 9. Reliability and failure handling
 
 | Component | Failure mode | Detection | Mitigation |
@@ -561,8 +495,6 @@ Response (200 OK):
 | Vector Embedder | Provider rate limit or quota exhaustion | `ProviderAccessError` during `embedMany` | Batch requests into smaller chunks (50 items), apply retry with jitter up to 3 attempts, mark key as `QUOTA_EXHAUSTED` on hard 429. |
 | Wiki Generator | Model JSON formatting failure during plan generation | `JSON.parse` failure on LLM response string | Fallback heuristic plan generator builds deterministic pages directly from categorized architectural layers. |
 | PostgreSQL Database | Connection pool starvation under peak QA load | Prisma connection timeout errors | Configure PgBouncer transaction pooling in Neon; cap max client connections in serverless container configurations. |
-
----
 
 ## 10. Alternatives and trade-offs
 
@@ -578,16 +510,12 @@ We evaluated running `git clone --depth 1` into temporary worker volumes versus 
 - Git clone cons: Requires container environments with disk access and Git binaries. Cloudflare Workers and serverless Vercel functions cannot run arbitrary shell commands or store multi-gigabyte repositories.
 - Why REST Tree won: The REST API runs in lightweight serverless runtimes, downloads only non-ignored source files, and avoids cloning large Git commit histories.
 
----
-
 ## 11. Future improvements
 
 1. Incremental commit indexing: Compute Git diffs between the previous indexed commit SHA and the current HEAD. Re-chunk and re-embed only modified files, leaving unchanged vector rows intact.
 2. Abstract syntax tree (AST) code graph resolution: Resolve imported symbol definitions to exact target declaration files for cross-file jump navigation in the QA panel.
 3. Local embedding support: Provide a self-hosted ONNX / Transformers.js worker embedding pipeline for environments that prohibit outbound calls to cloud LLM providers.
 4. Automated documentation drift detection: A scheduled GitHub Action that checks whether commits pushed to `main` invalidate existing DeepWiki section content and alerts maintainers.
-
----
 
 ## 12. Diagram prompts
 
@@ -611,7 +539,7 @@ We evaluated running `git clone --depth 1` into temporary worker volumes versus 
 > 1. User enters question in Next.js chat UI.
 > 2. Hono API validates session and passes question to QA Engine.
 > 3. Embedding model converts query into dense vector.
-> 4. pgvector executes cosine similarity search (`<=>`) on PostgreSQL, returning top 12 code chunks.
+> 4. pgvector executes cosine similarity search on PostgreSQL, returning top 12 code chunks.
 > 5. Context Builder combines code chunks, wiki excerpts, and chat history.
-> 6. LLM generates answer enforcing strict `[[filePath:start-end]]` citations.
+> 6. LLM generates answer enforcing strict file and line citations.
 > 7. Response streams back to user with interactive source code inspection pills.

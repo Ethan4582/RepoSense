@@ -19,7 +19,7 @@ RepoSense transforms any GitHub repository into an interactive, multi-page techn
 - Interactive source inspector: Clicking any citation displays the file in a stacked, full-width code panel with line-level syntax highlighting.
 - Bring Your Own Key (BYOK): Connect your own API keys for OpenAI, Google Gemini, Anthropic, Groq, DeepSeek, Meta, and xAI. Keys are stored encrypted with AES-256-GCM.
 - Branch and pull request awareness: Switch between branches and pull requests to view documentation and chat against exact commit revisions.
-- Native pgvector search: Vector similarity queries run on PostgreSQL using the `<=>` cosine distance operator with HNSW index acceleration.
+- Native pgvector search: Vector similarity queries run on PostgreSQL using the cosine distance operator with HNSW index acceleration.
 
 ---
 
@@ -41,16 +41,14 @@ For a thorough description of the ingestion pipeline, capacity math, schema defi
 
 ```mermaid
 flowchart LR
-    GH[GitHub API] --> INGEST[Tree Filter & Ingestion]
-    INGEST --> CHUNK[Symbol Chunker & AST Skeleton]
-    CHUNK --> EMBED[pgvector Embeddings
-OpenAI / Gemini]
-    CHUNK --> WIKI[DeepWiki Generator
-Parallel LLM Pages]
-    EMBED --> PG[(PostgreSQL + pgvector)]
+    GH["GitHub API"] --> INGEST["Tree Filter and Ingestion"]
+    INGEST --> CHUNK["Symbol Chunker and AST Skeleton"]
+    CHUNK --> EMBED["pgvector Embeddings<br/>OpenAI or Gemini"]
+    CHUNK --> WIKI["DeepWiki Generator<br/>Parallel LLM Pages"]
+    EMBED --> PG[("PostgreSQL and pgvector")]
     WIKI --> PG
-    USER[Developer] --> HONO[Hono API / Next.js UI]
-    HONO --> QA[QA Grounding Engine]
+    USER["Developer"] --> HONO["Hono API and Next.js UI"]
+    HONO --> QA["QA Grounding Engine"]
     PG --> QA
     QA --> USER
 ```

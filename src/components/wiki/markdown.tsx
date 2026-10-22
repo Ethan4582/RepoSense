@@ -98,19 +98,19 @@ export function WikiMarkdown({
   };
 
   return (
-    <div className={cn('wiki-prose max-w-none text-sm leading-7 text-foreground', className)}>
+    <div className={cn('wiki-prose max-w-none text-[17px] leading-[1.7] text-foreground', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="mt-2 mb-5 text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="mt-2 mb-6 text-[30px] font-bold tracking-tight text-foreground">
               {children}
             </h1>
           ),
           h2: ({ children }) => {
             const text = nodeToText(children);
             return (
-              <h2 id={headingId(text)} className="scroll-mt-6 mt-9 mb-3 text-xl font-semibold tracking-tight text-foreground">
+              <h2 id={headingId(text)} className="scroll-mt-8 mt-10 mb-4 text-[24px] font-semibold tracking-tight text-foreground">
                 {children}
               </h2>
             );
@@ -118,14 +118,15 @@ export function WikiMarkdown({
           h3: ({ children }) => {
             const text = nodeToText(children);
             return (
-              <h3 id={headingId(text)} className="scroll-mt-6 mt-7 mb-2 text-base font-semibold text-foreground">
+              <h3 id={headingId(text)} className="scroll-mt-8 mt-8 mb-3 text-[22px] font-semibold text-foreground">
                 {children}
               </h3>
             );
           },
-          p: ({ children }) => <p className="my-3 text-foreground/90">{children}</p>,
-          ul: ({ children }) => <ul className="my-3 list-disc space-y-1.5 pl-5">{children}</ul>,
-          ol: ({ children }) => <ol className="my-3 list-decimal space-y-1.5 pl-5">{children}</ol>,
+          p: ({ children }) => <p className="my-4 text-foreground/90">{children}</p>,
+          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+          ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-6">{children}</ul>,
+          ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-6">{children}</ol>,
           li: ({ children }) => <li className="text-foreground/90">{children}</li>,
           table: ({ children }) => (
             <div className="my-5 overflow-x-auto rounded-lg border">

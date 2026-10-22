@@ -87,9 +87,13 @@ export function WikiComposer({
     }
   };
 
+  const providerMeta = modelInfo?.provider
+    ? PROVIDER_METADATA[modelInfo.provider as keyof typeof PROVIDER_METADATA]
+    : undefined;
+
   return (
-    <div className="pointer-events-none absolute bottom-5 left-0 right-0 z-30 flex justify-center px-4 xl:pr-[216px]">
-      <div className="pointer-events-auto w-full max-w-[720px] group rounded-2xl border border-border/60 bg-background/75 shadow-[0_8px_32px_rgba(0,0,0,0.08)] backdrop-blur-2xl transition-all focus-within:border-border/80 focus-within:bg-background/90 dark:bg-card/75 dark:focus-within:bg-card/90">
+    <div className="pointer-events-none w-full flex justify-center">
+      <div className="pointer-events-auto w-full max-w-[900px] group rounded-2xl border border-white/10 bg-background/50 shadow-2xl backdrop-blur-2xl transition-all focus-within:border-white/20 focus-within:bg-background/70 dark:border-white/10 dark:bg-card/40 dark:focus-within:bg-card/60">
         <textarea
           ref={textareaRef}
           value={question}
@@ -97,7 +101,7 @@ export function WikiComposer({
           onKeyDown={handleKeyDown}
           placeholder={placeholder ?? `Ask about ${repoName}...`}
           rows={2}
-          className="min-h-18 w-full resize-none bg-transparent px-5 pt-4 pb-2 text-[14px] leading-relaxed text-foreground placeholder:text-muted-foreground/60 outline-none"
+          className="min-h-18 w-full resize-none bg-transparent px-5 pt-4 pb-2 text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground/60 outline-none"
         />
 
         <div className="flex items-center justify-between px-4 pb-3 pt-1">
@@ -105,9 +109,13 @@ export function WikiComposer({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/70"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-1 text-[11px] font-medium text-foreground/90 backdrop-blur-sm transition-colors hover:bg-muted/40"
               >
-                <Zap className="size-3 text-primary" />
+                {providerMeta?.logoAsset ? (
+                  <img src={providerMeta.logoAsset} alt={providerMeta.displayName} className="size-3.5 object-contain" />
+                ) : (
+                  <span className="size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
+                )}
                 <span className="max-w-[120px] truncate">{displayName}</span>
                 <ChevronDown className="size-2.5 text-muted-foreground" />
               </button>

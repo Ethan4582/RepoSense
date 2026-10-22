@@ -331,13 +331,20 @@ export async function planWiki(context: WikiGenerationContext): Promise<WikiPlan
     )
   );
 
+  const fileCount = context.skeleton.files.length;
+  const repoSize = fileCount < 50 ? 'small' : fileCount <= 500 ? 'medium' : 'large';
+  const groupRange = repoSize === 'small' ? '1 to 2 groups' : repoSize === 'medium' ? '3 to 6 groups' : '6 to 10 groups';
+
   const prompt = `You are a senior software architect planning a DeepWiki documentation site for ${context.projectName}, specifically the ${branchDescription(context)}.
+
+This repository is classified as ${repoSize} (${fileCount} source files). Generate ${groupRange}.
 
 Return ONLY valid JSON, no prose, no markdown fences. The shape must be:
 {
   "sections": [
     {
       "sectionTitle": "Overview",
+      "description": "System introduction, core value proposition, and entry points.",
       "sectionOrder": 1,
       "pages": [
         { "slug": "overview", "title": "Overview", "pageOrder": 1, "relevantFiles": ["README.md", "package.json"] }
@@ -347,14 +354,16 @@ Return ONLY valid JSON, no prose, no markdown fences. The shape must be:
 }
 
 Rules:
-- 3 to 5 sections, 6 to 12 total pages.
-  - Discover 3 to 5 domain-native sections and 8 to 14 pages from the repository profile. Do not use generic taxonomy names.
-  - Start with one root overview page, then name pages after concrete subsystems, symbols, lifecycle mechanisms, or data models.
-  - Page and section titles MUST be clean plain text without icons, emojis, or decorative symbols.
+- Generate ${groupRange} based on the repository size.
+- Always place "Overview" first as a single page. Add "Getting Started" or "Setup and Usage" when a README or install script exists.
+- Build groups from domains, not raw directories. Merge related directories that share a responsibility (e.g. routes and middleware into an "HTTP Transport" group). Use names from code symbols, README headings, and package names. Never use raw folder names or generic labels such as "Module 1" or "Misc".
+- Order groups by reader need: entry points and overview, core domain logic, interfaces (API, UI, CLI), data and persistence, infrastructure and tooling, and legacy code last.
+- Give each group a one-sentence description in the JSON under "description".
+- Page titles must be Title Case, 2 to 6 words, maximum 60 characters, specific rather than generic.
+- Add sub-pages only when a topic covers more than roughly 800 lines or two distinct subsystems.
 - Slugs must be lowercase kebab-case and globally unique.
 - relevantFiles must be exact paths from the repository skeleton or normalized profile.
 - Tailor sections to this repository's real architecture, not a generic web-app template.
-- If this is a script-based, notebook-heavy, monolith, or otherwise unstructured repository, do not invent modules. Plan pages around entrypoints, execution order, state, data, external calls, and scripts.
 - Documentation for this branch must be branch-specific. Describe only behavior present on ${branchDescription(context)}.
 
 NORMALIZED REPOSITORY PROFILE:

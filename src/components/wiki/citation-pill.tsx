@@ -50,16 +50,17 @@ export function CitationPill({
       title={finalGithubUrl ? `Open ${target.filePath}:${lineLabel} on GitHub` : `${target.filePath}:${lineLabel}`}
       onClick={handleClick}
       className={cn(
-        'mx-1 inline-flex max-w-full items-center gap-1.5 rounded-[5px] border px-1.5 py-[2px] align-baseline font-mono text-[11px] leading-tight no-underline transition-colors shadow-2xs',
-        // Light mode: subtle gray background and borders; Dark mode: sleek dark background
-        'border-neutral-300 bg-neutral-100 text-neutral-800 hover:border-neutral-400 hover:bg-neutral-200',
-        'dark:border-neutral-700/80 dark:bg-[#16181d] dark:text-neutral-200 dark:hover:border-neutral-500 dark:hover:bg-[#1f2229]',
+        'group mx-1 inline-flex max-w-full items-stretch overflow-hidden rounded-[6px] border align-baseline text-[13px] font-normal no-underline shadow-2xs transition-colors',
+        'border-neutral-300/80 bg-neutral-100 text-neutral-800 hover:border-neutral-400',
+        'dark:border-neutral-700/80 dark:bg-[#16181d] dark:text-neutral-200 dark:hover:border-neutral-600',
         className,
       )}
     >
-      <Github className="size-3 shrink-0 text-neutral-500 dark:text-neutral-400" />
-      <span className="truncate font-medium">{target.filePath}</span>
-      <span className="shrink-0 rounded-[3px] border border-neutral-300 bg-neutral-200/80 px-1 py-[0.5px] text-[10px] text-neutral-600 dark:border-neutral-700/60 dark:bg-neutral-800/80 dark:text-neutral-400">
+      <span className="flex items-center gap-1.5 px-2 py-0.5 font-mono text-[13px] text-neutral-700 group-hover:underline dark:text-neutral-300">
+        <Github className="size-3.5 shrink-0 text-neutral-500 dark:text-neutral-400" />
+        <span className="truncate">{target.filePath}</span>
+      </span>
+      <span className="flex items-center border-l border-neutral-300/80 bg-neutral-200/90 px-1.5 py-0.5 font-mono text-[11px] font-normal text-neutral-600 dark:border-neutral-700/80 dark:bg-neutral-800/90 dark:text-neutral-300">
         {lineLabel}
       </span>
     </a>

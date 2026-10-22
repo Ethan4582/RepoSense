@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 import { WikiMarkdown, type CitationTarget } from './markdown';
 import { CodeViewer, type ActiveFile } from './code-viewer';
 import { getModelInfo } from '~/lib/providers/catalog';
-import Link from 'next/link';
 import { IndexingLoader } from '~/components/indexing-loader';
+import { WikiComposer } from './wiki-composer';
 
 interface WikiQaViewProps {
   projectId: string;
@@ -58,6 +58,7 @@ export function WikiQaView({
   onCitation,
   onSelectFile,
   answerEndRef,
+  composerProps,
 }: WikiQaViewProps) {
   const modelInfo = getModelInfo(selectedModel);
   const [saved, setSaved] = React.useState(false);

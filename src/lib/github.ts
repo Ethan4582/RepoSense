@@ -62,7 +62,8 @@ export function parseRepoUrl(repoUrl: string): RepoCoordinates {
 
 export function getOctokit(token?: string | null) {
   const trimmedToken = token?.trim();
-  const authToken = trimmedToken ?? process.env.GITHUB_TOKEN;
+  const envToken = process.env.GITHUB_TOKEN?.trim();
+  const authToken = trimmedToken || envToken || undefined;
   return new Octokit({
     ...(authToken ? { auth: authToken } : {}),
     request: { timeout: 20_000 },
@@ -100,8 +101,8 @@ function wrapGithubError(err: unknown, hasToken: boolean): never {
     throw new GitHubAccessError(
       'INVALID_TOKEN',
       hasToken
-        ? 'Your GitHub Personal Access Token is invalid or expired. Please remove it for public repos or provide a new token.'
-        : 'GitHub rejected the request. The repository may be private; add a valid GitHub token.'
+        ? 'Your GitHub Personal Access Token is invalid or expired. Please remove it for public repos or provide a valid token.'
+        : 'GitHub rejected the request (rate limited or access error). For private repos, please provide a valid GitHub token.'
     );
   }
   const e = err as { status?: number; message?: string };
@@ -152,7 +153,34 @@ export async function getRepoMetadata(
       sizeKb: data.size,
     };
   } catch (err) {
-    wrapGithubError(err, Boolean(token));
+    if (err instanceof GitHubAccessError) throw err;
+
+    // If bad credentials (e.g. invalid environment or user token), try unauthenticated to see if public
+    if (isBadCredentials(err)) {
+      try {
+        const publicClient = new Octokit({ request: { timeout: 20_000 } });
+        const { data } = await publicClient.rest.repos.get({ owner, repo });
+        if (!data.private) {
+          const ref = await publicClient.rest.git.getRef({
+            owner,
+            repo,
+            ref: `heads/${data.default_branch}`,
+          });
+          return {
+            owner,
+            repo,
+            repoUrl: normalized,
+            defaultBranch: data.default_branch,
+            commitSha: ref.data.object.sha,
+            isPrivate: false,
+            sizeKb: data.size,
+          };
+        }
+      } catch {
+        // Fall through
+      }
+    }
+    wrapGithubError(err, Boolean(token?.trim()));
   }
 }
 
@@ -212,14 +240,14 @@ export async function resolveRepoRef(
   const meta = await getRepoMetadata(repoUrl, token);
   const client = getOctokit(token);
 
-  try {
+  const execute = async (c: Octokit) => {
     if (input.pullRequestNumber) {
       const pullNumber = input.pullRequestNumber;
       if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
         throw new GitHubAccessError('NOT_FOUND', 'Pull request number is not valid.');
       }
 
-      const { data: pull } = await client.rest.pulls.get({
+      const { data: pull } = await c.rest.pulls.get({
         owner: meta.owner,
         repo: meta.repo,
         pull_number: pullNumber,
@@ -232,7 +260,7 @@ export async function resolveRepoRef(
         fetchOwner: pull.head.repo?.owner?.login ?? meta.owner,
         fetchRepo: pull.head.repo?.name ?? meta.repo,
         branch: pull.head.ref || `pull-${pullNumber}`,
-        branchKind: 'PULL_REQUEST',
+        branchKind: 'PULL_REQUEST' as const,
         pullRequestNumber: pullNumber,
         commitSha: pull.head.sha,
         defaultBranch: meta.defaultBranch,
@@ -246,7 +274,7 @@ export async function resolveRepoRef(
       : meta.defaultBranch;
     const kind: RepoBranchKind = branch === meta.defaultBranch ? 'MAIN' : 'BRANCH';
 
-    const { data: ref } = await client.rest.git.getRef({
+    const { data: ref } = await c.rest.git.getRef({
       owner: meta.owner,
       repo: meta.repo,
       ref: `heads/${branch}`,
@@ -266,9 +294,20 @@ export async function resolveRepoRef(
       isPrivate: meta.isPrivate,
       sizeKb: meta.sizeKb,
     };
+  };
+
+  try {
+    return await execute(client);
   } catch (err) {
     if (err instanceof GitHubAccessError) throw err;
-    wrapGithubError(err, Boolean(token));
+    if (isBadCredentials(err) && !meta.isPrivate) {
+      try {
+        return await execute(new Octokit({ request: { timeout: 20_000 } }));
+      } catch {
+        // Fall through
+      }
+    }
+    wrapGithubError(err, Boolean(token?.trim()));
   }
 }
 
@@ -295,7 +334,21 @@ export async function getRepoTree(
     });
     return data.tree as RepoTreeEntry[];
   } catch (err) {
-    wrapGithubError(err, Boolean(token));
+    if (isBadCredentials(err)) {
+      try {
+        const publicClient = new Octokit({ request: { timeout: 20_000 } });
+        const { data } = await publicClient.rest.git.getTree({
+          owner,
+          repo,
+          tree_sha: commitSha,
+          recursive: 'true',
+        });
+        return data.tree as RepoTreeEntry[];
+      } catch {
+        // Fall through
+      }
+    }
+    wrapGithubError(err, Boolean(token?.trim()));
   }
 }
 
@@ -309,17 +362,19 @@ export async function fetchRawFile(
   const encodedPath = path.split('/').map(encodeURIComponent).join('/');
   const url = `https://raw.githubusercontent.com/${owner}/${repo}/${commitSha}/${encodedPath}`;
   const headers: Record<string, string> = { 'User-Agent': 'reposense-app' };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token?.trim()) headers.Authorization = `Bearer ${token.trim()}`;
 
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  let res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  if (res.status === 401 && headers.Authorization) {
+    delete headers.Authorization;
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  }
   if (res.ok) return await res.text();
 
-  if (res.status === 404) {
-    // Private repos may not allow raw access with a Bearer token.
-    if (!token) return null;
+  if (res.status === 404 || res.status === 401 || res.status === 403) {
     const client = getOctokit(token);
-    try {
-      const { data } = await client.rest.repos.getContent({
+    const getContent = async (c: Octokit) => {
+      const { data } = await c.rest.repos.getContent({
         owner,
         repo,
         path,
@@ -331,8 +386,19 @@ export async function fetchRawFile(
         return new TextDecoder().decode(bytes);
       }
       return null;
+    };
+
+    try {
+      return await getContent(client);
     } catch (err) {
-      wrapGithubError(err, true);
+      if (isBadCredentials(err)) {
+        try {
+          return await getContent(new Octokit({ request: { timeout: 20_000 } }));
+        } catch {
+          // ignore
+        }
+      }
+      return null;
     }
   }
 
@@ -364,15 +430,8 @@ export const getPullRequests = async (
   const { owner, repo } = parseRepoUrl(githubUrl);
   const client = getOctokit(token);
 
-  try {
-    const res = await client.rest.pulls.list({
-      owner,
-      repo,
-      state: 'all',
-      per_page: 50,
-    });
-
-    return res.data.map((pr) => ({
+  const parsePRs = (data: any[]) =>
+    data.map((pr) => ({
       id: pr.id,
       number: pr.number,
       title: pr.title ?? 'Untitled PR',
@@ -386,13 +445,36 @@ export const getPullRequests = async (
       branchName: pr.head?.ref ?? 'unknown',
       baseBranch: pr.base?.ref ?? 'main',
       body: pr.body ?? null,
-      labels: (pr.labels ?? []).map((label) =>
-        typeof label === 'string' ? label : (label.name ?? '')
-      ).filter(Boolean),
+      labels: (pr.labels ?? [])
+        .map((label: any) => (typeof label === 'string' ? label : (label.name ?? '')))
+        .filter(Boolean),
       mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
     }));
+
+  try {
+    const res = await client.rest.pulls.list({
+      owner,
+      repo,
+      state: 'all',
+      per_page: 50,
+    });
+    return parsePRs(res.data);
   } catch (err) {
-    wrapGithubError(err, Boolean(token));
+    if (isBadCredentials(err)) {
+      try {
+        const publicClient = new Octokit({ request: { timeout: 20_000 } });
+        const res = await publicClient.rest.pulls.list({
+          owner,
+          repo,
+          state: 'all',
+          per_page: 50,
+        });
+        return parsePRs(res.data);
+      } catch {
+        // Fall through
+      }
+    }
+    wrapGithubError(err, Boolean(token?.trim()));
   }
 };
 

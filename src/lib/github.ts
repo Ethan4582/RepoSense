@@ -435,7 +435,7 @@ export const getPullRequests = async (
       id: pr.id,
       number: pr.number,
       title: pr.title ?? 'Untitled PR',
-      state: pr.state === 'open' ? 'open' : 'closed',
+      state: (pr.state === 'open' ? 'open' : 'closed') as 'open' | 'closed',
       isDraft: Boolean(pr.draft),
       authorName: pr.user?.login ?? 'Unknown',
       authorAvatar: pr.user?.avatar_url ?? '',

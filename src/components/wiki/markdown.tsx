@@ -35,9 +35,10 @@ function nodeToText(node: React.ReactNode): string {
 }
 
 function renderCitations(markdown: string): string {
-  return markdown.replace(/\[\[([^:\]]+):(\d+)(?:-(\d+))?\]\]/g, (_match: string, path: string, start: string, end?: string) => {
+  // Support both [[path:start-end]] and [[path:line]]
+  return markdown.replace(/\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g, (_match: string, path: string, start: string, end?: string) => {
     const finalLine = end ?? start;
-    return `[citation](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+    return `[${path}:${start}${end && end !== start ? `-${end}` : ''}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
   });
 }
 
@@ -61,16 +62,33 @@ export function WikiMarkdown({
   onCitation,
   githubRepo,
   commitSha,
+  branch,
   className,
 }: {
   content: string;
   onCitation?: (target: CitationTarget) => void;
   githubRepo?: { owner: string; repo: string };
   commitSha?: string | null;
+  branch?: string | null;
   className?: string;
 }) {
   const isDark = useIsDark();
-  const prepared = React.useMemo(() => renderCitations(content), [content]);
+  const prepared = React.useMemo(() => {
+    // 1. Convert [[path:start-end]] or [[path:line]]
+    let res = content.replace(/\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g, (_m, path, start, end) => {
+      const finalLine = end ?? start;
+      return `[${path}:${start}${end && end !== start ? `-${end}` : ''}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+    });
+
+    // 2. Also convert any raw unformatted "path/to/file.ext:12" or "README.md:12" or "path/file.ext:12-25" into citations
+    res = res.replace(/(?:^|\s)([\w.-]+(?:\/[\w.-]+)*\.[a-zA-Z0-9]+):(\d+)(?:-(\d+))?(?=[\s,.)]|$)/g, (fullMatch, path, start, end) => {
+      const prefix = fullMatch.startsWith(' ') || fullMatch.startsWith('\n') ? fullMatch[0] : '';
+      const finalLine = end ?? start;
+      return `${prefix}[${path}:${start}${end && end !== start ? `-${end}` : ''}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+    });
+
+    return res;
+  }, [content]);
   const headingCounts = new Map<string, number>();
   const headingId = (text: string) => {
     const base = slugify(text);
@@ -135,10 +153,32 @@ export function WikiMarkdown({
               const endLine = Number(raw.slice(lastColon + 1));
 
               const target = { filePath: path, startLine, endLine };
-              const githubUrl = githubRepo && commitSha
-                ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${commitSha}/${path}#L${startLine}-L${endLine}`
+              const ref = commitSha || branch || 'main';
+              const lineAnchor = startLine === endLine ? `#L${startLine}` : `#L${startLine}-L${endLine}`;
+              const githubUrl = githubRepo
+                ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${ref}/${path.replace(/^\/+/, '')}${lineAnchor}`
                 : undefined;
               return <CitationPill target={target} githubUrl={githubUrl} onCitation={onCitation} />;
+            }
+
+            // Check if link href or text has citation pattern (e.g. path:12 or path#L12)
+            const textContent = nodeToText(children).trim();
+            const hrefOrText = href || textContent;
+            const citationMatch = /(?:citation:)?([^:\s#]+)(?:[:#]L?(\d+))(?:(?:-|:L?)(\d+))?$/.exec(hrefOrText);
+            if (citationMatch && citationMatch[2]) {
+              const cleanPath = decodeURIComponent(citationMatch[1].replace(/^citation:/, '').replace(/#.*$/, ''));
+              // Only consider valid file extensions
+              if (/\.[a-zA-Z0-9]+$/.test(cleanPath)) {
+                const startLine = Number(citationMatch[2]);
+                const endLine = citationMatch[3] ? Number(citationMatch[3]) : startLine;
+                const target = { filePath: cleanPath, startLine, endLine };
+                const ref = commitSha || branch || 'main';
+                const lineAnchor = startLine === endLine ? `#L${startLine}` : `#L${startLine}-L${endLine}`;
+                const githubUrl = githubRepo
+                  ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${ref}/${cleanPath.replace(/^\/+/, '')}${lineAnchor}`
+                  : undefined;
+                return <CitationPill target={target} githubUrl={githubUrl} onCitation={onCitation} />;
+              }
             }
 
             return (

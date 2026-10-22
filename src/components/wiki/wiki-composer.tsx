@@ -88,8 +88,8 @@ export function WikiComposer({
   };
 
   return (
-    <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-30 flex justify-center px-6 xl:pr-[216px]">
-      <div className="pointer-events-auto w-full max-w-[640px] group rounded-2xl border border-border/70 bg-background/90 shadow-[0_4px_20px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all focus-within:border-border dark:bg-card/90">
+    <div className="pointer-events-none absolute bottom-5 left-0 right-0 z-30 flex justify-center px-4 xl:pr-[216px]">
+      <div className="pointer-events-auto w-full max-w-[720px] group rounded-2xl border border-border/60 bg-background/75 shadow-[0_8px_32px_rgba(0,0,0,0.08)] backdrop-blur-2xl transition-all focus-within:border-border/80 focus-within:bg-background/90 dark:bg-card/75 dark:focus-within:bg-card/90">
         <textarea
           ref={textareaRef}
           value={question}
@@ -97,7 +97,7 @@ export function WikiComposer({
           onKeyDown={handleKeyDown}
           placeholder={placeholder ?? `Ask about ${repoName}...`}
           rows={2}
-          className="min-h-16 w-full resize-none bg-transparent px-5 pt-4 pb-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 outline-none"
+          className="min-h-18 w-full resize-none bg-transparent px-5 pt-4 pb-2 text-[14px] leading-relaxed text-foreground placeholder:text-muted-foreground/60 outline-none"
         />
 
         <div className="flex items-center justify-between px-4 pb-3 pt-1">

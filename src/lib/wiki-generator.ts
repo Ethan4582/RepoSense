@@ -350,6 +350,7 @@ Rules:
 - 3 to 5 sections, 6 to 12 total pages.
   - Discover 3 to 5 domain-native sections and 8 to 14 pages from the repository profile. Do not use generic taxonomy names.
   - Start with one root overview page, then name pages after concrete subsystems, symbols, lifecycle mechanisms, or data models.
+  - Page and section titles MUST be clean plain text without icons, emojis, or decorative symbols.
 - Slugs must be lowercase kebab-case and globally unique.
 - relevantFiles must be exact paths from the repository skeleton or normalized profile.
 - Tailor sections to this repository's real architecture, not a generic web-app template.

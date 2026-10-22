@@ -36,6 +36,7 @@ import { CodeViewer, type ActiveFile } from './code-viewer';
 import { WikiComposer } from './wiki-composer';
 import { WikiQaView } from './wiki-qa-view';
 import { useSmoothStream } from '~/hooks/use-smooth-stream';
+import { IndexingLoader } from '~/components/indexing-loader';
 
 interface WikiPageMeta {
   id: string;
@@ -47,6 +48,8 @@ interface WikiPageMeta {
   headings?: Array<{ id: string; text: string; level: number }> | null;
   content?: string;
   relevantFiles?: string[];
+  updatedAt?: string | null;
+  createdAt?: string | null;
 }
 
 interface BranchSummary {
@@ -212,9 +215,22 @@ export function WikiReader() {
 
   const scrollToHeading = React.useCallback((id: string) => {
     const container = articleRef.current;
-    const target = document.getElementById(id);
-    if (!container || !target || !container.contains(target)) return;
-    container.scrollTo({ top: Math.max(0, target.offsetTop - 24), behavior: 'smooth' });
+    if (!container) return;
+
+    // Search by exact id, or by slug/text fallback
+    let target = document.getElementById(id);
+    if (!target) {
+      const allHeadings = Array.from(container.querySelectorAll<HTMLElement>('h2, h3'));
+      target = allHeadings.find((el) => el.id === id || el.textContent?.trim().toLowerCase() === id.replace(/-/g, ' ')) ?? null;
+    }
+
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const targetOffsetTop = targetRect.top - containerRect.top + container.scrollTop - 28;
+
+    container.scrollTo({ top: Math.max(0, targetOffsetTop), behavior: 'smooth' });
     setActiveHeadingId(id);
     window.history.replaceState(null, '', `#${id}`);
   }, []);
@@ -492,6 +508,7 @@ export function WikiReader() {
     if (!activePage || !project || isSavingPage) return;
     setIsSavingPage(true);
     try {
+      // 1. Save currently edited page content & title
       const res = await fetch(`/api/projects/${projectId}/pages/${activePage.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -507,6 +524,21 @@ export function WikiReader() {
       }
 
       const data = (await res.json()) as { page: WikiPageMeta };
+
+      // 2. Persist any sectionTitle or page title updates across the wiki
+      const updatedPagesPayload = project.wikiPages.map((p) => ({
+        id: p.id,
+        sectionTitle: p.sectionTitle,
+        sectionOrder: p.sectionOrder,
+        pageOrder: p.pageOrder,
+      }));
+
+      await fetch(`/api/projects/${projectId}/pages/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pages: updatedPagesPayload }),
+      }).catch(() => {});
+
       setActivePage(data.page);
       setProject((prev) => {
         if (!prev) return prev;
@@ -516,7 +548,7 @@ export function WikiReader() {
         };
       });
       setIsEditing(false);
-      toast.success('Page changes saved');
+      toast.success('Page and section changes saved');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save page changes.');
     } finally {
@@ -625,9 +657,8 @@ export function WikiReader() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center gap-2 bg-background text-sm text-muted-foreground">
-        <Loader2 className="size-5 animate-spin" />
-        Loading wiki...
+      <div className="flex h-screen items-center justify-center bg-background">
+        <IndexingLoader step="LOADING_REPO" />
       </div>
     );
   }
@@ -789,15 +820,22 @@ export function WikiReader() {
 
       {/* ── Body: Floating Centered 3-Column Stage (10-14vw side space) ── */}
       <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-4 md:px-8 xl:px-12">
-        <div className="flex min-h-0 w-full max-w-[1280px] flex-1 overflow-hidden">
+        <div className="flex min-h-0 w-full max-w-[1280px] flex-1 overflow-hidden border-x border-border/40">
 
-          {/* Left column: Wiki Pages (Permanent Hierarchy) */}
-          <aside className="scrollbar-none z-10 w-[210px] shrink-0 overflow-y-auto border-r border-border/60 py-6 pr-3 pl-1">
-            <div className="mb-4 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Wiki Pages
-            </div>
+          {/* Left column: Wiki Pages (hidden in dedicated answer mode) */}
+          {!qaOpen ? (
+            <aside className="scrollbar-none z-10 w-[210px] shrink-0 overflow-y-auto border-r border-border/60 py-6 pr-3 pl-1">
+              <div className="mb-4 px-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  {activePage?.updatedAt
+                    ? `Last edited: ${new Date(activePage.updatedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                    : project.lastIndexedAt
+                      ? `Last indexed: ${new Date(project.lastIndexedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                      : 'Wiki Pages'}
+                </div>
+              </div>
 
-            <nav className="space-y-4">
+              <nav className="space-y-4">
               {sections.map(([sectionTitle, pages]) => (
                 <div key={sectionTitle}>
                   <div className="mb-1 px-2 text-[12px] font-semibold text-foreground/80">
@@ -851,6 +889,7 @@ export function WikiReader() {
               ))}
             </nav>
           </aside>
+          ) : null}
 
         {/* Main content */}
         <main
@@ -887,18 +926,24 @@ export function WikiReader() {
               >
                 {/* Inner wrapper: centered, max-720px, with generous side gutters */}
                 <div className="mx-auto w-full max-w-[720px] px-6">
-                  {pageLoading && !activePage?.content ? (
-                    <div className="space-y-3">
-                      <div className="h-8 w-2/3 animate-pulse rounded bg-muted" />
-                      <div className="h-4 w-full animate-pulse rounded bg-muted" />
-                      <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
+                  {indexing && (!activePage?.content || project.wikiPages.length === 0) ? (
+                    <div className="flex min-h-[380px] w-full items-center justify-center py-16">
+                      <IndexingLoader step={indexing.currentStep} detail={indexing.currentDetail} />
+                    </div>
+                  ) : pageLoading && !activePage?.content ? (
+                    <div className="flex min-h-[380px] w-full items-center justify-center py-16">
+                      <IndexingLoader step="LOADING_REPO" />
                     </div>
                   ) : activePage?.content ? (
                     <>
                       {activePage.relevantFiles && activePage.relevantFiles.length > 0 ? (
-                        <details className="mb-4 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-sm">
-                          <summary className="cursor-pointer select-none text-muted-foreground">
-                            ▶ Relevant source files ({activePage.relevantFiles.length})
+                        <details className="group mb-5 rounded-lg border border-border/60 bg-muted/20 px-3.5 py-2.5 text-xs transition-colors hover:bg-muted/30">
+                          <summary className="flex cursor-pointer select-none items-center gap-1.5 font-medium text-muted-foreground transition-colors hover:text-foreground">
+                            <ChevronRight className="size-3.5 transition-transform duration-150 group-open:rotate-90" />
+                            <span>Relevant source files</span>
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              {activePage.relevantFiles.length}
+                            </span>
                           </summary>
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {activePage.relevantFiles.map((path) => (
@@ -999,6 +1044,7 @@ export function WikiReader() {
                           onCitation={openCitation}
                           githubRepo={{ owner: project.repoOwner, repo: project.repoName }}
                           commitSha={project.lastIndexedCommitSha}
+                          branch={activeBranch}
                         />
                       )}
                     </>

@@ -140,14 +140,14 @@ export function CodeViewer({
                 lineNumber <= (file.endLine ?? file.startLine);
 
               return (
-                <div
-                  key={lineNumber}
-                  ref={highlighted && lineNumber === file.startLine ? highlightRef : undefined}
-                  className={cn(
-                    'flex',
-                    highlighted && 'bg-amber-500/10 ring-1 ring-inset ring-amber-500/20'
-                  )}
-                >
+                  <div
+                    key={lineNumber}
+                    ref={highlighted && lineNumber === file.startLine ? highlightRef : undefined}
+                    className={cn(
+                      'flex transition-colors',
+                      highlighted && 'bg-primary/10 border-l-2 border-primary'
+                    )}
+                  >
                   <span className="w-12 shrink-0 select-none pr-3 text-right text-muted-foreground/60">
                     {lineNumber}
                   </span>

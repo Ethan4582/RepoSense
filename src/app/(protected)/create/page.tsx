@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
@@ -106,10 +106,12 @@ function branchFromRepoUrl(url: string): string | undefined {
 
 export default function CreateProjectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const repoParam = searchParams.get('repo');
   const refetch = useRefetch();
   const { setProjectId } = useProject();
 
-  const [repoUrl, setRepoUrl] = React.useState('');
+  const [repoUrl, setRepoUrl] = React.useState(repoParam ?? '');
   const [githubToken, setGithubToken] = React.useState('');
   const [urlError, setUrlError] = React.useState<string | null>(null);
   const [verifying, setVerifying] = React.useState(false);
@@ -165,7 +167,7 @@ export default function CreateProjectPage() {
   }, []);
 
   React.useEffect(() => {
-    if (!indexingSession) return;
+    if (!indexingSession || !indexingSession.projectId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -268,6 +270,11 @@ export default function CreateProjectPage() {
     }
 
     setIsSubmitting(true);
+    setIndexingSession({
+      projectId: '',
+      status: 'QUEUED',
+      currentStep: 'LOADING_REPO',
+    });
     try {
       const res = await client.projects.$post({
         json: {
@@ -302,9 +309,15 @@ export default function CreateProjectPage() {
           setProjectId(data.projectId);
           void refetch();
           toast.success(branchData.code === 'BRANCH_ALREADY_INDEXED' ? 'This branch is already indexed.' : 'Feature branch indexing has started.');
-          router.push(`/wiki/${data.projectId}?branch=${encodeURIComponent(requestedBranch)}`);
+          setIndexingSession({
+            projectId: data.projectId,
+            status: 'RUNNING',
+            currentStep: 'LOADING_REPO',
+          });
           return;
         }
+        setIndexingSession(null);
+        setIsSubmitting(false);
         throw new Error(data.error ?? 'Could not create this wiki.');
       }
 
@@ -317,6 +330,7 @@ export default function CreateProjectPage() {
       }
     } catch (err) {
       setIsSubmitting(false);
+      setIndexingSession(null);
       toast.error(err instanceof Error ? err.message : 'Could not create this wiki.');
     }
   };

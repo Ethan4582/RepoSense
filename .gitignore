@@ -49,14 +49,17 @@ yarn-error.log*
 # clerk configuration (can include secrets)
 /.clerk/
 
-# agent directories and plans
+# agent directories, plans, and interviews
 .agent/
 .agents/
 .our.agent/
 *.agent/
 *.agents/
-/plan/
-/plans/
+plan/
+plans/
+interview/
+interview.md
+*interview*.md
 design.md
 *plan*.md
 *.plan.md

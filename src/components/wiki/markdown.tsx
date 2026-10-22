@@ -165,7 +165,7 @@ export function WikiMarkdown({
             const textContent = nodeToText(children).trim();
             const hrefOrText = href || textContent;
             const citationMatch = /(?:citation:)?([^:\s#]+)(?:[:#]L?(\d+))(?:(?:-|:L?)(\d+))?$/.exec(hrefOrText);
-            if (citationMatch && citationMatch[2]) {
+            if (citationMatch && citationMatch[1] && citationMatch[2]) {
               const cleanPath = decodeURIComponent(citationMatch[1].replace(/^citation:/, '').replace(/#.*$/, ''));
               // Only consider valid file extensions
               if (/\.[a-zA-Z0-9]+$/.test(cleanPath)) {

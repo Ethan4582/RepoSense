@@ -89,8 +89,9 @@ export function IndexingLoader({
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const ctx: CanvasRenderingContext2D = context;
 
     const CSS_W = size === 'sm' ? 260 : 320;
     const CSS_H = size === 'sm' ? 180 : 230;

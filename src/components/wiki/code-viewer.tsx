@@ -12,9 +12,14 @@ export interface ActiveFile {
   endLine?: number;
 }
 
-async function fetchFile(projectId: string, filePath: string): Promise<string | null> {
+async function fetchFile(
+  projectId: string,
+  filePath: string,
+  branch?: string
+): Promise<string | null> {
+  const branchQuery = branch ? `&branch=${encodeURIComponent(branch)}` : '';
   const publicRes = await fetch(
-    `/api/public/projects/${projectId}/file?path=${encodeURIComponent(filePath)}`,
+    `/api/public/projects/${projectId}/file?path=${encodeURIComponent(filePath)}${branchQuery}`,
     { cache: 'no-store' }
   );
   if (publicRes.ok) {
@@ -23,7 +28,7 @@ async function fetchFile(projectId: string, filePath: string): Promise<string | 
   }
 
   const privateRes = await fetch(
-    `/api/projects/${projectId}/file?path=${encodeURIComponent(filePath)}`,
+    `/api/projects/${projectId}/file?path=${encodeURIComponent(filePath)}${branchQuery}`,
     { cache: 'no-store' }
   );
   if (privateRes.ok) {
@@ -36,11 +41,13 @@ async function fetchFile(projectId: string, filePath: string): Promise<string | 
 
 export function CodeViewer({
   projectId,
+  branch,
   file,
   onClose,
   className,
 }: {
   projectId: string;
+  branch?: string;
   file: ActiveFile;
   onClose?: () => void;
   className?: string;
@@ -55,7 +62,7 @@ export function CodeViewer({
     setLoading(true);
     setContent(null);
 
-    void fetchFile(projectId, file.filePath)
+    void fetchFile(projectId, file.filePath, branch)
       .then((text) => {
         if (cancelled) return;
         setContent(text);
@@ -70,7 +77,7 @@ export function CodeViewer({
     return () => {
       cancelled = true;
     };
-  }, [projectId, file.filePath]);
+  }, [projectId, branch, file.filePath]);
 
   React.useEffect(() => {
     if (!content || !file.startLine) return;

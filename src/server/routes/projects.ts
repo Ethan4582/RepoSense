@@ -461,7 +461,8 @@ export const projectsRoutes = new Hono<AuthContext>()
     const userId = c.get("userId");
     const db = c.get("db");
     const filePath = c.req.query("path");
-    const branch = c.req.query("branch")?.trim();
+    const branchQuery = c.req.query("branch")?.trim();
+    const branch = branchQuery === "" ? undefined : branchQuery;
 
     if (!filePath) return c.json({ error: "path is required" }, 400);
     if (filePath.length > 500) return c.json({ error: "File not found" }, 404);
@@ -475,7 +476,7 @@ export const projectsRoutes = new Hono<AuthContext>()
     });
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const activeBranch = branch || project.lastIndexedBranch || project.defaultBranch;
+    const activeBranch = branch ?? project.lastIndexedBranch ?? project.defaultBranch;
     const content = await getFullFileContent(db, projectId, filePath, activeBranch);
     if (content === null) return c.json({ error: "File not found" }, 404);
 

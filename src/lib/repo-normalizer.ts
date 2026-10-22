@@ -175,7 +175,11 @@ function parsePackageManifest(content: string): {
     const entries = [parsed.main, parsed.module, parsed.bin]
       .flatMap((value) => {
         if (typeof value === 'string') return [value];
-        if (value && typeof value === 'object') return Object.values(value).filter((item) => typeof item === 'string') as string[];
+        if (value && typeof value === 'object') {
+          return Object.values(value).filter(
+            (item): item is string => typeof item === 'string'
+          );
+        }
         return [];
       })
       .filter(Boolean);

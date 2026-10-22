@@ -137,10 +137,10 @@ export function WikiReader() {
   const [branchBusy, setBranchBusy] = React.useState(false);
   const wasIndexingRef = React.useRef(false);
   const activeBranch =
+    branchParam ??
     project?.activeBranch ??
     project?.defaultBranch ??
     project?.lastIndexedBranch ??
-    branchParam ??
     'main';
 
   const [question, setQuestion] = React.useState('');
@@ -573,8 +573,11 @@ export function WikiReader() {
     );
   }
 
-  const lastIndexed = formatDate(project.lastIndexedAt);
-  const shortSha = project.lastIndexedCommitSha?.slice(0, 6);
+  const branchInfo = project.branches?.find(
+    (entry) => entry.branch === activeBranch
+  );
+  const lastIndexed = formatDate(branchInfo?.updatedAt ?? project.lastIndexedAt);
+  const shortSha = (branchInfo?.commitSha ?? project.lastIndexedCommitSha)?.slice(0, 6);
   const modelInfo = project.chatModel ? getModelInfo(project.chatModel) : undefined;
   const providerMeta = project.chatProvider
     ? PROVIDER_METADATA[project.chatProvider as ProviderId]
@@ -636,6 +639,75 @@ export function WikiReader() {
               ) : (
                 <span>Not indexed yet</span>
               )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex max-w-44 items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-foreground transition-colors hover:border-primary/40"
+                    title="Switch branch"
+                  >
+                    <GitBranch className="size-2.5 shrink-0 text-primary" />
+                    <span className="truncate">{activeBranch}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 space-y-2 p-2">
+                  <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Indexed branches
+                  </div>
+                  <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                    {(project.branches ?? []).map((entry) => (
+                      <button
+                        key={entry.branch}
+                        type="button"
+                        onClick={() => switchBranch(entry.branch)}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+                          entry.branch === activeBranch
+                            ? 'bg-primary/10 font-medium text-primary'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                      >
+                        <GitBranch className="size-3 shrink-0" />
+                        <span className="truncate font-mono">{entry.branch}</span>
+                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">
+                          {entry.pageCount} pages
+                        </span>
+                      </button>
+                    ))}
+                    {(project.branches ?? []).length === 0 ? (
+                      <p className="px-2 py-2 text-[11px] text-muted-foreground">
+                        No branches indexed yet.
+                      </p>
+                    ) : null}
+                  </div>
+                  {project.isOwner && isSignedIn ? (
+                    <form
+                      onSubmit={indexRequestedBranch}
+                      className="space-y-1.5 border-t pt-2"
+                    >
+                      <label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Index a branch or PR
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          value={branchInput}
+                          onChange={(event) => setBranchInput(event.target.value)}
+                          placeholder="feature/name or #42"
+                          className="h-7 min-w-0 flex-1 rounded-md border bg-background px-2 font-mono text-[11px] outline-none focus:border-primary/50"
+                        />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className="h-7 shrink-0 text-[11px]"
+                          disabled={!branchInput.trim() || branchBusy}
+                        >
+                          {branchBusy ? <Loader2 className="size-3 animate-spin" /> : 'Index'}
+                        </Button>
+                      </div>
+                    </form>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>
@@ -730,7 +802,7 @@ export function WikiReader() {
               size="sm"
               className="h-8 gap-1.5 text-xs"
               onClick={startReindex}
-              disabled={Boolean(indexing)}
+              disabled={Boolean(indexing) || branchBusy}
             >
               <RefreshCw className={cn('size-3.5', indexing && 'animate-spin')} />
               <span className="hidden sm:inline">{indexing ? 'Indexing' : 'Re-index'}</span>
@@ -977,7 +1049,7 @@ export function WikiReader() {
                       Add your API key in Settings, then start indexing to generate documentation.
                     </p>
                     {project.isOwner && isSignedIn ? (
-                      <Button className="mt-4 gap-2" size="sm" onClick={startReindex} disabled={Boolean(indexing)}>
+                      <Button className="mt-4 gap-2" size="sm" onClick={startReindex} disabled={Boolean(indexing) || branchBusy}>
                         <Sparkles className="size-3.5" />
                         Generate wiki
                       </Button>

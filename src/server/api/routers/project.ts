@@ -88,6 +88,7 @@ export const projectRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string().max(64),
+        branch: z.string().max(255).optional(),
         question: z.string().trim().min(1).max(4000),
         answers: z.string().trim().min(1).max(100_000),
         fileReference: z.unknown().optional(),
@@ -103,6 +104,7 @@ export const projectRouter = createTRPCRouter({
       return await ctx.db.question.create({
         data: {
           answers: input.answers,
+          branch: input.branch ?? "main",
           projectId: input.projectId,
           question: input.question,
           fileReference: input.fileReference as Prisma.InputJsonValue | undefined,
@@ -112,7 +114,7 @@ export const projectRouter = createTRPCRouter({
     }),
 
   getQuestions: protectedProcedure
-    .input(z.object({ projectId: z.string() }))
+    .input(z.object({ projectId: z.string(), branch: z.string().max(255).optional() }))
     .query(async ({ ctx, input }) => {
       const member = await ctx.db.userToProject.findUnique({
         where: { userId_projectId: { userId: ctx.user.userId, projectId: input.projectId } },
@@ -121,7 +123,10 @@ export const projectRouter = createTRPCRouter({
       if (!member) throw new TRPCError({ code: "NOT_FOUND" });
 
       return await ctx.db.question.findMany({
-        where: { projectId: input.projectId },
+        where: {
+          projectId: input.projectId,
+          ...(input.branch ? { branch: input.branch } : {}),
+        },
         include: {
           user: {
             select: { id: true, firstName: true, lastName: true, imageUrl: true },

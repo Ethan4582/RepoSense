@@ -623,6 +623,9 @@ export function WikiReader() {
     setStreaming(true);
     setQuestion('');
 
+    const qaStartTime = Date.now();
+    const MIN_LOADER_MS = 1400; // Uniform minimum duration to enjoy the animation
+
     try {
       const res = await fetch(`/api/projects/${projectId}/qa`, {
         method: 'POST',
@@ -639,6 +642,12 @@ export function WikiReader() {
       if (!res.ok || !res.body) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? 'Could not answer this question.');
+      }
+
+      // Wait if response arrived faster than MIN_LOADER_MS
+      const elapsed = Date.now() - qaStartTime;
+      if (elapsed < MIN_LOADER_MS) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_LOADER_MS - elapsed));
       }
 
       const reader = res.body.getReader();
@@ -665,6 +674,9 @@ export function WikiReader() {
 
           if (payload.type === 'thread') {
             setThreadId(payload.threadId);
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('questionId', payload.threadId);
+            window.history.replaceState(null, '', currentUrl.toString());
           } else if (payload.type === 'scanning') {
             if (!scanningRef.current.some((item) => item.filePath === payload.filePath)) {
               scanningRef.current = [...scanningRef.current, payload];
@@ -682,6 +694,12 @@ export function WikiReader() {
                 }
               );
             }
+          } else if (payload.type === 'done' && 'questionId' in payload && (payload as { questionId?: string }).questionId) {
+            const qId = (payload as { questionId?: string }).questionId!;
+            setThreadId(qId);
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('questionId', qId);
+            window.history.replaceState(null, '', currentUrl.toString());
           } else if (payload.type === 'error') {
             setQaError(payload.message);
           }
@@ -974,7 +992,12 @@ export function WikiReader() {
                 streaming={streaming}
                 activeFile={activeFile}
                 isSignedIn={Boolean(isSignedIn)}
-                onBack={() => setQaOpen(false)}
+                onBack={() => {
+                  setQaOpen(false);
+                  const currentUrl = new URL(window.location.href);
+                  currentUrl.searchParams.delete('questionId');
+                  window.history.replaceState(null, '', currentUrl.toString());
+                }}
                 onCitation={onTokenCitation}
                 onSelectFile={setActiveFile}
                 answerEndRef={answerEndRef}

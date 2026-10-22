@@ -293,9 +293,32 @@ export async function streamQuestion(
           where: { id: prepared.threadId },
           data: { updatedAt: new Date() },
         });
-      }
 
-      controller.enqueue(send({ type: 'done', threadId: prepared.threadId }));
+        // Ensure question is saved in database so page reloads persist instance
+        const savedRecord = await opts.db.question.create({
+          data: {
+            question: opts.question,
+            answers: fullText,
+            fileReference: prepared.scannedFiles.map((f) => ({
+              fileName: f.filePath,
+              sourceCode: '',
+              summary: `Cited from ${f.filePath}:${f.startLine}-${f.endLine}`,
+            })) as unknown as Prisma.InputJsonValue,
+            projectId: opts.project.id,
+            userId: opts.userId,
+            branch: opts.branch,
+            isBookmarked: true,
+          },
+        }).catch(() => null);
+
+        controller.enqueue(send({
+          type: 'done',
+          threadId: prepared.threadId,
+          questionId: savedRecord?.id ?? prepared.threadId,
+        }));
+      } else {
+        controller.enqueue(send({ type: 'done', threadId: prepared.threadId }));
+      }
       controller.close();
     },
   });

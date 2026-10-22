@@ -4,13 +4,20 @@ import { z } from "zod";
 import type { AuthContext } from "../auth";
 import { encryptKeyWithIv, getEncryptionSecret } from "~/lib/providers";
 import { alignChatModel, resolveProjectKeys } from "~/lib/providers/guard";
-import { GitHubAccessError, decryptProjectToken, getRepoMetadata, parseRepoUrl } from "~/lib/github";
+import {
+  GitHubAccessError,
+  decryptProjectToken,
+  getRepoMetadata,
+  parseRepoUrl,
+  getRepoGithubDetails,
+} from "~/lib/github";
 import { getFullFileContent } from "~/lib/embeddings";
 import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { writesPaused } from "~/lib/emergency";
 import { purgeWikiCache } from "~/lib/cache";
 import { withoutProjectSecrets } from "~/lib/project";
 import { getProjectBranches, pickActiveBranch } from "~/lib/branch";
+import { extractHeadings, extractCitationPaths } from "~/lib/chunker";
 import { indexingRoutes } from "./indexing";
 import { pullsRoutes } from "./pulls";
 import { estimateRoutes } from "./estimate";
@@ -52,7 +59,20 @@ export const projectsRoutes = new Hono<AuthContext>()
       },
     });
 
-    return c.json({ projects: projects.map(withoutProjectSecrets) });
+    const enriched = await Promise.all(
+      projects.map(async (p) => {
+        const token = await decryptProjectToken(p).catch(() => null);
+        const meta = await getRepoGithubDetails(p.repoOwner, p.repoName, token);
+        return {
+          ...withoutProjectSecrets(p),
+          description: meta.description,
+          stars: meta.stars,
+          language: meta.language,
+        };
+      })
+    );
+
+    return c.json({ projects: enriched });
   })
   .post(
     "/",
@@ -455,6 +475,231 @@ export const projectsRoutes = new Hono<AuthContext>()
 
     await purgeProjectWiki(db, projectId);
     return c.json({ project: withoutProjectSecrets(updated) });
+  })
+  .post(
+    "/:id/pages",
+    zValidator(
+      "json",
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        sectionTitle: z.string().trim().max(100).optional(),
+        content: z.string().default("# New Page\n\nWrite documentation here..."),
+        branch: z.string().optional(),
+      })
+    ),
+    async (c) => {
+      const projectId = c.req.param("id");
+      const userId = c.get("userId");
+      const db = c.get("db");
+      const body = c.req.valid("json");
+
+      const member = await db.userToProject.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: "Unauthorized" }, 403);
+
+      const project = await db.project.findFirst({
+        where: { id: projectId, deletedAt: null },
+        select: { defaultBranch: true, lastIndexedBranch: true },
+      });
+      if (!project) return c.json({ error: "Project not found" }, 404);
+
+      const targetBranch =
+        body.branch?.trim() || project.lastIndexedBranch || project.defaultBranch || "main";
+
+      let baseSlug = body.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      if (!baseSlug) baseSlug = "page";
+
+      let slug = baseSlug;
+      let counter = 1;
+      while (true) {
+        const existing = await db.wikiPage.findUnique({
+          where: {
+            projectId_branch_slug: {
+              projectId,
+              branch: targetBranch,
+              slug,
+            },
+          },
+          select: { id: true },
+        });
+        if (!existing) break;
+        counter++;
+        slug = `${baseSlug}-${counter}`;
+      }
+
+      const sectionTitle = body.sectionTitle?.trim() || "Documentation";
+      const existingInSection = await db.wikiPage.findFirst({
+        where: { projectId, branch: targetBranch, sectionTitle },
+        orderBy: { pageOrder: "desc" },
+        select: { sectionOrder: true, pageOrder: true },
+      });
+
+      let sectionOrder = 0;
+      let pageOrder = 0;
+
+      if (existingInSection) {
+        sectionOrder = existingInSection.sectionOrder;
+        pageOrder = existingInSection.pageOrder + 1;
+      } else {
+        const highestSection = await db.wikiPage.findFirst({
+          where: { projectId, branch: targetBranch },
+          orderBy: { sectionOrder: "desc" },
+          select: { sectionOrder: true },
+        });
+        sectionOrder = highestSection ? highestSection.sectionOrder + 1 : 0;
+        pageOrder = 0;
+      }
+
+      const headings = extractHeadings(body.content);
+      const relevantFiles = extractCitationPaths(body.content);
+
+      const newPage = await db.wikiPage.create({
+        data: {
+          projectId,
+          branch: targetBranch,
+          slug,
+          title: body.title,
+          sectionTitle,
+          sectionOrder,
+          pageOrder,
+          content: body.content,
+          relevantFiles,
+          headings,
+        },
+      });
+
+      await purgeWikiCache(projectId, [slug], [targetBranch]);
+      return c.json({ page: newPage }, 201);
+    }
+  )
+  .patch(
+    "/:id/pages/reorder",
+    zValidator(
+      "json",
+      z.object({
+        pages: z.array(
+          z.object({
+            id: z.string(),
+            sectionTitle: z.string().optional(),
+            sectionOrder: z.number().int(),
+            pageOrder: z.number().int(),
+          })
+        ),
+      })
+    ),
+    async (c) => {
+      const projectId = c.req.param("id");
+      const userId = c.get("userId");
+      const db = c.get("db");
+      const body = c.req.valid("json");
+
+      const member = await db.userToProject.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: "Unauthorized" }, 403);
+
+      await db.$transaction(
+        body.pages.map((item) =>
+          db.wikiPage.update({
+            where: { id: item.id },
+            data: {
+              ...(item.sectionTitle ? { sectionTitle: item.sectionTitle } : {}),
+              sectionOrder: item.sectionOrder,
+              pageOrder: item.pageOrder,
+            },
+          })
+        )
+      );
+
+      await purgeWikiCache(projectId);
+      return c.json({ success: true });
+    }
+  )
+  .patch(
+    "/:id/pages/:pageId",
+    zValidator(
+      "json",
+      z.object({
+        title: z.string().trim().min(1).max(200).optional(),
+        sectionTitle: z.string().trim().max(100).optional(),
+        content: z.string().optional(),
+        sectionOrder: z.number().int().optional(),
+        pageOrder: z.number().int().optional(),
+      })
+    ),
+    async (c) => {
+      const projectId = c.req.param("id");
+      const pageId = c.req.param("pageId");
+      const userId = c.get("userId");
+      const db = c.get("db");
+      const body = c.req.valid("json");
+
+      const member = await db.userToProject.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: "Unauthorized" }, 403);
+
+      const page = await db.wikiPage.findFirst({
+        where: { id: pageId, projectId },
+      });
+      if (!page) return c.json({ error: "Page not found" }, 404);
+
+      const updateData: {
+        title?: string;
+        sectionTitle?: string;
+        sectionOrder?: number;
+        pageOrder?: number;
+        content?: string;
+        headings?: ReturnType<typeof extractHeadings>;
+        relevantFiles?: string[];
+      } = {};
+
+      if (body.title !== undefined) updateData.title = body.title;
+      if (body.sectionTitle !== undefined) updateData.sectionTitle = body.sectionTitle;
+      if (body.sectionOrder !== undefined) updateData.sectionOrder = body.sectionOrder;
+      if (body.pageOrder !== undefined) updateData.pageOrder = body.pageOrder;
+      if (body.content !== undefined) {
+        updateData.content = body.content;
+        updateData.headings = extractHeadings(body.content);
+        updateData.relevantFiles = extractCitationPaths(body.content);
+      }
+
+      const updated = await db.wikiPage.update({
+        where: { id: pageId },
+        data: updateData,
+      });
+
+      await purgeWikiCache(projectId, [page.slug], [page.branch]);
+      return c.json({ page: updated });
+    }
+  )
+  .delete("/:id/pages/:pageId", async (c) => {
+    const projectId = c.req.param("id");
+    const pageId = c.req.param("pageId");
+    const userId = c.get("userId");
+    const db = c.get("db");
+
+    const member = await db.userToProject.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      select: { id: true },
+    });
+    if (!member) return c.json({ error: "Unauthorized" }, 403);
+
+    const page = await db.wikiPage.findFirst({
+      where: { id: pageId, projectId },
+    });
+    if (!page) return c.json({ error: "Page not found" }, 404);
+
+    await db.wikiPage.delete({ where: { id: pageId } });
+    await purgeWikiCache(projectId, [page.slug], [page.branch]);
+    return c.json({ success: true, deletedId: pageId });
   })
   .get("/:id/file", async (c) => {
     const projectId = c.req.param("id");

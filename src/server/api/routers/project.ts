@@ -1,4 +1,4 @@
-import { getPullRequestsForProject } from "~/lib/github";
+import { getPullRequestsForProject, getRepoGithubDetails, decryptProjectToken } from "~/lib/github";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -27,7 +27,21 @@ export const projectRouter = createTRPCRouter({
         _count: { select: { wikiPages: true } },
       },
     });
-    return projects.map(withoutProjectSecrets);
+
+    const enriched = await Promise.all(
+      projects.map(async (p) => {
+        const token = await decryptProjectToken(p).catch(() => null);
+        const meta = await getRepoGithubDetails(p.repoOwner, p.repoName, token);
+        return {
+          ...withoutProjectSecrets(p),
+          description: meta.description,
+          stars: meta.stars,
+          language: meta.language,
+        };
+      })
+    );
+
+    return enriched;
   }),
 
   getCommits: protectedProcedure
@@ -469,4 +483,3 @@ export const projectRouter = createTRPCRouter({
       return withoutProjectSecrets(project);
     }),
 });
-

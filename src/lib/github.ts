@@ -38,7 +38,7 @@ export function parseRepoUrl(repoUrl: string): RepoCoordinates {
       const parts = url.pathname.split('/').filter(Boolean);
       if (parts.length !== 2) throw new Error('not a repo path');
       owner = parts[0];
-      repo = parts[1]?.replace(/\.git$/i, '');
+      repo = parts[1]?.replace(/\\.git$/i, '');
     } catch {
       throw new GitHubAccessError(
         'NOT_FOUND',
@@ -48,7 +48,7 @@ export function parseRepoUrl(repoUrl: string): RepoCoordinates {
   }
 
   const validSegment = (value: string) =>
-    value.length <= 100 && /^[A-Za-z0-9_.-]+$/.test(value) && !/^\.+$/.test(value);
+    value.length <= 100 && /^[A-Za-z0-9_.-]+$/.test(value) && !/^\\.+$/.test(value);
 
   if (!owner || !repo || !validSegment(owner) || !validSegment(repo)) {
     throw new GitHubAccessError(
@@ -508,3 +508,54 @@ export const getPullRequestsForProject = async (
   const { repoUrl, githubToken } = await fetchProjectGithubDetails(projectId);
   return getPullRequests(repoUrl, githubToken);
 };
+
+export interface RepoGithubDetails {
+  description: string | null;
+  stars: number;
+  language: string | null;
+}
+
+const repoGithubDetailsCache = new Map<string, { data: RepoGithubDetails; expiresAt: number }>();
+
+export async function getRepoGithubDetails(
+  owner: string,
+  repo: string,
+  token?: string | null
+): Promise<RepoGithubDetails> {
+  const key = `${owner.toLowerCase()}/${repo.toLowerCase()}`;
+  const now = Date.now();
+  const cached = repoGithubDetailsCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
+  }
+
+  const client = getOctokit(token);
+  try {
+    const { data } = await client.rest.repos.get({ owner, repo });
+    const result: RepoGithubDetails = {
+      description: data.description ?? null,
+      stars: data.stargazers_count ?? 0,
+      language: data.language ?? null,
+    };
+    repoGithubDetailsCache.set(key, { data: result, expiresAt: now + 5 * 60 * 1000 });
+    return result;
+  } catch {
+    try {
+      const publicClient = getOctokit();
+      const { data } = await publicClient.rest.repos.get({ owner, repo });
+      const result: RepoGithubDetails = {
+        description: data.description ?? null,
+        stars: data.stargazers_count ?? 0,
+        language: data.language ?? null,
+      };
+      repoGithubDetailsCache.set(key, { data: result, expiresAt: now + 5 * 60 * 1000 });
+      return result;
+    } catch {
+      return {
+        description: null,
+        stars: 0,
+        language: null,
+      };
+    }
+  }
+}

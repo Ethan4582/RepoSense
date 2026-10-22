@@ -57,11 +57,12 @@ import { cn } from '~/lib/utils';
 import { toast } from 'sonner';
 
 const NAV_ITEMS = [
-  { title: 'Explore Public Wikis', icon: Compass, url: '/explore' },
+  { title: 'Dashboard', icon: Compass, url: '/dashboard' },
+  { title: 'Public Wikis', icon: Globe2, url: '/explore' },
   { title: 'New Repository', icon: FolderGit2, url: '/create' },
   { title: 'Pull Requests', icon: GitPullRequest, url: '/pulls' },
   { title: 'Meetings', icon: Video, url: '/meetings' },
-  { title: 'API Keys & Models', icon: KeyRound, url: '/settings' },
+  { title: 'API Keys', icon: KeyRound, url: '/settings' },
 ];
 
 type ProjectSummary = {
@@ -434,7 +435,7 @@ export function AppSideBar() {
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
               >
                 <KeyRound className="size-3.5 text-muted-foreground" />
-                <span>API keys & models</span>
+                <span>API keys</span>
               </button>
             </div>
 

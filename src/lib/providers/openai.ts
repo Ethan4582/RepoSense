@@ -42,7 +42,13 @@ export function getEmbeddingModel(
   apiKey: string
 ): OpenAIEmbeddingModel {
   const client = getOpenAIClient(apiKey);
-  return client.textEmbeddingModel(modelId);
+  const model = client.textEmbeddingModel(modelId);
+  return new Proxy(model, {
+    get(target, prop, receiver) {
+      if (prop === 'specificationVersion') return 'v1';
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }
 
 /**

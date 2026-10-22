@@ -1,15 +1,11 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
-// import { PrismaClient } from "@prisma/client";
 import { db } from "~/server/db";
-// export const db = new PrismaClient();
 
 export default async function SyncUserPage() {
- 
   const authResult = (await auth()) as { userId?: string | null };
   const { userId } = authResult;
 
-  
   if (!userId) {
     throw new Error("User is not found");
   }
@@ -32,25 +28,36 @@ export default async function SyncUserPage() {
   }
 
   await db.user.upsert({
-      where: {
-        emailAddress: user.emailAddresses[0]?.emailAddress ?? "",
-      },
-      update: {
-        imageUrl: user.imageUrl,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-      create: {
-        id: user.id,
-        emailAddress: user.emailAddresses[0]?.emailAddress ?? "",
-        imageUrl: user.imageUrl,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        defaultChatProvider: "OPENAI",
-        defaultChatModel: "gpt-4o",
-        defaultEmbeddingProvider: "OPENAI",
-      },
-    });
+    where: {
+      emailAddress: user.emailAddresses[0]?.emailAddress ?? "",
+    },
+    update: {
+      imageUrl: user.imageUrl,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    },
+    create: {
+      id: user.id,
+      emailAddress: user.emailAddresses[0]?.emailAddress ?? "",
+      imageUrl: user.imageUrl,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      defaultChatProvider: "OPENAI",
+      defaultChatModel: "gpt-4o",
+      defaultEmbeddingProvider: "OPENAI",
+    },
+  });
+
+  const projectCount = await db.project.count({
+    where: {
+      userToProjects: { some: { userId: user.id } },
+      deletedAt: null,
+    },
+  });
+
+  if (projectCount === 0) {
+    return redirect("/create");
+  }
 
   return redirect("/dashboard");
 }

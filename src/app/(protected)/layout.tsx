@@ -1,4 +1,7 @@
+'use client';
+
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { SidebarProvider } from "~/components/ui/sidebar";
 import { AppSideBar } from "../app-sidebar";
 
@@ -7,6 +10,17 @@ type Props = {
 };
 
 export default function SideBarLayout({ children }: Props) {
+  const pathname = usePathname();
+  const isDashboard = pathname === '/dashboard';
+
+  if (isDashboard) {
+    return (
+      <div className="min-h-screen w-full bg-background flex flex-col">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">

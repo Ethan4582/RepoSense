@@ -689,34 +689,36 @@ export function WikiReader() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* ── Header ── */}
       <header
-        className="flex h-[96px] shrink-0 items-center justify-between border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-[clamp(20px,5vw,77px)]"
+        className="relative flex h-[64px] shrink-0 items-center justify-between border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-[clamp(20px,5vw,77px)]"
       >
-        <div className="flex w-full items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Link href="/" className="flex items-center gap-2.5 shrink-0">
-              <img src="/logo.png" alt="RepoSense" className="size-7 rounded-md object-contain" />
-              <span className="text-[20px] font-medium tracking-tight text-foreground">
+        <div className="flex h-full w-full items-center justify-between border-x border-dashed border-neutral-300 dark:border-neutral-700/80 px-7">
+          {/* Left brand segment */}
+          <div className="flex items-center gap-2.5">
+            <Link href="/" className="flex items-center gap-2 shrink-0">
+              <img src="/logo.png" alt="RepoSense" className="size-6 rounded-md object-contain" />
+              <span className="text-[17px] font-semibold tracking-tight text-foreground">
                 RepoSense
               </span>
             </Link>
-            <span className="text-muted-foreground/40">/</span>
+            <span className="text-muted-foreground/30 font-light">/</span>
             <a
               href={project.repoUrl}
               target="_blank"
               rel="noreferrer"
-              className="truncate text-[20px] font-normal text-muted-foreground transition-colors hover:text-foreground"
+              className="truncate text-[15px] font-normal text-muted-foreground transition-colors hover:text-foreground"
             >
-              {project.repoOwner}/{project.repoName}
+              {project.repoName}
             </a>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2.5">
+          {/* Right actions segment */}
+          <div className="flex items-center gap-2.5">
             {project.isOwner && isSignedIn ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsEditing(!isEditing)}
-                className="h-9 rounded-[8px] border-border/60 px-3.5 text-[13px] font-medium text-foreground hover:bg-muted/40"
+                className="h-8 rounded-[8px] border-border/60 px-3 text-xs font-medium text-foreground hover:bg-muted/40"
               >
                 <Pencil className="mr-1.5 size-3.5" />
                 <span>{isEditing ? 'Reading Mode' : 'Edit Wiki'}</span>
@@ -726,7 +728,7 @@ export function WikiReader() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 rounded-[8px] border-border/60 px-3.5 text-[13px] font-medium text-foreground hover:bg-muted/40"
+                className="h-8 rounded-[8px] border-border/60 px-3 text-xs font-medium text-foreground hover:bg-muted/40"
               >
                 <GitPullRequest className="mr-1.5 size-3.5" />
                 <span className="hidden sm:inline">Pull Requests</span>
@@ -736,7 +738,7 @@ export function WikiReader() {
               <PopoverTrigger asChild>
                 <Button
                   size="sm"
-                  className="h-9 rounded-[8px] border-none bg-[#2563eb] px-4 text-[13px] font-medium text-white shadow-xs hover:bg-[#1d4ed8] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb]"
+                  className="h-8 rounded-[8px] border-none bg-[#2563eb] px-3.5 text-xs font-medium text-white shadow-xs hover:bg-[#1d4ed8] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb]"
                 >
                   <Share2 className="mr-1.5 size-3.5" />
                   <span>Share</span>
@@ -799,7 +801,7 @@ export function WikiReader() {
             </Popover>
             <button
               type="button"
-              className="inline-flex size-9 items-center justify-center rounded-[8px] border border-border/60 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+              className="inline-flex size-8 items-center justify-center rounded-[8px] border border-border/60 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
               title="Toggle theme"
               onClick={() => {
                 const isDark = document.documentElement.classList.toggle('dark');
@@ -835,9 +837,9 @@ export function WikiReader() {
       <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-[clamp(20px,5vw,77px)]">
         <div className="flex min-h-0 w-full flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
 
-          {/* Left column: Wiki Navigation (300px to 320px wide, 28px padding, scrolls independently) */}
+          {/* Left column: Wiki Navigation with matching border intersecting the header line */}
           {!qaOpen ? (
-            <aside className="scrollbar-none z-10 hidden w-[clamp(280px,22vw,320px)] shrink-0 overflow-y-auto px-7 py-8 md:block">
+            <aside className="scrollbar-none z-10 hidden w-[300px] shrink-0 overflow-y-auto border-r border-dashed border-neutral-300 dark:border-neutral-700/80 px-7 py-7 md:block">
               <div className="mb-5">
                 <div className="text-[12px] font-normal text-muted-foreground">
                   {activePage?.updatedAt
@@ -1098,10 +1100,10 @@ export function WikiReader() {
                   </div>
                 </div>
 
-                {/* Right "On this page" panel: 280px to 300px wide, 24px inner padding, sticky, no border, no card, no left line */}
+                {/* Right "On this page" panel: 280px wide with no left line */}
                 {displayHeadings.length >= 2 ? (
                   <aside
-                    className="scrollbar-none hidden w-[clamp(260px,18vw,300px)] shrink-0 overflow-y-auto p-6 min-[1100px]:block"
+                    className="scrollbar-none hidden w-[280px] shrink-0 overflow-y-auto p-6 min-[1100px]:block"
                   >
                     <div className="sticky top-6">
                       <div className="mb-4 text-[20px] font-bold text-foreground">

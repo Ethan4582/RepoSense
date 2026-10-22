@@ -111,6 +111,7 @@ export function WikiReader() {
   const searchParams = useSearchParams();
   const branchParam = searchParams.get('branch');
   const prParam = searchParams.get('pr');
+  const questionIdParam = searchParams.get('questionId');
   const { isSignedIn } = useUser();
 
   const [project, setProject] = React.useState<WikiProject | null>(null);
@@ -150,8 +151,51 @@ export function WikiReader() {
   const smoothStream = useSmoothStream();
 
   React.useEffect(() => {
-    if (qaOpen) setAnswer(smoothStream.text);
-  }, [qaOpen, smoothStream.text]);
+    if (qaOpen && streaming) setAnswer(smoothStream.text);
+  }, [qaOpen, streaming, smoothStream.text]);
+
+  React.useEffect(() => {
+    if (!questionIdParam || !projectId) return;
+
+    fetch(`/api/projects/${projectId}/questions/${questionIdParam}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          question?: {
+            id: string;
+            question: string;
+            answers: string;
+            fileReference?: unknown;
+          };
+        };
+        if (data.question) {
+          setQaOpen(true);
+          setQaQuestion(data.question.question);
+          setAnswer(data.question.answers);
+          setStreaming(false);
+          setThreadId(data.question.id);
+
+          const rawRef = data.question.fileReference;
+          let parsedScans: Array<{ filePath: string; startLine: number; endLine: number }> = [];
+          if (Array.isArray(rawRef)) {
+            parsedScans = rawRef.map((f: { fileName?: string; sourceCode?: string }) => ({
+              filePath: f.fileName ?? '',
+              startLine: 1,
+              endLine: 1,
+            })).filter((f) => Boolean(f.filePath));
+          } else if (rawRef && typeof rawRef === 'object' && Array.isArray((rawRef as { citations?: Array<{ fileName?: string }> }).citations)) {
+            parsedScans = (rawRef as { citations: Array<{ fileName?: string }> }).citations
+              .map((f) => ({ filePath: f.fileName ?? '', startLine: 1, endLine: 1 }))
+              .filter((f) => Boolean(f.filePath));
+          }
+          if (parsedScans.length > 0) {
+            setScanning(parsedScans);
+            setActiveFile({ filePath: parsedScans[0]!.filePath, startLine: parsedScans[0]!.startLine, endLine: parsedScans[0]!.endLine });
+          }
+        }
+      })
+      .catch(() => {});
+  }, [questionIdParam, projectId]);
 
   React.useEffect(() => {
     if (project?.chatModel) {

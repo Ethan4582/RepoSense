@@ -203,7 +203,7 @@ export const indexingRoutes = new Hono<AuthContext>()
         userId,
         step: inlineStepRunner,
         db,
-      }).catch((err) => console.error("[indexing] inline run failed:", err));
+      }).catch(() => {});
     }
 
     return c.json({ job });

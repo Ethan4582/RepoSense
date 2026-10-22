@@ -27,6 +27,16 @@ interface WikiQaViewProps {
   onCitation: (target: CitationTarget) => void;
   onSelectFile: (file: ActiveFile | null) => void;
   answerEndRef: React.RefObject<HTMLDivElement | null>;
+  composerProps?: {
+    question: string;
+    onQuestionChange: (value: string) => void;
+    onSubmit: () => void;
+    streaming: boolean;
+    repoName: string;
+    selectedModel: string;
+    onModelSelect: (modelId: string) => void;
+    availableKeys?: string[];
+  };
 }
 
 export function WikiQaView({
@@ -207,87 +217,51 @@ export function WikiQaView({
         </div>
       </section>
 
-      {/* Right Pane: Multi-file Context & Independent Excerpt Scroller */}
-      <section className="flex min-h-0 flex-col overflow-hidden bg-muted/5 p-4 pb-36 md:p-6">
-        {activeFile ? (
-          <div className="flex h-full min-h-0 flex-col space-y-3">
-            {/* Multi-file switcher tabs if multiple files exist */}
-            {citedFiles.length > 1 ? (
-              <div className="scrollbar-none flex items-center gap-1.5 overflow-x-auto pb-1">
-                {citedFiles.map((f) => {
-                  const isCurrent = f.filePath === activeFile.filePath;
-                  return (
-                    <button
-                      key={f.filePath}
-                      type="button"
-                      onClick={() => onSelectFile(f)}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
-                        isCurrent
-                          ? 'border-primary/50 bg-background font-medium text-primary shadow-xs'
-                          : 'border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                      }`}
-                    >
-                      <FileCode2 className="size-3" />
-                      <span className="truncate max-w-[140px]">{f.filePath.split('/').pop()}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            <div className="min-h-0 flex-1">
-              <CodeViewer
-                projectId={projectId}
-                branch={activeBranch}
-                file={activeFile}
-                onClose={() => onSelectFile(null)}
-                className="h-full rounded-xl border border-border/60 bg-background shadow-xs"
-              />
+      {/* Right Pane: Multi-file Context & Vertically Stacked Excerpt Panels */}
+      <section className="scrollbar-none flex min-h-0 flex-col overflow-y-auto bg-muted/5 p-4 pb-36 md:p-6">
+        {citedFiles.length > 0 ? (
+          <div className="flex flex-col space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[13px] font-semibold text-foreground">
+                Referenced Sources ({citedFiles.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Click headers to collapse/expand
+              </span>
             </div>
+
+            {/* Vertically stacked full-width panels */}
+            {citedFiles.map((f, idx) => {
+              const isSelected = activeFile ? activeFile.filePath === f.filePath : idx === 0;
+              return (
+                <CodeViewer
+                  key={f.filePath}
+                  projectId={projectId}
+                  branch={activeBranch}
+                  file={{
+                    filePath: f.filePath,
+                    startLine: f.startLine ?? (activeFile?.filePath === f.filePath ? activeFile.startLine : undefined),
+                    endLine: f.endLine ?? (activeFile?.filePath === f.filePath ? activeFile.endLine : undefined),
+                  }}
+                  collapsible
+                  defaultExpanded={isSelected}
+                  className="w-full"
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-xl border border-border/60 bg-background p-5 shadow-xs">
-              <div className="mb-3 text-[12px] font-semibold text-foreground">
-                Referenced Source Files
+            <div className="w-full max-w-md rounded-xl border border-border/50 bg-background/60 p-6 text-center shadow-xs">
+              <FileCode2 className="mx-auto mb-2.5 size-7 text-muted-foreground/50" />
+              <div className="text-[13px] font-semibold text-foreground">
+                No Referenced Source Files
               </div>
-              {citedFiles.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-8 text-center text-xs text-muted-foreground">
-                  {streaming ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin text-primary" />
-                      <span>Scanning codebase for citations...</span>
-                    </>
-                  ) : (
-                    <span>No citations referenced in this answer.</span>
-                  )}
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {citedFiles.map((file) => (
-                    <button
-                      key={file.filePath}
-                      type="button"
-                      onClick={() => onSelectFile(file)}
-                      className="group flex w-full items-center justify-between gap-2.5 py-2.5 text-left text-xs transition-colors hover:text-primary"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <FileCode2 className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-                        <span className="truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground">
-                          {file.filePath}
-                        </span>
-                      </div>
-                      {file.startLine ? (
-                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                          L{file.startLine}{file.endLine && file.endLine !== file.startLine ? `-${file.endLine}` : ''}
-                        </span>
-                      ) : (
-                        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {streaming
+                  ? 'Scanning codebase for citations...'
+                  : 'No specific source lines were cited for this answer.'}
+              </p>
             </div>
           </div>
         )}

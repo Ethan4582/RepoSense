@@ -299,6 +299,38 @@ export const questionsRoutes = new Hono<AuthContext>()
 
     return c.json({ questions });
   })
+  .get("/:id/questions/:questionId", async (c) => {
+    const projectId = c.req.param("id");
+    const questionId = c.req.param("questionId");
+    const db = c.get("db");
+    const userId = c.get("userId");
+
+    const project = await db.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+      select: { id: true, isPublicWiki: true },
+    });
+    if (!project) return c.json({ error: "Project not found" }, 404);
+
+    if (!project.isPublicWiki) {
+      const member = await db.userToProject.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: "Project not found" }, 404);
+    }
+
+    const question = await db.question.findFirst({
+      where: { id: questionId, projectId },
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, imageUrl: true },
+        },
+      },
+    });
+
+    if (!question) return c.json({ error: "Question not found" }, 404);
+    return c.json({ question });
+  })
   .post(
     "/:id/questions",
     zValidator(
@@ -362,6 +394,7 @@ export const questionsRoutes = new Hono<AuthContext>()
               question,
               answers,
               fileReference: storedReference,
+              isBookmarked: true,
             },
           })
         : await db.question.create({
@@ -372,6 +405,7 @@ export const questionsRoutes = new Hono<AuthContext>()
               projectId,
               userId,
               branch,
+              isBookmarked: true,
             },
           });
 

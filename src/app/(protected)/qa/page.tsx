@@ -103,16 +103,16 @@ export default function QaBookmarksPage() {
   const activeInspectorFile = inspectorFiles[activeFileIndex] ?? null;
 
   return (
-    <div className="flex flex-col h-full w-full max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
+    <div className="flex flex-col h-full w-full px-6 py-8 md:px-12 lg:px-16 space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
             <Bookmark className="size-6 text-primary fill-primary/20" />
             QA Bookmarks Vault
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Searchable knowledge base of bookmarked inquiries and code citations
+            Searchable knowledge base of saved inquiries and code citations
             {project && selectedProjectFilter !== 'all' ? (
               <>
                 {' for '}
@@ -124,83 +124,90 @@ export default function QaBookmarksPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Repository Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Repository:</span>
-            <Select
-              value={selectedProjectFilter}
-              onValueChange={(val) => {
-                setSelectedProjectFilter(val);
-                if (val !== 'all') {
-                  setProjectId(val);
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 min-w-[180px] max-w-[260px] text-xs gap-2 border-border/80 bg-background">
-                <FolderGit2 className="size-3.5 text-primary shrink-0" />
-                <SelectValue placeholder="All Repositories" />
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="all" className="text-xs font-medium">
-                  All Repositories
+        {/* Repository Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Repository:</span>
+          <Select
+            value={selectedProjectFilter}
+            onValueChange={(val) => {
+              setSelectedProjectFilter(val);
+              if (val !== 'all') {
+                setProjectId(val);
+              }
+            }}
+          >
+            <SelectTrigger className="h-9 min-w-[200px] text-xs gap-2 border-border/80 bg-background">
+              <FolderGit2 className="size-3.5 text-primary shrink-0" />
+              <SelectValue placeholder="All Repositories" />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="all" className="text-xs font-medium">
+                All Repositories
+              </SelectItem>
+              {projects?.map((p) => (
+                <SelectItem key={p.id} value={p.id} className="text-xs">
+                  <span className="font-medium truncate">{p.name}</span>
                 </SelectItem>
-                {projects?.map((p) => (
-                  <SelectItem key={p.id} value={p.id} className="text-xs">
-                    <span className="font-medium truncate">{p.name}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Real-time search */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search saved answers & files..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-xs bg-muted/20"
-            />
-          </div>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Bookmarks Document List */}
-      <div className="rounded-xl border bg-card overflow-hidden shadow-xs">
-        <div className="border-b bg-muted/20 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          <span>Saved Inquiries ({bookmarks?.length ?? 0})</span>
-        </div>
+      {/* Prominent Wide Search Bar */}
+      <div className="relative w-full">
+        <Search className="absolute left-3.5 top-3.5 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Search saved answers, code citations, and questions..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10 h-11 text-sm bg-muted/20 border-border/70 rounded-lg shadow-xs"
+        />
+      </div>
 
+      {/* Saved Inquiries Header */}
+      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-1">
+        <span>Saved Inquiries ({bookmarks?.length ?? 0})</span>
+      </div>
+
+      {/* Bookmarks List */}
+      <div className="w-full">
         {isLoading ? (
-          <div className="p-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+          <div className="py-20 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
             <Sparkles className="size-5 text-primary animate-spin" />
             <span>Searching bookmarked questions...</span>
           </div>
         ) : !bookmarks || bookmarks.length === 0 ? (
-          <div className="p-12 text-center text-xs text-muted-foreground space-y-3">
+          <div className="py-20 text-center text-xs text-muted-foreground space-y-3">
             <Bookmark className="size-8 mx-auto text-muted-foreground/30" />
-            <p className="font-medium text-foreground">
+            <p className="font-medium text-foreground text-sm">
               {search ? 'No matching bookmarks found.' : 'No bookmarked Q&As yet.'}
             </p>
-            <p className="text-[11px] max-w-sm mx-auto leading-relaxed">
+            <p className="text-xs max-w-sm mx-auto leading-relaxed">
               When chatting with the AI assistant in Chat & Discussions, click &quot;Save to QA History&quot; on any answer to bookmark key inquiries and code citations here.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border/60">
             {bookmarks.map((b) => {
               const fileRefs = getCitationFiles(b.fileReference);
               const repoUrl = (b as unknown as { project?: { repoUrl?: string } }).project?.repoUrl ?? project?.repoUrl;
+              const targetProjectId = b.projectId || projectId;
 
               return (
                 <div
                   key={b.id}
-                  className="p-5 hover:bg-muted/30 transition-colors space-y-3"
+                  className="py-5 hover:bg-muted/15 transition-colors space-y-3"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1 flex-1 min-w-0">
+                    <div
+                      className="space-y-1 flex-1 min-w-0 cursor-pointer group"
+                      onClick={() => {
+                        if (targetProjectId) {
+                          router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);
+                        }
+                      }}
+                    >
                       <div className="flex items-center gap-2 flex-wrap">
                         {b.isPinned && (
                           <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/20 bg-amber-500/10 text-amber-600">
@@ -208,7 +215,7 @@ export default function QaBookmarksPage() {
                             Pinned
                           </Badge>
                         )}
-                        <h3 className="font-semibold text-sm text-foreground">
+                        <h3 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors">
                           {b.question}
                         </h3>
 
@@ -240,20 +247,25 @@ export default function QaBookmarksPage() {
                     </div>
 
                     {/* Quick Actions */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/dashboard?threadId=${b.id}`)}
-                        className="h-7 text-xs px-2.5"
+                        onClick={() => {
+                          if (targetProjectId) {
+                            router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);
+                          }
+                        }}
+                        className="h-8 text-xs px-3 gap-1"
                       >
-                        Jump to Chat
+                        <span>Open Instance</span>
+                        <ExternalLink className="size-3 text-muted-foreground" />
                       </Button>
 
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7 text-muted-foreground hover:text-foreground"
+                        className="size-8 text-muted-foreground hover:text-foreground"
                         title="Copy Answer"
                         onClick={() => {
                           void navigator.clipboard.writeText(b.answers);
@@ -266,7 +278,7 @@ export default function QaBookmarksPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7 text-muted-foreground hover:text-destructive"
+                        className="size-8 text-muted-foreground hover:text-destructive"
                         title="Remove Bookmark"
                         onClick={() => toggleBookmarkMutation.mutate({ questionId: b.id })}
                       >
@@ -276,7 +288,14 @@ export default function QaBookmarksPage() {
                   </div>
 
                   {/* Answer Preview */}
-                  <div className="rounded-lg border bg-muted/20 p-3 text-xs text-foreground prose prose-sm dark:prose-invert max-w-none">
+                  <div
+                    className="rounded-lg border border-border/50 bg-muted/15 p-4 text-xs text-foreground prose prose-sm dark:prose-invert max-w-none cursor-pointer"
+                    onClick={() => {
+                      if (targetProjectId) {
+                        router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);
+                      }
+                    }}
+                  >
                     <MDEditor.Markdown source={b.answers} />
                   </div>
 
@@ -292,10 +311,10 @@ export default function QaBookmarksPage() {
                           key={idx}
                           type="button"
                           onClick={() => openInspector(fileRefs, idx, repoUrl)}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border bg-background hover:bg-muted text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-border/60 bg-background hover:bg-muted text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                         >
                           <Code2 className="size-2.5" />
-                          <span className="truncate max-w-[150px]">{ref.fileName}</span>
+                          <span className="truncate max-w-[200px]">{ref.fileName}</span>
                         </button>
                       ))}
                     </div>

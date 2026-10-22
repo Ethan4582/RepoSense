@@ -104,7 +104,7 @@ function branchFromRepoUrl(url: string): string | undefined {
   }
 }
 
-export default function CreateProjectPage() {
+function CreateProjectContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const repoParam = searchParams.get('repo');
@@ -725,5 +725,13 @@ export default function CreateProjectPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+export default function CreateProjectPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <CreateProjectContent />
+    </React.Suspense>
   );
 }

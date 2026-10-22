@@ -60,8 +60,7 @@ export async function POST(req: NextRequest) {
             success: true, 
             meeting: updatedMeeting 
         });
-    } catch (error) {
-        console.error(error)
+    } catch {
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

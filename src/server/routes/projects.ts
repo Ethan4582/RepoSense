@@ -320,10 +320,10 @@ export const projectsRoutes = new Hono<AuthContext>()
             userId,
             step: inlineStepRunner,
             db,
-          }).catch((err) => console.error("[projects] inline indexing failed:", err));
+          }).catch(() => {});
         }
-      } catch (err) {
-        console.warn("[projects] indexing deferred:", err instanceof Error ? err.message : err);
+      } catch {
+        // Indexing deferred
       }
 
       return c.json({ project: withoutProjectSecrets(project), indexingJobId }, 201);

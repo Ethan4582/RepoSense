@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useUser, useClerk } from '@clerk/nextjs';
 import {
   ArrowRight,
+  Bookmark,
   BookOpen,
   Check,
   Compass,
@@ -78,7 +79,7 @@ import { toast } from 'sonner';
 const NAV_ITEMS = [
   { title: 'Dashboard', icon: Compass, url: '/dashboard' },
   { title: 'Public Wikis', icon: Globe2, url: '/explore' },
-  { title: 'New Repository', icon: FolderGit2, url: '/create' },
+  { title: 'QA', icon: Bookmark, url: '/qa' },
   { title: 'Pull Requests', icon: GitPullRequest, url: '/pulls' },
   { title: 'Meetings', icon: Video, url: '/meetings' },
   { title: 'API Keys', icon: KeyRound, url: '/settings' },

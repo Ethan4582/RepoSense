@@ -92,8 +92,7 @@ export const projectRouter = createTRPCRouter({
         return allPrs.sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-      } catch (err) {
-        console.error("Failed to fetch pull requests:", err);
+      } catch {
         return [];
       }
     }),

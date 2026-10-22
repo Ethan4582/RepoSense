@@ -184,6 +184,11 @@
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
+/* Suppress Mermaid default global error popups/bombs */
+[id^="dmermaid"], svg[aria-roledescription="error"] {
+  display: none !important;
+}
+
 @keyframes indexing-cube-wave {
   0%, 100% { transform: translate3d(0, 0, 0); }
   45% { transform: translate3d(0, -16px, 0); }

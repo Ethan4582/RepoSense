@@ -60,8 +60,7 @@ Please summarise the following diff file: \n\n${diff}`
       }]
     });
     return response.response.text();
-  } catch (error) {
-    console.error("Commit summarization failed:", error instanceof Error ? error.message : error);
+  } catch {
     return "Failed to generate summary";
   }
 };
@@ -84,8 +83,7 @@ Please give a concise summary less than 100 words.`
       }]
     });
     return response.response.text();
-  } catch (error) {
-    console.error("Gemini code summarization failed:", error instanceof Error ? error.message : error);
+  } catch {
     return `Failed to summarize: ${doc.metadata.source}`;
   }
 }

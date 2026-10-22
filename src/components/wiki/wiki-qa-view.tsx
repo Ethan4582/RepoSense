@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { WikiMarkdown, type CitationTarget } from './markdown';
 import { CodeViewer, type ActiveFile } from './code-viewer';
 import { getModelInfo } from '~/lib/providers/catalog';
+import Link from 'next/link';
 import { IndexingLoader } from '~/components/indexing-loader';
 import { WikiComposer } from './wiki-composer';
 
@@ -216,6 +217,25 @@ export function WikiQaView({
 
           <div ref={answerEndRef} />
         </div>
+
+        {/* Floating Chat Bar docked in the middle bottom of the QA panel */}
+        {composerProps ? (
+          <div className="pointer-events-none sticky bottom-4 left-0 right-0 z-30 mt-8 flex justify-center">
+            <div className="pointer-events-auto w-full max-w-[680px]">
+              <WikiComposer
+                question={composerProps.question}
+                onQuestionChange={composerProps.onQuestionChange}
+                onSubmit={composerProps.onSubmit}
+                streaming={composerProps.streaming}
+                repoName={composerProps.repoName}
+                selectedModel={composerProps.selectedModel}
+                onModelSelect={composerProps.onModelSelect}
+                availableKeys={composerProps.availableKeys}
+                placeholder="Ask a follow-up question..."
+              />
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {/* Right Pane: Multi-file Context & Vertically Stacked Excerpt Panels */}

@@ -7,23 +7,17 @@ import {
   Bookmark,
   Search,
   Calendar,
-  FileCode,
   Sparkles,
   ExternalLink,
   Copy,
   Trash2,
   Pin,
-  Code2,
   FolderGit2,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import MDEditor from '@uiw/react-md-editor';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '~/components/ui/sheet';
+import { WikiMarkdown } from '~/components/wiki/markdown';
 import {
   Select,
   SelectContent,
@@ -36,24 +30,6 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import useProject from '~/hooks/use-project';
 import { api } from '~/trpc/react';
-
-type CitationFile = {
-  fileName: string;
-  sourceCode: string;
-  summary: string;
-};
-
-function getCitationFiles(reference: unknown): CitationFile[] {
-  if (Array.isArray(reference)) return reference as CitationFile[];
-  if (
-    reference &&
-    typeof reference === 'object' &&
-    Array.isArray((reference as { citations?: unknown }).citations)
-  ) {
-    return (reference as { citations: CitationFile[] }).citations;
-  }
-  return [];
-}
 
 export default function QaBookmarksPage() {
   const router = useRouter();
@@ -69,11 +45,18 @@ export default function QaBookmarksPage() {
 
   const queryProjectId = selectedProjectFilter === 'all' ? undefined : selectedProjectFilter;
 
-  // Inspector state
-  const [inspectorOpen, setInspectorOpen] = React.useState(false);
-  const [inspectorFiles, setInspectorFiles] = React.useState<CitationFile[]>([]);
-  const [activeFileIndex, setActiveFileIndex] = React.useState(0);
-  const [activeRepoUrl, setActiveRepoUrl] = React.useState<string | undefined>(undefined);
+  // Dropdown accordion state: store expanded question IDs
+  const [expandedQuestionIds, setExpandedQuestionIds] = React.useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setExpandedQuestionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const {
     data: bookmarks,
@@ -91,16 +74,6 @@ export default function QaBookmarksPage() {
     },
     onError: () => toast.error('Failed to remove bookmark'),
   });
-
-  const openInspector = (refs: CitationFile[], index = 0, repoUrl?: string) => {
-    if (!refs || refs.length === 0) return;
-    setInspectorFiles(refs);
-    setActiveFileIndex(index);
-    setActiveRepoUrl(repoUrl ?? project?.repoUrl);
-    setInspectorOpen(true);
-  };
-
-  const activeInspectorFile = inspectorFiles[activeFileIndex] ?? null;
 
   return (
     <div className="flex flex-col h-full w-full px-6 py-8 md:px-12 lg:px-16 space-y-6">
@@ -190,32 +163,51 @@ export default function QaBookmarksPage() {
         ) : (
           <div className="divide-y divide-border/60">
             {bookmarks.map((b) => {
-              const fileRefs = getCitationFiles(b.fileReference);
               const repoUrl = (b as unknown as { project?: { repoUrl?: string } }).project?.repoUrl ?? project?.repoUrl;
               const targetProjectId = b.projectId || projectId;
+              const isExpanded = expandedQuestionIds.has(b.id);
+
+              // Parse repoOwner and repoName from project or repoUrl
+              let repoOwner = (b as unknown as { project?: { repoOwner?: string } }).project?.repoOwner ?? '';
+              let repoName = (b as unknown as { project?: { repoName?: string } }).project?.repoName ?? '';
+              if (!repoOwner && repoUrl) {
+                const parts = repoUrl.replace(/\.git$/, '').split('/');
+                repoName = parts.pop() ?? '';
+                repoOwner = parts.pop() ?? '';
+              }
 
               return (
                 <div
                   key={b.id}
-                  className="py-5 hover:bg-muted/15 transition-colors space-y-3"
+                  className="py-4 hover:bg-muted/10 transition-colors space-y-3"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div
-                      className="space-y-1 flex-1 min-w-0 cursor-pointer group"
-                      onClick={() => {
-                        if (targetProjectId) {
-                          router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);
-                        }
-                      }}
+                      className="space-y-1.5 flex-1 min-w-0 cursor-pointer select-none"
+                      onClick={(e) => toggleExpand(b.id, e)}
                     >
                       <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={(e) => toggleExpand(b.id, e)}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-sm"
+                          aria-label={isExpanded ? 'Collapse answer' : 'Expand answer'}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="size-4 text-foreground/80" />
+                          ) : (
+                            <ChevronRight className="size-4 text-muted-foreground" />
+                          )}
+                        </button>
+
                         {b.isPinned && (
                           <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/20 bg-amber-500/10 text-amber-600">
                             <Pin className="size-2.5 fill-amber-500/20" />
                             Pinned
                           </Badge>
                         )}
-                        <h3 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors">
+
+                        <h3 className="font-semibold text-base text-foreground hover:text-primary transition-colors">
                           {b.question}
                         </h3>
 
@@ -228,7 +220,7 @@ export default function QaBookmarksPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="size-3" />
                           {new Date(b.createdAt).toLocaleDateString([], {
@@ -287,36 +279,19 @@ export default function QaBookmarksPage() {
                     </div>
                   </div>
 
-                  {/* Answer Preview */}
-                  <div
-                    className="rounded-lg border border-border/50 bg-muted/15 p-4 text-xs text-foreground prose prose-sm dark:prose-invert max-w-none cursor-pointer"
-                    onClick={() => {
-                      if (targetProjectId) {
-                        router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);
-                      }
-                    }}
-                  >
-                    <MDEditor.Markdown source={b.answers} />
-                  </div>
-
-                  {/* 5-File Citation Strip */}
-                  {fileRefs.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mr-1">
-                        <FileCode className="size-3 text-primary" />
-                        Cited Files:
-                      </span>
-                      {fileRefs.slice(0, 5).map((ref, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => openInspector(fileRefs, idx, repoUrl)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-border/60 bg-background hover:bg-muted text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <Code2 className="size-2.5" />
-                          <span className="truncate max-w-[200px]">{ref.fileName}</span>
-                        </button>
-                      ))}
+                  {/* Collapsible Answer Accordion with Proper GitHub Citation Boxes */}
+                  {isExpanded && (
+                    <div className="ml-6 rounded-lg border border-border/50 bg-muted/15 p-5 text-sm text-foreground">
+                      <WikiMarkdown
+                        content={b.answers}
+                        githubRepo={repoOwner && repoName ? { owner: repoOwner, repo: repoName } : undefined}
+                        branch={b.branch ?? 'main'}
+                        onCitation={(target) => {
+                          if (targetProjectId) {
+                            router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);
+                          }
+                        }}
+                      />
                     </div>
                   )}
                 </div>
@@ -325,87 +300,6 @@ export default function QaBookmarksPage() {
           </div>
         )}
       </div>
-
-      {/* Slide-Over Code Inspector */}
-      <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
-        <SheetContent className="sm:max-w-2xl w-full p-0 flex flex-col h-full bg-card">
-          <SheetHeader className="px-6 py-4 border-b">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-sm font-semibold flex items-center gap-2 font-mono truncate">
-                <FileCode className="size-4 text-primary shrink-0" />
-                <span className="truncate">{activeInspectorFile?.fileName ?? 'File Inspector'}</span>
-              </SheetTitle>
-
-              {activeRepoUrl && activeInspectorFile && (
-                <Link
-                  href={`${activeRepoUrl.replace(/\.git$/, '')}/blob/main/${activeInspectorFile.fileName}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                >
-                  <span>Open on GitHub</span>
-                  <ExternalLink className="size-3" />
-                </Link>
-              )}
-            </div>
-
-            {inspectorFiles.length > 1 && (
-              <div className="flex items-center gap-1 pt-2 overflow-x-auto pb-1 scrollbar-none">
-                {inspectorFiles.map((f, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveFileIndex(idx)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-mono truncate max-w-[150px] transition-colors ${
-                      idx === activeFileIndex
-                        ? 'bg-primary text-primary-foreground font-semibold'
-                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
-                  >
-                    {f.fileName.split('/').pop()}
-                  </button>
-                ))}
-              </div>
-            )}
-          </SheetHeader>
-
-          {activeInspectorFile && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="rounded-lg border bg-muted/40 p-4 space-y-1.5">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="size-3.5 text-primary" />
-                  AI File Summary
-                </h4>
-                <p className="text-xs text-foreground leading-relaxed">
-                  {activeInspectorFile.summary}
-                </p>
-              </div>
-
-              <div className="rounded-lg border bg-muted/20 p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Source Code
-                  </h4>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(activeInspectorFile.sourceCode);
-                      toast.success('Code copied to clipboard');
-                    }}
-                  >
-                    <Copy className="size-3" />
-                    Copy
-                  </Button>
-                </div>
-                <pre className="max-h-[500px] overflow-auto rounded-md bg-muted p-3 text-xs font-mono text-foreground leading-relaxed whitespace-pre">
-                  <code>{activeInspectorFile.sourceCode}</code>
-                </pre>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

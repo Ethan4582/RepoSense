@@ -22,6 +22,8 @@ export interface MatchedChunk {
 export interface EmbeddingBatchOptions {
   db: PrismaClient;
   projectId: string;
+  branch: string;
+  commitSha: string;
   chunks: CodeChunk[];
   provider: EmbeddingProviderId;
   model: string;
@@ -31,7 +33,7 @@ export interface EmbeddingBatchOptions {
 const EMBED_BATCH_SIZE = 100;
 
 export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<number> {
-  const { db, projectId, chunks, provider, model, apiKey } = opts;
+  const { db, projectId, branch, commitSha, chunks, provider, model, apiKey } = opts;
   if (chunks.length === 0) return 0;
 
   const embeddingModel = getEmbeddingModel(provider, model, apiKey);
@@ -52,6 +54,8 @@ export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<
       data: batch.map((chunk, index) => ({
         id: ids[index]!,
         projectId,
+        branch,
+        commitSha,
         filePath: chunk.filePath,
         directory: chunk.directory,
         chunkIndex: chunk.chunkIndex,
@@ -82,11 +86,12 @@ export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<
 export async function searchCodeChunks(opts: {
   db: PrismaClient;
   projectId: string;
+  branch: string;
   provider: EmbeddingProviderId;
   embedding: number[];
   limit?: number;
 }): Promise<MatchedChunk[]> {
-  const { db, projectId, provider, embedding, limit = 12 } = opts;
+  const { db, projectId, branch, provider, embedding, limit = 12 } = opts;
   const column = EMBEDDING_COLUMNS[provider];
   const vector = `[${embedding.join(',')}]`;
 
@@ -95,11 +100,13 @@ export async function searchCodeChunks(opts: {
        1 - ("${column}" <=> $1::vector) AS similarity
      FROM "SourceCodeEmbedding"
      WHERE "projectId" = $2
+       AND "branch" = $3
        AND "${column}" IS NOT NULL
      ORDER BY "${column}" <=> $1::vector
-     LIMIT $3`,
+     LIMIT $4`,
     vector,
     projectId,
+    branch,
     limit
   );
 }
@@ -107,10 +114,16 @@ export async function searchCodeChunks(opts: {
 export async function getFullFileContent(
   db: PrismaClient,
   projectId: string,
-  filePath: string
+  filePath: string,
+  branch?: string | null
 ): Promise<string | null> {
   const row = await db.sourceCodeEmbedding.findFirst({
-    where: { projectId, filePath, chunkIndex: 0 },
+    where: {
+      projectId,
+      filePath,
+      chunkIndex: 0,
+      ...(branch ? { branch } : {}),
+    },
     select: { fullFileContent: true },
   });
   return row?.fullFileContent ?? null;

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AuthContext } from "../auth";
 import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { resolveProjectKeys } from "~/lib/providers/guard";
-import { GitHubAccessError, decryptProjectToken } from "~/lib/github";
+import { GitHubAccessError, decryptProjectToken, resolveRepoRef } from "~/lib/github";
 import { writesPaused } from "~/lib/emergency";
 
 export const indexingRoutes = new Hono<AuthContext>()
@@ -10,6 +10,7 @@ export const indexingRoutes = new Hono<AuthContext>()
     const db = c.get("db");
     const userId = c.get("userId");
     const projectId = c.req.param("id");
+    const branch = c.req.query("branch")?.trim();
 
     const member = await db.userToProject.findUnique({
       where: { userId_projectId: { userId, projectId } },
@@ -18,7 +19,7 @@ export const indexingRoutes = new Hono<AuthContext>()
     if (!member) return c.json({ error: "Project not found" }, 404);
 
     const job = await db.indexingJob.findFirst({
-      where: { projectId },
+      where: { projectId, ...(branch ? { branch } : {}) },
       orderBy: { startedAt: "desc" },
     });
 
@@ -28,6 +29,20 @@ export const indexingRoutes = new Hono<AuthContext>()
     const db = c.get("db");
     const userId = c.get("userId");
     const projectId = c.req.param("id");
+    const body = (await c.req.json().catch(() => ({}))) as {
+      branch?: unknown;
+      pullRequestNumber?: unknown;
+    };
+    const requestedBranch =
+      typeof body.branch === "string" && body.branch.trim()
+        ? body.branch.trim()
+        : undefined;
+    const pullRequestNumber =
+      typeof body.pullRequestNumber === "number" &&
+      Number.isSafeInteger(body.pullRequestNumber) &&
+      body.pullRequestNumber > 0
+        ? body.pullRequestNumber
+        : undefined;
 
     if (writesPaused()) {
       return c.json(
@@ -84,9 +99,15 @@ export const indexingRoutes = new Hono<AuthContext>()
       );
     }
 
+    let target: Awaited<ReturnType<typeof resolveRepoRef>>;
     try {
       await resolveProjectKeys(userId, project);
-      await decryptProjectToken(project);
+      const token = await decryptProjectToken(project);
+      target = await resolveRepoRef(
+        project.repoUrl,
+        { branch: requestedBranch, pullRequestNumber },
+        token
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Missing API keys or GitHub token.";
       return c.json(
@@ -101,6 +122,10 @@ export const indexingRoutes = new Hono<AuthContext>()
     const job = await db.indexingJob.create({
       data: {
         projectId,
+        branch: target.branch,
+        branchKind: target.branchKind,
+        pullRequestNumber: target.pullRequestNumber,
+        commitSha: target.commitSha,
         status: "QUEUED",
         currentStep: "LOADING_REPO",
         startedAt: new Date(),

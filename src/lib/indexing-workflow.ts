@@ -11,12 +11,15 @@ import { GitHubAccessError, decryptProjectToken } from './github';
 import {
   loadRepoFiles,
   loadRepoTree,
+  selectFilesForLoading,
   type LoadedRepoFile,
   type RepoSource,
 } from './repo-filter';
+import { analyzeRepository, type RepoArchitecture } from './repo-normalizer';
 import { ProviderAccessError, resolveProjectKeys } from './providers/guard';
 import { purgeWikiCache } from './cache';
 import {
+  ensureBlueprint,
   fallbackPlan,
   generateWikiPage,
   planWiki,
@@ -32,7 +35,8 @@ export const inlineStepRunner: StepRunner = {
   do: async (_name, fn) => fn(),
 };
 
-const FILE_FETCH_BATCH = 2;
+const MAX_FETCH_BATCH = 20;
+const MAX_FETCH_BATCH_BYTES = 800 * 1024;
 const EMBED_BATCH = 100;
 const PAGE_CONCURRENCY = 3;
 
@@ -62,6 +66,30 @@ async function updateJob(
 export interface IndexingResult {
   wikiPages: number;
   chunks: number;
+}
+
+function createFetchBatches(files: RepoSource['files']): RepoSource['files'][] {
+  const batches: RepoSource['files'][] = [];
+  let current: RepoSource['files'] = [];
+  let currentBytes = 0;
+
+  for (const file of files) {
+    const size = file.size ?? 0;
+    if (
+      current.length > 0 &&
+      (current.length >= MAX_FETCH_BATCH || currentBytes + size > MAX_FETCH_BATCH_BYTES)
+    ) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+
+    current.push(file);
+    currentBytes += size;
+  }
+
+  if (current.length > 0) batches.push(current);
+  return batches;
 }
 
 export async function runIndexingWorkflow(opts: {
@@ -104,6 +132,13 @@ async function executePipeline(opts: {
   keys: Awaited<ReturnType<typeof resolveProjectKeys>>;
 }): Promise<IndexingResult> {
   const { db, project, jobId, step, token, keys } = opts;
+  const job = await db.indexingJob.findUnique({ where: { id: jobId } });
+  const requestedRef =
+    job?.branchKind === 'PULL_REQUEST' && job.pullRequestNumber
+      ? { pullRequestNumber: job.pullRequestNumber }
+      : job?.commitSha && job.branch
+        ? { branch: job.branch }
+        : {};
 
   await updateJob(db, jobId, {
     status: 'RUNNING',
@@ -111,18 +146,23 @@ async function executePipeline(opts: {
     startedAt: new Date(),
     errorCode: null,
     errorMessage: null,
-    currentDetail: 'Resolving default branch and repository tree...',
+    currentDetail: 'Resolving repository ref, branch tree, and files...',
   });
 
   const source = await step.do('load-repository', async () => {
-    const loaded = await loadRepoTree(project.repoUrl, token);
+    const loaded = await loadRepoTree(project.repoUrl, token, requestedRef);
     return {
       owner: loaded.owner,
       repo: loaded.repo,
       repoUrl: loaded.repoUrl,
       defaultBranch: loaded.defaultBranch,
+      branch: loaded.branch,
+      branchKind: loaded.branchKind,
+      pullRequestNumber: loaded.pullRequestNumber,
       commitSha: loaded.commitSha,
       isPrivate: loaded.isPrivate,
+      fetchOwner: loaded.fetchOwner,
+      fetchRepo: loaded.fetchRepo,
       files: loaded.files,
     } satisfies RepoSource;
   });
@@ -136,20 +176,32 @@ async function executePipeline(opts: {
       repoUrl: source.repoUrl,
       isPrivateRepo: source.isPrivate,
       isPublicWiki: source.isPrivate ? false : project.isPublicWiki,
+      defaultBranch: source.defaultBranch,
+      lastIndexedBranch: source.branch,
+      lastIndexedBranchKind: source.branchKind,
+      lastIndexedPullRequest: source.pullRequestNumber,
       lastIndexedCommitSha: source.commitSha,
     },
   });
 
+  const filesToLoad = selectFilesForLoading(source.files);
+  const batches = createFetchBatches(filesToLoad);
+
   await updateJob(db, jobId, {
-    totalFiles: source.files.length,
+    branch: source.branch,
+    branchKind: source.branchKind,
+    pullRequestNumber: source.pullRequestNumber,
+    commitSha: source.commitSha,
+    totalFiles: filesToLoad.length,
     processedFiles: 0,
-    currentDetail: `Fetching ${source.files.length} source files...`,
+    currentDetail: `Fetching ${filesToLoad.length} source files from ${source.branch}...`,
   });
 
   const loadedFiles: LoadedRepoFile[] = [];
 
-  for (let offset = 0; offset < source.files.length; offset += FILE_FETCH_BATCH) {
-    const batch = source.files.slice(offset, offset + FILE_FETCH_BATCH);
+  for (let index = 0; index < batches.length; index += 1) {
+    const batch = batches[index] ?? [];
+    const offset = batches.slice(0, index).reduce((sum, item) => sum + item.length, 0);
     const loaded = await step.do(`fetch-files-${offset}`, async () => {
       const files = await loadRepoFiles(source, token, batch);
       return files.map((file) => ({
@@ -162,8 +214,8 @@ async function executePipeline(opts: {
 
     loadedFiles.push(...loaded);
     await updateJob(db, jobId, {
-      processedFiles: Math.min(offset + batch.length, source.files.length),
-      currentDetail: `Loaded ${loadedFiles.length}/${source.files.length} files...`,
+      processedFiles: Math.min(offset + batch.length, filesToLoad.length),
+      currentDetail: `Loaded ${loadedFiles.length}/${filesToLoad.length} files from ${source.branch}...`,
     });
   }
 
@@ -185,12 +237,22 @@ async function executePipeline(opts: {
     return built;
   });
 
+  const architecture: RepoArchitecture = await step.do('normalize-repository', async () =>
+    analyzeRepository({
+      files: loadedFiles,
+      skeleton,
+      allPaths: source.files.map((file) => file.path),
+    })
+  );
+
   const chunks: CodeChunk[] = [];
   for (const file of loadedFiles) {
     chunks.push(...chunkFile({ path: file.path, content: file.content }));
   }
 
-  await db.sourceCodeEmbedding.deleteMany({ where: { projectId: project.id } });
+  await db.sourceCodeEmbedding.deleteMany({
+    where: { projectId: project.id, branch: source.branch },
+  });
 
   let embedded = 0;
   for (let offset = 0; offset < chunks.length; offset += EMBED_BATCH) {
@@ -199,6 +261,8 @@ async function executePipeline(opts: {
       return embedAndStoreChunks({
         db,
         projectId: project.id,
+        branch: source.branch,
+        commitSha: source.commitSha,
         chunks: batch,
         provider: keys.embeddingProvider,
         model: keys.embeddingModel,
@@ -220,7 +284,11 @@ async function executePipeline(opts: {
   const context: WikiGenerationContext = {
     projectName: `${source.owner}/${source.repo}`,
     repoUrl: source.repoUrl,
-    skeleton: skeleton,
+    branch: source.branch,
+    branchKind: source.branchKind,
+    pullRequestNumber: source.pullRequestNumber,
+    skeleton,
+    architecture,
     files: loadedFiles.map((file) => ({ path: file.path, content: file.content })),
     provider: keys.chatProvider,
     model: keys.chatModel,
@@ -232,7 +300,10 @@ async function executePipeline(opts: {
     plan = await step.do('plan-wiki', async () => planWiki(context));
   } catch (err) {
     console.warn('[indexing] Wiki planning failed, using fallback plan:', err);
-    plan = fallbackPlan(context.skeleton);
+    plan = ensureBlueprint(
+      fallbackPlan(context.skeleton, context.architecture),
+      context.architecture
+    );
   }
 
   const totalPages = plan.sections.reduce((sum, section) => sum + section.pages.length, 0);
@@ -274,9 +345,17 @@ async function executePipeline(opts: {
 
     for (const page of generated) {
       await db.wikiPage.upsert({
-        where: { projectId_slug: { projectId: project.id, slug: page.slug } },
+        where: {
+          projectId_branch_slug: {
+            projectId: project.id,
+            branch: source.branch,
+            slug: page.slug,
+          },
+        },
         create: {
           projectId: project.id,
+          branch: source.branch,
+          commitSha: source.commitSha,
           slug: page.slug,
           title: page.title,
           sectionTitle: page.sectionTitle,
@@ -287,6 +366,7 @@ async function executePipeline(opts: {
           headings: page.headings,
         },
         update: {
+          commitSha: source.commitSha,
           title: page.title,
           sectionTitle: page.sectionTitle,
           sectionOrder: page.sectionOrder,
@@ -315,20 +395,25 @@ async function executePipeline(opts: {
   await step.do('finalize', async () => {
     const keepSlugs = plan.sections.flatMap((section) => section.pages.map((page) => page.slug));
     const previousPages = await db.wikiPage.findMany({
-      where: { projectId: project.id },
+      where: { projectId: project.id, branch: source.branch },
       select: { slug: true },
     });
     await db.wikiPage.deleteMany({
-      where: { projectId: project.id, slug: { notIn: keepSlugs } },
+      where: {
+        projectId: project.id,
+        branch: source.branch,
+        slug: { notIn: keepSlugs },
+      },
     });
     await db.project.update({
       where: { id: project.id },
       data: { lastIndexedAt: new Date() },
     });
-    await purgeWikiCache(project.id, [
-      ...previousPages.map((page) => page.slug),
-      ...keepSlugs,
-    ]);
+    await purgeWikiCache(
+      project.id,
+      [...previousPages.map((page) => page.slug), ...keepSlugs],
+      [source.branch]
+    );
   });
 
   await updateJob(db, jobId, {

@@ -156,6 +156,122 @@ export async function getRepoMetadata(
   }
 }
 
+export type RepoBranchKind = 'MAIN' | 'BRANCH' | 'PULL_REQUEST';
+
+export interface RepoRefRequest {
+  branch?: string | null;
+  pullRequestNumber?: number | null;
+}
+
+export interface ResolvedRepoRef {
+  owner: string;
+  repo: string;
+  repoUrl: string;
+  fetchOwner: string;
+  fetchRepo: string;
+  branch: string;
+  branchKind: RepoBranchKind;
+  pullRequestNumber: number | null;
+  commitSha: string;
+  defaultBranch: string;
+  isPrivate: boolean;
+  sizeKb: number;
+}
+
+export function normalizeBranchName(value: string): string {
+  const branch = value.trim().replace(/^refs\/heads\//i, '');
+
+  if (!branch) {
+    throw new GitHubAccessError('NOT_FOUND', 'Enter a branch name or pull request number.');
+  }
+  if (
+    branch.length > 255 ||
+    branch.startsWith('/') ||
+    branch.endsWith('/') ||
+    branch.startsWith('.') ||
+    branch.endsWith('.') ||
+    branch.endsWith('.lock') ||
+    branch.includes('..') ||
+    branch.includes('@{') ||
+    branch === '@' ||
+    branch.includes('//') ||
+    /[\u0000-\u0020]/.test(branch) ||
+    /[~^:?*\[\]\\]/.test(branch)
+  ) {
+    throw new GitHubAccessError('NOT_FOUND', 'That branch name is not valid for GitHub.');
+  }
+
+  return branch;
+}
+
+export async function resolveRepoRef(
+  repoUrl: string,
+  input: RepoRefRequest = {},
+  token?: string | null
+): Promise<ResolvedRepoRef> {
+  const meta = await getRepoMetadata(repoUrl, token);
+  const client = getOctokit(token);
+
+  try {
+    if (input.pullRequestNumber) {
+      const pullNumber = input.pullRequestNumber;
+      if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
+        throw new GitHubAccessError('NOT_FOUND', 'Pull request number is not valid.');
+      }
+
+      const { data: pull } = await client.rest.pulls.get({
+        owner: meta.owner,
+        repo: meta.repo,
+        pull_number: pullNumber,
+      });
+
+      return {
+        owner: meta.owner,
+        repo: meta.repo,
+        repoUrl: meta.repoUrl,
+        fetchOwner: pull.head.repo?.owner?.login ?? meta.owner,
+        fetchRepo: pull.head.repo?.name ?? meta.repo,
+        branch: pull.head.ref || `pull-${pullNumber}`,
+        branchKind: 'PULL_REQUEST',
+        pullRequestNumber: pullNumber,
+        commitSha: pull.head.sha,
+        defaultBranch: meta.defaultBranch,
+        isPrivate: meta.isPrivate,
+        sizeKb: meta.sizeKb,
+      };
+    }
+
+    const branch = input.branch?.trim()
+      ? normalizeBranchName(input.branch)
+      : meta.defaultBranch;
+    const kind: RepoBranchKind = branch === meta.defaultBranch ? 'MAIN' : 'BRANCH';
+
+    const { data: ref } = await client.rest.git.getRef({
+      owner: meta.owner,
+      repo: meta.repo,
+      ref: `heads/${branch}`,
+    });
+
+    return {
+      owner: meta.owner,
+      repo: meta.repo,
+      repoUrl: meta.repoUrl,
+      fetchOwner: meta.owner,
+      fetchRepo: meta.repo,
+      branch,
+      branchKind: kind,
+      pullRequestNumber: null,
+      commitSha: ref.object.sha,
+      defaultBranch: meta.defaultBranch,
+      isPrivate: meta.isPrivate,
+      sizeKb: meta.sizeKb,
+    };
+  } catch (err) {
+    if (err instanceof GitHubAccessError) throw err;
+    wrapGithubError(err, Boolean(token));
+  }
+}
+
 export interface RepoTreeEntry {
   path: string;
   type: 'blob' | 'tree' | 'commit';

@@ -1,8 +1,10 @@
 import {
   fetchRawFile,
-  getRepoMetadata,
   getRepoTree,
   parseRepoUrl,
+  resolveRepoRef,
+  type RepoBranchKind,
+  type RepoRefRequest,
   type RepoTreeEntry,
 } from './github';
 
@@ -18,7 +20,6 @@ const IGNORED_DIRECTORIES = [
   '__pycache__/',
   '.venv/',
   'public/models/',
-  'components/ui/',
 ];
 
 const IGNORED_FILES = [
@@ -37,7 +38,16 @@ const IGNORED_EXTENSIONS = [
   '.zip', '.gz', '.tar', '.lock', '.map',
 ];
 
-export const MAX_INDEXED_FILES = 300;
+function positiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export const MAX_INDEXED_FILES = positiveInt(process.env.MAX_INDEXED_FILES, 10_000);
+export const MAX_TOTAL_SOURCE_BYTES = positiveInt(
+  process.env.MAX_TOTAL_SOURCE_BYTES,
+  64 * 1024 * 1024
+);
 export const MAX_FILE_BYTES = 250 * 1024;
 
 export interface FilteredRepoFile {
@@ -69,12 +79,31 @@ export function isIgnoredPath(path: string, size?: number): boolean {
 
 function priorityScore(path: string): number {
   const lower = path.toLowerCase();
+  const basename = lower.split('/').pop() ?? lower;
   if (lower === 'readme.md') return 1000;
   if (lower.startsWith('readme')) return 950;
-  if (lower.endsWith('package.json')) return 900;
+  if (
+    [
+      'package.json',
+      'pyproject.toml',
+      'requirements.txt',
+      'go.mod',
+      'cargo.toml',
+      'pom.xml',
+      'build.gradle',
+      'gemfile',
+      'composer.json',
+      'dockerfile',
+      'docker-compose.yml',
+      'makefile',
+    ].includes(basename)
+  ) {
+    return 900;
+  }
 
   const corePrefixes = ['src/', 'app/', 'lib/', 'server/', 'docs/', 'prisma/'];
   if (corePrefixes.some((p) => lower.startsWith(p))) return 500;
+  if (/^(scripts|tools|bin|automation|jobs|tasks)\//.test(lower)) return 700;
 
   if (lower.endsWith('.md') || lower.endsWith('.mdx')) return 300;
   if (lower.endsWith('.ts') || lower.endsWith('.tsx') || lower.endsWith('.js') || lower.endsWith('.jsx')) return 250;
@@ -101,31 +130,64 @@ export function filterRepoTree(entries: RepoTreeEntry[]): FilteredRepoFile[] {
     .slice(0, MAX_INDEXED_FILES);
 }
 
+export function selectFilesForLoading(
+  files: FilteredRepoFile[],
+  maxBytes = MAX_TOTAL_SOURCE_BYTES
+): FilteredRepoFile[] {
+  const selected: FilteredRepoFile[] = [];
+  let totalBytes = 0;
+
+  for (const file of files) {
+    const size = file.size ?? 0;
+    if (size > 0 && selected.length > 0 && totalBytes + size > maxBytes) continue;
+    selected.push(file);
+    totalBytes += size;
+  }
+
+  return selected;
+}
+
 export interface RepoSource {
   owner: string;
   repo: string;
   repoUrl: string;
   defaultBranch: string;
+  branch: string;
+  branchKind: RepoBranchKind;
+  pullRequestNumber: number | null;
   commitSha: string;
   isPrivate: boolean;
+  fetchOwner: string;
+  fetchRepo: string;
   files: FilteredRepoFile[];
 }
 
 export async function loadRepoTree(
   repoUrl: string,
-  token?: string | null
+  token?: string | null,
+  ref: RepoRefRequest = {}
 ): Promise<RepoSource> {
-  const { owner, repo, repoUrl: normalized } = parseRepoUrl(repoUrl);
-  const meta = await getRepoMetadata(normalized, token);
-  const tree = await getRepoTree(owner, repo, meta.commitSha, token);
+  const { repoUrl: normalized } = parseRepoUrl(repoUrl);
+  const resolved = await resolveRepoRef(normalized, ref, token);
+  const tree = await getRepoTree(
+    resolved.fetchOwner,
+    resolved.fetchRepo,
+    resolved.commitSha,
+    token
+  );
 
   return {
-    owner,
-    repo,
+    owner: resolved.owner,
+    repo: resolved.repo,
     repoUrl: normalized,
-    defaultBranch: meta.defaultBranch,
-    commitSha: meta.commitSha,
-    isPrivate: meta.isPrivate,
+    defaultBranch: resolved.defaultBranch,
+    branch: resolved.branch,
+    branchKind: resolved.branchKind,
+    pullRequestNumber: resolved.pullRequestNumber,
+    commitSha: resolved.commitSha,
+    isPrivate: resolved.isPrivate,
+    fetchOwner: resolved.fetchOwner,
+    fetchRepo: resolved.fetchRepo,
     files: filterRepoTree(tree),
   };
 }
@@ -144,8 +206,8 @@ export async function loadRepoFiles(
   for (const file of slice) {
     try {
       const content = await fetchRawFile(
-        source.owner,
-        source.repo,
+        source.fetchOwner,
+        source.fetchRepo,
         source.commitSha,
         file.path,
         token

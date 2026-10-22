@@ -61,6 +61,20 @@ async function canReadProject(
   return Boolean(project);
 }
 
+async function resolveProjectBranch(
+  db: AuthContext["Variables"]["db"],
+  projectId: string,
+  requested?: string
+): Promise<string> {
+  if (requested?.trim()) return requested.trim();
+
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { defaultBranch: true, lastIndexedBranch: true },
+  });
+  return project?.defaultBranch ?? project?.lastIndexedBranch ?? "main";
+}
+
 export const questionsRoutes = new Hono<AuthContext>()
   .get("/:id/qa/threads", async (c) => {
     const db = c.get("db");
@@ -71,8 +85,9 @@ export const questionsRoutes = new Hono<AuthContext>()
       return c.json({ error: "Project not found" }, 404);
     }
 
+    const branch = await resolveProjectBranch(db, projectId, c.req.query("branch"));
     const threads = await db.qaThread.findMany({
-      where: { projectId, userId },
+      where: { projectId, userId, branch },
       orderBy: { updatedAt: "desc" },
       take: 50,
       include: {
@@ -96,8 +111,9 @@ export const questionsRoutes = new Hono<AuthContext>()
       return c.json({ error: "Project not found" }, 404);
     }
 
+    const branch = await resolveProjectBranch(db, projectId, c.req.query("branch"));
     const thread = await db.qaThread.findFirst({
-      where: { id: threadId, projectId, userId },
+      where: { id: threadId, projectId, userId, branch },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
 
@@ -111,6 +127,7 @@ export const questionsRoutes = new Hono<AuthContext>()
       z.object({
         question: z.string().trim().min(1).max(4000),
         threadId: z.string().max(64).optional(),
+        branch: z.string().max(255).optional(),
         chatProvider: z.enum(PROVIDERS).optional(),
         chatModel: z.string().optional(),
       })
@@ -130,7 +147,8 @@ export const questionsRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const userId = c.get("userId");
       const projectId = c.req.param("id");
-      const { question, threadId, chatProvider, chatModel } = c.req.valid("json");
+      const { question, threadId, branch: requestedBranch, chatProvider, chatModel } =
+        c.req.valid("json");
 
       const project = await db.project.findFirst({
         where: { id: projectId, deletedAt: null },
@@ -145,6 +163,8 @@ export const questionsRoutes = new Hono<AuthContext>()
         if (!member) return c.json({ error: "Project not found" }, 404);
       }
 
+      const branch = await resolveProjectBranch(db, projectId, requestedBranch);
+
       try {
         const keys = await resolveKeys(userId, project, chatProvider, chatModel);
         const stream = await streamQuestion({
@@ -153,6 +173,7 @@ export const questionsRoutes = new Hono<AuthContext>()
           userId,
           question,
           threadId,
+          branch,
           keys,
         });
 
@@ -180,6 +201,7 @@ export const questionsRoutes = new Hono<AuthContext>()
         chatProvider: z.enum(PROVIDERS).optional(),
         chatModel: z.string().optional(),
         threadId: z.string().max(64).optional(),
+        branch: z.string().max(255).optional(),
       })
     ),
     async (c) => {
@@ -197,7 +219,8 @@ export const questionsRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const userId = c.get("userId");
       const projectId = c.req.param("id");
-      const { query, chatProvider, chatModel, threadId } = c.req.valid("json");
+      const { query, chatProvider, chatModel, threadId, branch: requestedBranch } =
+        c.req.valid("json");
 
       if (projectId === "general" || projectId === "unlinked") {
         return c.json(
@@ -216,6 +239,8 @@ export const questionsRoutes = new Hono<AuthContext>()
 
       if (!project) return c.json({ error: "Project not found" }, 404);
 
+      const branch = await resolveProjectBranch(db, projectId, requestedBranch);
+
       try {
         const keys = await resolveKeys(userId, project, chatProvider, chatModel);
         const result = await answerQuestionOnce({
@@ -224,6 +249,7 @@ export const questionsRoutes = new Hono<AuthContext>()
           userId,
           question: query,
           threadId,
+          branch,
           keys,
         });
 
@@ -260,8 +286,9 @@ export const questionsRoutes = new Hono<AuthContext>()
     });
     if (!member) return c.json({ error: "Project not found" }, 404);
 
+    const branch = await resolveProjectBranch(db, projectId, c.req.query("branch"));
     const questions = await db.question.findMany({
-      where: { projectId },
+      where: { projectId, branch },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, imageUrl: true },
@@ -278,6 +305,7 @@ export const questionsRoutes = new Hono<AuthContext>()
       "json",
       z.object({
         threadId: z.string().max(64).optional(),
+        branch: z.string().max(255).optional(),
         question: z.string().trim().min(1).max(4000),
         answers: z.string().trim().min(1).max(100_000),
         fileReference: z.unknown().optional(),
@@ -297,7 +325,8 @@ export const questionsRoutes = new Hono<AuthContext>()
       const projectId = c.req.param("id");
       const userId = c.get("userId");
       const db = c.get("db");
-      const { threadId, question, answers, turns } = c.req.valid("json");
+      const { threadId, branch: requestedBranch, question, answers, turns } =
+        c.req.valid("json");
       const rawReference = c.req.valid("json").fileReference;
 
       const member = await db.userToProject.findUnique({
@@ -305,6 +334,8 @@ export const questionsRoutes = new Hono<AuthContext>()
         select: { id: true },
       });
       if (!member) return c.json({ error: "Project not found" }, 404);
+
+      const branch = await resolveProjectBranch(db, projectId, requestedBranch);
 
       const storedReference = turns?.length
         ? ({
@@ -319,7 +350,7 @@ export const questionsRoutes = new Hono<AuthContext>()
 
       const existing = threadId
         ? await db.question.findFirst({
-            where: { id: threadId, projectId, userId },
+            where: { id: threadId, projectId, userId, branch },
             select: { id: true },
           })
         : null;
@@ -340,6 +371,7 @@ export const questionsRoutes = new Hono<AuthContext>()
               fileReference: storedReference,
               projectId,
               userId,
+              branch,
             },
           });
 

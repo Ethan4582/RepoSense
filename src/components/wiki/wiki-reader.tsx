@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   Clock,
   FileCode2,
   FolderTree,
+  GitBranch,
   GitPullRequest,
   Globe2,
   Loader2,
@@ -49,6 +50,13 @@ interface WikiPageMeta {
   relevantFiles?: string[];
 }
 
+interface BranchSummary {
+  branch: string;
+  pageCount: number;
+  updatedAt?: string | null;
+  commitSha?: string | null;
+}
+
 interface WikiProject {
   id: string;
   name: string;
@@ -58,6 +66,10 @@ interface WikiProject {
   isPublicWiki?: boolean;
   lastIndexedAt?: string | null;
   lastIndexedCommitSha?: string | null;
+  defaultBranch?: string | null;
+  lastIndexedBranch?: string | null;
+  activeBranch?: string | null;
+  branches?: BranchSummary[];
   chatModel?: string | null;
   chatProvider?: string | null;
   isPrivateRepo?: boolean;
@@ -67,6 +79,7 @@ interface WikiProject {
 
 interface IndexingJob {
   id: string;
+  branch?: string;
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
   currentStep: string;
   processedFiles: number;
@@ -100,6 +113,11 @@ function groupSections(pages: WikiPageMeta[]) {
 export function WikiReader() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const branchParam = searchParams.get('branch');
+  const prParam = searchParams.get('pr');
   const { isSignedIn } = useUser();
 
   const [project, setProject] = React.useState<WikiProject | null>(null);
@@ -115,7 +133,15 @@ export function WikiReader() {
   const [visibilityBusy, setVisibilityBusy] = React.useState(false);
   const [indexing, setIndexing] = React.useState<IndexingJob | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [branchInput, setBranchInput] = React.useState('');
+  const [branchBusy, setBranchBusy] = React.useState(false);
   const wasIndexingRef = React.useRef(false);
+  const activeBranch =
+    project?.activeBranch ??
+    project?.defaultBranch ??
+    project?.lastIndexedBranch ??
+    branchParam ??
+    'main';
 
   const [question, setQuestion] = React.useState('');
   const [qaOpen, setQaOpen] = React.useState(false);
@@ -160,9 +186,15 @@ export function WikiReader() {
     const load = async () => {
       setLoading(true);
       setError(null);
+      const branchQuery = branchParam
+        ? `?branch=${encodeURIComponent(branchParam)}`
+        : '';
 
       try {
-        const publicRes = await fetch(`/api/public/projects/${projectId}`, { cache: 'no-store' });
+        const publicRes = await fetch(
+          `/api/public/projects/${projectId}${branchQuery}`,
+          { cache: 'no-store' }
+        );
         if (publicRes.ok) {
           const data = (await publicRes.json()) as { project: WikiProject };
           if (cancelled) return;
@@ -171,11 +203,15 @@ export function WikiReader() {
 
           const first = data.project.wikiPages.find((p) => p.slug === 'overview') ?? data.project.wikiPages[0];
           setActiveSlug(first?.slug ?? null);
+          setActivePage(first ?? null);
           setLoading(false);
 
           if (isSignedIn) {
             try {
-              const ownerRes = await fetch(`/api/projects/${projectId}`, { cache: 'no-store' });
+              const ownerRes = await fetch(
+                `/api/projects/${projectId}${branchQuery}`,
+                { cache: 'no-store' }
+              );
               if (ownerRes.ok) {
                 const ownerData = (await ownerRes.json()) as {
                   project: WikiProject;
@@ -183,13 +219,15 @@ export function WikiReader() {
                 };
                 if (!cancelled) {
                   setProject((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          isOwner: ownerData.isOwner ?? false,
-                          isPrivateRepo: ownerData.project.isPrivateRepo,
-                        }
-                      : prev
+                        prev
+                        ? {
+                            ...prev,
+                            isOwner: ownerData.isOwner ?? false,
+                            isPrivateRepo: ownerData.project.isPrivateRepo,
+                            branches: ownerData.project.branches ?? prev.branches,
+                            activeBranch: ownerData.project.activeBranch ?? prev.activeBranch,
+                          }
+                        : prev
                   );
                 }
               }
@@ -200,7 +238,9 @@ export function WikiReader() {
           return;
         }
 
-        const privateRes = await fetch(`/api/projects/${projectId}`, { cache: 'no-store' });
+        const privateRes = await fetch(`/api/projects/${projectId}${branchQuery}`, {
+          cache: 'no-store',
+        });
         if (!privateRes.ok) {
           const message =
             privateRes.status === 404
@@ -230,7 +270,7 @@ export function WikiReader() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, isSignedIn, reloadKey]);
+  }, [projectId, isSignedIn, reloadKey, branchParam]);
 
   React.useEffect(() => {
     if (!activeSlug || !project) return;
@@ -238,7 +278,10 @@ export function WikiReader() {
     const localPage = project.wikiPages.find((page) => page.slug === activeSlug);
     if (isPublic) {
       setPageLoading(true);
-      fetch(`/api/public/projects/${projectId}/pages/${activeSlug}`, { cache: 'no-store' })
+      fetch(
+        `/api/public/projects/${projectId}/pages/${activeSlug}?branch=${encodeURIComponent(activeBranch)}`,
+        { cache: 'no-store' }
+      )
         .then(async (res) => {
           if (!res.ok) throw new Error('Unable to load page.');
           const data = (await res.json()) as { page: WikiPageMeta };
@@ -249,14 +292,17 @@ export function WikiReader() {
     } else if (localPage) {
       setActivePage(localPage);
     }
-  }, [activeSlug, project, isPublic, projectId]);
+  }, [activeSlug, project, isPublic, projectId, activeBranch]);
 
   React.useEffect(() => {
     if (!isSignedIn || !project?.isOwner) return;
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/indexing/status`, { cache: 'no-store' });
+        const res = await fetch(
+          `/api/projects/${projectId}/indexing/status?branch=${encodeURIComponent(activeBranch)}`,
+          { cache: 'no-store' }
+        );
         if (!res.ok) return;
         const data = (await res.json()) as { job: IndexingJob | null };
         if (data.job && (data.job.status === 'QUEUED' || data.job.status === 'RUNNING')) {
@@ -279,11 +325,16 @@ export function WikiReader() {
       void poll();
     }, 3000);
     return () => clearInterval(timer);
-  }, [isSignedIn, project?.isOwner, projectId]);
+  }, [isSignedIn, project?.isOwner, projectId, activeBranch]);
 
   React.useEffect(() => {
     answerEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [answer]);
+
+  React.useEffect(() => {
+    setThreadId(null);
+    setQaOpen(false);
+  }, [activeBranch]);
 
   const sections = React.useMemo(() => (project ? groupSections(project.wikiPages) : []), [project]);
 
@@ -291,19 +342,73 @@ export function WikiReader() {
     setActiveFile(target);
   };
 
-  const startReindex = async () => {
+  const switchBranch = (branch: string, pullRequestNumber?: number) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('branch', branch);
+    if (pullRequestNumber) next.set('pr', String(pullRequestNumber));
+    else next.delete('pr');
+
+    setActiveSlug(null);
+    setActivePage(null);
+    router.replace(`${pathname}?${next.toString()}`);
+  };
+
+  const startIndexing = async (target?: {
+    branch?: string;
+    pullRequestNumber?: number;
+  }): Promise<boolean> => {
+    setBranchBusy(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/indexing/start`, { method: 'POST' });
+      const res = await fetch(`/api/projects/${projectId}/indexing/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branch: target?.branch,
+          pullRequestNumber: target?.pullRequestNumber,
+        }),
+      });
       const data = (await res.json()) as { job?: IndexingJob; error?: string };
       if (!res.ok) {
         toast.error(data.error ?? 'Could not start indexing.');
-        return;
+        return false;
       }
-      if (data.job) setIndexing(data.job);
-      toast.success('Re-indexing started.');
+      if (data.job) {
+        setIndexing(data.job);
+        if (data.job.branch && data.job.branch !== activeBranch) {
+          switchBranch(data.job.branch, target?.pullRequestNumber);
+        }
+      }
+      toast.success('Indexing started.');
+      return true;
     } catch {
       toast.error('Could not start indexing.');
+      return false;
+    } finally {
+      setBranchBusy(false);
     }
+  };
+
+  const startReindex = async () => {
+    const pullRequestNumber =
+      prParam && Number.isSafeInteger(Number(prParam)) ? Number(prParam) : undefined;
+    await startIndexing({
+      branch: pullRequestNumber ? undefined : activeBranch,
+      pullRequestNumber,
+    });
+  };
+
+  const indexRequestedBranch = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = branchInput.trim();
+    if (!value) return;
+
+    const prMatch = /^#?(\d+)$/.exec(value);
+    const pullRequestNumber = prMatch ? Number(prMatch[1]) : undefined;
+    const ok = await startIndexing({
+      branch: pullRequestNumber ? undefined : value,
+      pullRequestNumber,
+    });
+    if (ok) setBranchInput('');
   };
 
   const updateVisibility = async (nextPublic: boolean) => {
@@ -323,7 +428,10 @@ export function WikiReader() {
       if (!nextPublic) {
         setIsPublic(false);
         setProject((prev) => (prev ? { ...prev, isPublicWiki: false } : prev));
-        const privateRes = await fetch(`/api/projects/${projectId}`, { cache: 'no-store' });
+        const privateRes = await fetch(
+          `/api/projects/${projectId}?branch=${encodeURIComponent(activeBranch)}`,
+          { cache: 'no-store' }
+        );
         if (privateRes.ok) {
           const data = (await privateRes.json()) as { project: WikiProject; isOwner?: boolean };
           setProject({ ...data.project, isOwner: data.isOwner ?? true });
@@ -367,7 +475,11 @@ export function WikiReader() {
       const res = await fetch(`/api/projects/${projectId}/qa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text, threadId: threadId ?? undefined }),
+        body: JSON.stringify({
+          question: text,
+          threadId: threadId ?? undefined,
+          branch: activeBranch,
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -765,6 +877,7 @@ export function WikiReader() {
                 {activeFile ? (
                   <CodeViewer
                     projectId={projectId}
+                    branch={activeBranch}
                     file={activeFile}
                     onClose={() => setActiveFile(null)}
                     className="h-full"

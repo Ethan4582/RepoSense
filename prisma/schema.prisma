@@ -103,6 +103,10 @@ model Project {
   embeddingModel      String             @default("text-embedding-3-small")
   embeddingDimensions Int                @default(1536)
   repoSkeleton        Json?
+  defaultBranch       String?
+  lastIndexedBranch   String?
+  lastIndexedBranchKind String?
+  lastIndexedPullRequest Int?
   lastIndexedCommitSha String?
   lastIndexedAt       DateTime?
   deletedAt           DateTime?
@@ -123,6 +127,8 @@ model WikiPage {
   id             String   @id @default(cuid())
   projectId      String
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch         String   @default("main")
+  commitSha      String?
   slug           String
   title          String
   sectionTitle   String
@@ -134,14 +140,16 @@ model WikiPage {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([projectId, slug])
-  @@index([projectId, sectionOrder, pageOrder])
+  @@unique([projectId, branch, slug])
+  @@index([projectId, branch, sectionOrder, pageOrder])
 }
 
 model SourceCodeEmbedding {
   id                     String                       @id @default(cuid())
   projectId              String
   project                Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch                 String                       @default("main")
+  commitSha              String?
   filePath               String
   directory              String
   chunkIndex             Int
@@ -152,7 +160,7 @@ model SourceCodeEmbedding {
   embeddingOpenAI        Unsupported("vector(1536)")?
   embeddingGemini        Unsupported("vector(768)")?
 
-  @@index([projectId, filePath])
+  @@index([projectId, branch, filePath])
 }
 
 model QaThread {
@@ -161,12 +169,13 @@ model QaThread {
   project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId    String
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch    String      @default("main")
   title     String
   messages  QaMessage[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  @@index([projectId, userId])
+  @@index([projectId, branch, userId])
 }
 
 model QaMessage {
@@ -186,6 +195,10 @@ model IndexingJob {
   id                       String         @id @default(cuid())
   projectId                String
   project                  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch                   String         @default("main")
+  branchKind               String         @default("MAIN")
+  pullRequestNumber        Int?
+  commitSha                String?
   status                   IndexingStatus @default(QUEUED)
   currentStep              IndexingStep   @default(LOADING_REPO)
   totalFiles               Int            @default(0)
@@ -258,4 +271,5 @@ model Question {
   project       Project  @relation(fields: [projectId], references: [id])
   userId        String
   user          User     @relation(fields: [userId], references: [id])
+  branch        String   @default("main")
 }

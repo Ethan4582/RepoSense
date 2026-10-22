@@ -98,6 +98,7 @@ export interface QaContext {
   project: Project;
   userId: string;
   question: string;
+  branch: string;
   threadId?: string;
   keys?: ResolvedProjectKeys;
 }
@@ -119,13 +120,14 @@ async function prepare(opts: QaContext) {
   const chunks = await searchCodeChunks({
     db: opts.db,
     projectId: opts.project.id,
+    branch: opts.branch,
     provider: keys.embeddingProvider,
     embedding,
     limit: 12,
   });
 
   const allPages = await opts.db.wikiPage.findMany({
-    where: { projectId: opts.project.id },
+    where: { projectId: opts.project.id, branch: opts.branch },
     select: { title: true, content: true },
     orderBy: [{ sectionOrder: 'asc' }, { pageOrder: 'asc' }],
     take: 40,
@@ -136,7 +138,12 @@ async function prepare(opts: QaContext) {
 
   if (threadId) {
     const thread = await opts.db.qaThread.findFirst({
-      where: { id: threadId, userId: opts.userId, projectId: opts.project.id },
+      where: {
+        id: threadId,
+        userId: opts.userId,
+        projectId: opts.project.id,
+        branch: opts.branch,
+      },
       select: { id: true },
     });
     if (!thread) threadId = undefined;
@@ -147,6 +154,7 @@ async function prepare(opts: QaContext) {
       data: {
         projectId: opts.project.id,
         userId: opts.userId,
+        branch: opts.branch,
         title: opts.question.slice(0, 120),
       },
       select: { id: true },

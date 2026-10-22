@@ -10,6 +10,7 @@ import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { writesPaused } from "~/lib/emergency";
 import { purgeWikiCache } from "~/lib/cache";
 import { withoutProjectSecrets } from "~/lib/project";
+import { getProjectBranches, pickActiveBranch } from "~/lib/branch";
 import { indexingRoutes } from "./indexing";
 import { pullsRoutes } from "./pulls";
 import { estimateRoutes } from "./estimate";
@@ -22,11 +23,12 @@ const isEmergencyMode = () => writesPaused();
 async function purgeProjectWiki(db: AuthContext["Variables"]["db"], projectId: string) {
   const pages = await db.wikiPage.findMany({
     where: { projectId },
-    select: { slug: true },
+    select: { slug: true, branch: true },
   });
   await purgeWikiCache(
     projectId,
-    pages.map((page) => page.slug)
+    pages.map((page) => page.slug),
+    Array.from(new Set(pages.map((page) => page.branch)))
   );
 }
 
@@ -207,6 +209,10 @@ export const projectsRoutes = new Hono<AuthContext>()
           githubTokenIv,
           isPrivateRepo: meta.isPrivate,
           isPublicWiki: meta.isPrivate ? false : input.isPublicWiki,
+          defaultBranch: meta.defaultBranch,
+          lastIndexedBranch: meta.defaultBranch,
+          lastIndexedBranchKind: "MAIN",
+          lastIndexedCommitSha: meta.commitSha,
           chatProvider: input.chatProvider,
           chatModel,
           embeddingProvider: input.embeddingProvider,
@@ -225,6 +231,9 @@ export const projectsRoutes = new Hono<AuthContext>()
         const job = await db.indexingJob.create({
           data: {
             projectId: project.id,
+            branch: meta.defaultBranch,
+            branchKind: "MAIN",
+            commitSha: meta.commitSha,
             status: "QUEUED",
             currentStep: "LOADING_REPO",
             startedAt: new Date(),
@@ -345,6 +354,7 @@ export const projectsRoutes = new Hono<AuthContext>()
     const projectId = c.req.param("id");
     const db = c.get("db");
     const userId = c.get("userId");
+    const requestedBranch = c.req.query("branch")?.trim();
 
     const project = await db.project.findFirst({
       where: {
@@ -356,9 +366,6 @@ export const projectsRoutes = new Hono<AuthContext>()
         ],
       },
       include: {
-        wikiPages: {
-          orderBy: [{ sectionOrder: "asc" }, { pageOrder: "asc" }],
-        },
         userToProjects: {
           where: { userId },
           select: { id: true },
@@ -367,8 +374,23 @@ export const projectsRoutes = new Hono<AuthContext>()
     });
 
     if (!project) return c.json({ error: "Project not found" }, 404);
+
+    const branches = await getProjectBranches(db, projectId);
+    const activeBranch = pickActiveBranch(requestedBranch, branches, project);
+    const wikiPages = activeBranch
+      ? await db.wikiPage.findMany({
+          where: { projectId, branch: activeBranch },
+          orderBy: [{ sectionOrder: "asc" }, { pageOrder: "asc" }],
+        })
+      : [];
+
     return c.json({
-      project: withoutProjectSecrets(project),
+      project: withoutProjectSecrets({
+        ...project,
+        wikiPages,
+        branches,
+        activeBranch,
+      }),
       isOwner: project.userToProjects.length > 0,
     });
   })
@@ -439,20 +461,30 @@ export const projectsRoutes = new Hono<AuthContext>()
     const userId = c.get("userId");
     const db = c.get("db");
     const filePath = c.req.query("path");
+    const branch = c.req.query("branch")?.trim();
 
     if (!filePath) return c.json({ error: "path is required" }, 400);
     if (filePath.length > 500) return c.json({ error: "File not found" }, 404);
 
-    const member = await db.userToProject.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { id: true },
+    const project = await db.project.findFirst({
+      where: {
+        id: projectId,
+        userToProjects: { some: { userId } },
+      },
+      select: { defaultBranch: true, lastIndexedBranch: true },
     });
-    if (!member) return c.json({ error: "Project not found" }, 404);
+    if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const content = await getFullFileContent(db, projectId, filePath);
+    const activeBranch = branch || project.lastIndexedBranch || project.defaultBranch;
+    const content = await getFullFileContent(db, projectId, filePath, activeBranch);
     if (content === null) return c.json({ error: "File not found" }, 404);
 
-    return c.json({ filePath, content, lines: content.split("\n").length });
+    return c.json({
+      filePath,
+      branch: activeBranch,
+      content,
+      lines: content.split("\n").length,
+    });
   })
   .get("/:id/members", async (c) => {
     const projectId = c.req.param("id");

@@ -26,6 +26,9 @@ export interface CodeChunk {
 
 export const CHUNK_LINES = 120;
 export const CHUNK_OVERLAP = 20;
+export const SYMBOL_SPLIT_THRESHOLD = 800;
+export const SYMBOL_CHUNK_LINES = 180;
+export const SYMBOL_CONTEXT_LINES = 8;
 
 const IMPORT_PATTERNS = [
   /^\s*import\s.+?from\s+['"].+?['"];?/,
@@ -46,6 +49,21 @@ const EXPORT_PATTERNS = [
   /^\s*def\s+\w+/,
   /^\s*func\s+\w+/,
   /^\s*(app|router)\.(get|post|put|patch|delete)\(/,
+];
+
+const SYMBOL_PATTERNS = [
+  /^(export\s+)?(default\s+)?(async\s+)?function\s+\w+/,
+  /^(export\s+)?(default\s+)?(abstract\s+)?class\s+\w+/,
+  /^(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s*)?(\(|function)/,
+  /^(export\s+)?(interface|type|enum)\s+\w+/,
+  /^(async\s+)?def\s+\w+/,
+  /^class\s+\w+/,
+  /^func\s+(\([^)]*\)\s*)?\w+/,
+  /^(pub(lic)?\s+)?(async\s+)?fn\s+\w+/,
+  /^(public|private|protected)?\s*(static\s+)?(async\s+)?(class|interface|enum|void|int|string|boolean)\s+\w+/,
+  /^(app|router|server|express)\.(get|post|put|patch|delete|use)\(/,
+  /^(describe|test|it)\(/,
+  /^module\.exports\s*=/,
 ];
 
 export function extractSkeletonEntry(
@@ -112,36 +130,43 @@ export function formatChunkContent(
   return `File: ${filePath} (Lines ${startLine}-${endLine})\n${numbered.join('\n')}`;
 }
 
-export function chunkFile(file: {
-  path: string;
+function findSymbolStarts(lines: string[]): number[] {
+  const starts: number[] = [0];
+
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (!line.trim() || line !== line.trimStart()) continue;
+    if (SYMBOL_PATTERNS.some((pattern) => pattern.test(line))) starts.push(index);
+  }
+
+  return Array.from(new Set(starts)).sort((a, b) => a - b);
+}
+
+function buildFixedChunks(opts: {
+  filePath: string;
+  directory: string;
+  lines: string[];
   content: string;
+  step: number;
 }): CodeChunk[] {
-  if (file.content.trim().length === 0) return [];
-
-  const lines = file.content.split('\n');
+  const { filePath, directory, lines, content, step } = opts;
   const totalLines = lines.length;
-  const directory = file.path.includes('/')
-    ? file.path.slice(0, file.path.lastIndexOf('/'))
-    : '.';
-
   const chunks: CodeChunk[] = [];
-  const step = Math.max(1, CHUNK_LINES - CHUNK_OVERLAP);
   let chunkIndex = 0;
 
   for (let start = 0; start < totalLines; start += step) {
     const end = Math.min(start + CHUNK_LINES, totalLines);
-    const slice = lines.slice(start, end);
     const startLine = start + 1;
     const endLine = end;
 
     chunks.push({
-      filePath: file.path,
+      filePath,
       directory,
       chunkIndex,
       startLine,
       endLine,
-      chunkContent: formatChunkContent(file.path, startLine, endLine, slice),
-      ...(chunkIndex === 0 ? { fullFileContent: file.content } : {}),
+      chunkContent: formatChunkContent(filePath, startLine, endLine, lines.slice(start, end)),
+      ...(chunkIndex === 0 ? { fullFileContent: content } : {}),
     });
 
     chunkIndex += 1;
@@ -149,6 +174,78 @@ export function chunkFile(file: {
   }
 
   return chunks;
+}
+
+function buildSymbolChunks(opts: {
+  filePath: string;
+  directory: string;
+  lines: string[];
+  content: string;
+}): CodeChunk[] {
+  const { filePath, directory, lines, content } = opts;
+  const totalLines = lines.length;
+  const boundaries = [...findSymbolStarts(lines), totalLines];
+  const chunks: CodeChunk[] = [];
+  let chunkIndex = 0;
+
+  for (let boundaryIndex = 0; boundaryIndex < boundaries.length - 1; boundaryIndex += 1) {
+    const segmentStart = boundaries[boundaryIndex] ?? 0;
+    const segmentEnd = boundaries[boundaryIndex + 1] ?? totalLines;
+    let start = segmentStart;
+
+    while (start < segmentEnd) {
+      const end = Math.min(start + SYMBOL_CHUNK_LINES, segmentEnd);
+      const startLine = start + 1;
+      const endLine = end;
+
+      chunks.push({
+        filePath,
+        directory,
+        chunkIndex,
+        startLine,
+        endLine,
+        chunkContent: formatChunkContent(filePath, startLine, endLine, lines.slice(start, end)),
+        ...(chunkIndex === 0 ? { fullFileContent: content } : {}),
+      });
+
+      chunkIndex += 1;
+      if (end >= segmentEnd) break;
+      start = Math.max(start + 1, end - SYMBOL_CONTEXT_LINES);
+    }
+  }
+
+  return chunks;
+}
+
+export function chunkFile(file: {
+  path: string;
+  content: string;
+}): CodeChunk[] {
+  if (file.content.trim().length === 0) return [];
+
+  const lines = file.content.split('\n');
+  const directory = file.path.includes('/')
+    ? file.path.slice(0, file.path.lastIndexOf('/'))
+    : '.';
+  const step = Math.max(1, CHUNK_LINES - CHUNK_OVERLAP);
+
+  if (lines.length > SYMBOL_SPLIT_THRESHOLD) {
+    const symbolChunks = buildSymbolChunks({
+      filePath: file.path,
+      directory,
+      lines,
+      content: file.content,
+    });
+    if (symbolChunks.length > 0) return symbolChunks;
+  }
+
+  return buildFixedChunks({
+    filePath: file.path,
+    directory,
+    lines,
+    content: file.content,
+    step,
+  });
 }
 
 export function extractHeadings(

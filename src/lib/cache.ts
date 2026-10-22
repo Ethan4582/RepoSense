@@ -54,7 +54,11 @@ export async function cachedJson(
   return response;
 }
 
-export async function purgeWikiCache(projectId: string, slugs: readonly string[] = []): Promise<void> {
+export async function purgeWikiCache(
+  projectId: string,
+  slugs: readonly string[] = [],
+  branches: readonly string[] = []
+): Promise<void> {
   const cache = getEdgeCache();
   if (!cache) return;
 
@@ -62,6 +66,9 @@ export async function purgeWikiCache(projectId: string, slugs: readonly string[]
     `public-project-${projectId}`,
     'explore-all',
     ...slugs.map((slug) => `public-page-${projectId}-${slug}`),
+    ...branches.flatMap((branch) =>
+      slugs.map((slug) => `public-page-${projectId}-${branch}-${slug}`)
+    ),
   ];
 
   await Promise.all(

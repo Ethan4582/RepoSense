@@ -88,7 +88,7 @@ export function getOctokit(token?: string | null) {
   const authToken = trimmedToken || envToken || undefined;
   return new Octokit({
     ...(authToken ? { auth: authToken } : {}),
-    request: { timeout: 20_000 },
+    request: { timeout: 8_000 },
   });
 }
 
@@ -180,7 +180,7 @@ export async function getRepoMetadata(
     // If bad credentials (e.g. invalid environment or user token), try unauthenticated to see if public
     if (isBadCredentials(err)) {
       try {
-        const publicClient = new Octokit({ request: { timeout: 20_000 } });
+        const publicClient = new Octokit({ request: { timeout: 8_000 } });
         const { data } = await publicClient.rest.repos.get({ owner, repo });
         if (!data.private) {
           const ref = await publicClient.rest.git.getRef({
@@ -257,9 +257,10 @@ export function normalizeBranchName(value: string): string {
 export async function resolveRepoRef(
   repoUrl: string,
   input: RepoRefRequest = {},
-  token?: string | null
+  token?: string | null,
+  preloadedMeta?: Awaited<ReturnType<typeof getRepoMetadata>>
 ): Promise<ResolvedRepoRef> {
-  const meta = await getRepoMetadata(repoUrl, token);
+  const meta = preloadedMeta ?? (await getRepoMetadata(repoUrl, token));
   const client = getOctokit(token);
 
   const execute = async (c: Octokit) => {
@@ -296,6 +297,23 @@ export async function resolveRepoRef(
       : meta.defaultBranch;
     const kind: RepoBranchKind = branch === meta.defaultBranch ? 'MAIN' : 'BRANCH';
 
+    if (branch === meta.defaultBranch && meta.commitSha) {
+      return {
+        owner: meta.owner,
+        repo: meta.repo,
+        repoUrl: meta.repoUrl,
+        fetchOwner: meta.owner,
+        fetchRepo: meta.repo,
+        branch,
+        branchKind: kind,
+        pullRequestNumber: null,
+        commitSha: meta.commitSha,
+        defaultBranch: meta.defaultBranch,
+        isPrivate: meta.isPrivate,
+        sizeKb: meta.sizeKb,
+      };
+    }
+
     const { data: ref } = await c.rest.git.getRef({
       owner: meta.owner,
       repo: meta.repo,
@@ -324,7 +342,7 @@ export async function resolveRepoRef(
     if (err instanceof GitHubAccessError) throw err;
     if (isBadCredentials(err) && !meta.isPrivate) {
       try {
-        return await execute(new Octokit({ request: { timeout: 20_000 } }));
+        return await execute(new Octokit({ request: { timeout: 8_000 } }));
       } catch {
         // Fall through
       }
@@ -358,7 +376,7 @@ export async function getRepoTree(
   } catch (err) {
     if (isBadCredentials(err)) {
       try {
-        const publicClient = new Octokit({ request: { timeout: 20_000 } });
+        const publicClient = new Octokit({ request: { timeout: 8_000 } });
         const { data } = await publicClient.rest.git.getTree({
           owner,
           repo,
@@ -415,7 +433,7 @@ export async function fetchRawFile(
     } catch (err) {
       if (isBadCredentials(err)) {
         try {
-          return await getContent(new Octokit({ request: { timeout: 20_000 } }));
+          return await getContent(new Octokit({ request: { timeout: 8_000 } }));
         } catch {
           // ignore
         }
@@ -484,7 +502,7 @@ export const getPullRequests = async (
   } catch (err) {
     if (isBadCredentials(err)) {
       try {
-        const publicClient = new Octokit({ request: { timeout: 20_000 } });
+        const publicClient = new Octokit({ request: { timeout: 8_000 } });
         const res = await publicClient.rest.pulls.list({
           owner,
           repo,

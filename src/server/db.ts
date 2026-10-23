@@ -1,4 +1,4 @@
-import { PrismaNeon } from "@prisma/adapter-neon";
+﻿import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";
 import { PrismaClient } from "@prisma/client";
 
@@ -8,9 +8,19 @@ export const createPrismaClient = (databaseUrl?: string) => {
     throw new Error("DATABASE_URL is not set.");
   }
 
-  const isNode = typeof process !== "undefined" && typeof process.versions === "object" && process.versions !== null && Boolean(process.versions.node);
+  const isCloudflareOrEdge =
+    typeof (globalThis as any).WebSocketPair !== "undefined" ||
+    (typeof navigator !== "undefined" && navigator.userAgent?.includes("Cloudflare")) ||
+    (typeof process !== "undefined" && (process as any).release?.name === "workerd") ||
+    (typeof process !== "undefined" && process.env.NEXT_RUNTIME === "edge");
 
-  if (isNode) {
+  const isPureNode =
+    !isCloudflareOrEdge &&
+    typeof process !== "undefined" &&
+    process.release?.name === "node" &&
+    process.env.NEXT_RUNTIME !== "edge";
+
+  if (isPureNode) {
     return new PrismaClient({
       log:
         process.env.NODE_ENV === "development"
@@ -39,7 +49,7 @@ const globalForPrisma = globalThis as unknown as {
   prismaConfigVersion?: string;
 };
 
-const CURRENT_CONFIG_VERSION = "2026-10-22-direct-native";
+const CURRENT_CONFIG_VERSION = "2026-10-23-edge-compat-v1";
 if (globalForPrisma.prismaConfigVersion !== CURRENT_CONFIG_VERSION) {
   globalForPrisma.prisma = undefined;
   globalForPrisma.prismaConfigVersion = CURRENT_CONFIG_VERSION;

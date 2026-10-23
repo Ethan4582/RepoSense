@@ -5,7 +5,7 @@ import type { AuthContext } from "../auth";
 import { estimateProjectCost, estimateRepoTokensFromTree } from "~/lib/estimate";
 import { parseRepoUrlRef } from "~/lib/github";
 
-const GITHUB_REQUEST_TIMEOUT = 3_500;
+const GITHUB_REQUEST_TIMEOUT = 8_000;
 
 type GitHubTreeEntry = {
   type?: string;
@@ -84,16 +84,25 @@ export const estimateRoutes = new Hono<AuthContext>().post(
 
       const owner = coordinates.owner;
       const repo = coordinates.repo;
-      const branch = coordinates.branch ?? "main";
+      const explicitBranch = coordinates.branch;
 
       let treeEntries: Array<{ path?: string; size?: number }> = [];
 
       try {
-        const treeData = await fetchRepoTree(owner, repo, branch, githubToken?.trim() ?? undefined);
-        if (treeData && Array.isArray(treeData.tree)) {
-          treeEntries = treeData.tree
-            .filter((item) => item.type === "blob")
-            .map((item) => ({ path: item.path, size: item.size }));
+        const token = githubToken?.trim() ?? undefined;
+        // Try explicit branch first, then HEAD (works for any default branch), then common fallbacks
+        const branchesToTry = explicitBranch
+          ? [explicitBranch]
+          : ["HEAD", "main", "master"];
+
+        for (const branch of branchesToTry) {
+          const treeData = await fetchRepoTree(owner, repo, branch, token);
+          if (treeData?.tree && Array.isArray(treeData.tree) && treeData.tree.length > 0) {
+            treeEntries = treeData.tree
+              .filter((item) => item.type === "blob")
+              .map((item) => ({ path: item.path, size: item.size }));
+            break;
+          }
         }
       } catch {
         treeEntries = [];

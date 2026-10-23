@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronRight, Copy, FileCode2, Loader2, X } from 'l
 import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
+import { getApiBaseUrl } from '~/lib/api-client';
 
 export interface ActiveFile {
   filePath: string;
@@ -19,7 +20,7 @@ async function fetchFile(
 ): Promise<string | null> {
   const branchQuery = branch ? `&branch=${encodeURIComponent(branch)}` : '';
   const publicRes = await fetch(
-    `/api/public/projects/${projectId}/file?path=${encodeURIComponent(filePath)}${branchQuery}`,
+    `${getApiBaseUrl()}/api/public/projects/${projectId}/file?path=${encodeURIComponent(filePath)}${branchQuery}`,
     { cache: 'no-store' }
   );
   if (publicRes.ok) {
@@ -28,7 +29,7 @@ async function fetchFile(
   }
 
   const privateRes = await fetch(
-    `/api/projects/${projectId}/file?path=${encodeURIComponent(filePath)}${branchQuery}`,
+    `${getApiBaseUrl()}/api/projects/${projectId}/file?path=${encodeURIComponent(filePath)}${branchQuery}`,
     { cache: 'no-store' }
   );
   if (privateRes.ok) {

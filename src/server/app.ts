@@ -34,10 +34,15 @@ app.use(
     origin: (origin, c) => {
       if (!origin) return undefined;
 
+      // Always allow public routes from any origin
+      if (c.req.path.startsWith("/api/public")) return origin;
+
       try {
         const configured = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
         const allowed = configured ? new URL(configured).origin : new URL(c.req.url).origin;
         if (origin === allowed) return origin;
+        // Also allow *.pages.dev and configured custom domains
+        if (origin.endsWith(".pages.dev") || origin.includes("aash7.xyz") || origin.endsWith(".workers.dev")) return origin;
         if (
           process.env.NODE_ENV !== "production" &&
           /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
@@ -50,7 +55,7 @@ app.use(
 
       return undefined;
     },
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "Cookie"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })

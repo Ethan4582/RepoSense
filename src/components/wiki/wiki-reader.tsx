@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { getApiBaseUrl } from '~/lib/api-client';
 
@@ -160,8 +160,14 @@ export function WikiReader() {
   React.useEffect(() => {
     if (!questionIdParam || !projectId) return;
 
-    fetch(`${getApiBaseUrl()}/api/projects/${projectId}/questions/${questionIdParam}`)
-      .then(async (res) => {
+    const loadQuestion = async () => {
+      try {
+        let res = await fetch(`${getApiBaseUrl()}/api/public/projects/${projectId}/questions/${questionIdParam}`);
+        if (!res.ok) {
+          res = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/questions/${questionIdParam}`, {
+            credentials: 'include',
+          });
+        }
         if (!res.ok) return;
         const data = (await res.json()) as {
           question?: {
@@ -196,8 +202,11 @@ export function WikiReader() {
             setActiveFile({ filePath: parsedScans[0]!.filePath, startLine: parsedScans[0]!.startLine, endLine: parsedScans[0]!.endLine });
           }
         }
-      })
-      .catch(() => {});
+      } catch {
+        // Fallback or network error
+      }
+    };
+    void loadQuestion();
   }, [questionIdParam, projectId]);
 
   React.useEffect(() => {

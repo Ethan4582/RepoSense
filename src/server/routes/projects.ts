@@ -140,7 +140,8 @@ export const projectsRoutes = new Hono<AuthContext>()
         initialRef = await resolveRepoRef(
           coordinates.repoUrl,
           { branch: coordinates.branch },
-          input.githubToken
+          input.githubToken,
+          meta
         );
       } catch (err) {
         return c.json(

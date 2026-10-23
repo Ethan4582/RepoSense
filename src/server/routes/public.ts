@@ -225,4 +225,24 @@ export const publicRoutes = new Hono()
       content,
       lines: content.split('\n').length,
     });
+  })
+  .get('/projects/:id/questions/:questionId', async (c) => {
+    const projectId = c.req.param('id');
+    const questionId = c.req.param('questionId');
+
+    const project = await db.project.findFirst({
+      where: { id: projectId, isPublicWiki: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!project) return c.json({ error: 'Question not found' }, 404);
+
+    const question = await db.question.findFirst({
+      where: { id: questionId, projectId },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, imageUrl: true } },
+      },
+    });
+
+    if (!question) return c.json({ error: 'Question not found' }, 404);
+    return c.json({ question });
   });

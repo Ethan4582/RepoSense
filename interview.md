@@ -217,3 +217,25 @@ RepoSense is an autonomous repository intelligence platform that:
                      ?
     Final Grounded Response Streamed to Client
     ```
+
+
+### P0 Deep-Dive: Durable Background Execution & Queue Architectures (Scale & Reliability)
+
+#### Q15: "Why do giant repositories (5,000+ files) break in serverless environments, and how would you build a bulletproof indexing pipeline using durable background job queues (Inngest / BullMQ / Cloudflare Workflows)?"
+- **The Core Problem:**
+  - **Hard Execution Timeouts:** Serverless HTTP functions have strict execution ceilings (Cloudflare Workers: 30s CPU time, Vercel Serverless: 15s-60s). Indexing 5,000 files requires downloading trees, slicing 15,000+ chunks, making batched embedding calls, and generating multi-page wikis�a process taking 2 to 5 minutes.
+  - **Memory & Concurrency Limits:** Buffering thousands of file ASTs in memory risks Out-Of-Memory (OOM) crashes in serverless containers (128MB-256MB).
+  - **Catastrophic Failures:** In a single HTTP request, if file #4,990 fails due to a rate limit or transient network hiccup, the entire HTTP connection drops, aborts uncommitted database transactions, and forces the user to start completely over from 0%.
+- **The Solution: Durable Event-Driven Workflow Architecture:**
+  We split monolithic ingestion into an asynchronous, idempotent, stateful pipeline using a durable queue engine (such as Inngest, Redis-backed BullMQ, or native Cloudflare Workflows in `src/server/workflows/indexing.ts`):
+  1. **Immediate HTTP Return (202 Accepted):** When the user clicks "Index", the HTTP handler validates permissions, inserts an `IndexingJob` record with status `QUEUED`, enqueues a root job event `repo/index.started`, and returns immediately with a tracking `jobId` in <200ms.
+  2. **Fan-Out / Map-Reduce Step Decomposition:**
+     - **Step 1: Manifest & Tree Fetch:** Lightweight job fetches Git tree, runs ignore filters, and commits the file manifest to Postgres.
+     - **Step 2: Fan-Out Chunk & Embed:** Instead of one worker processing 5,000 files, the queue engine fans out files into deterministic batches (e.g., 50 files per batch). 100 queue workers process batches in parallel.
+     - **Step 3: Stateful Checkpointing:** Each batch independently writes its vectors to `SourceCodeEmbedding` and updates its batch counter atomically.
+     - **Step 4: Fan-In Wiki Generation:** Once all batch jobs emit completion events, a final aggregation step triggers the two-phase DeepWiki generator.
+  3. **Automatic Exponential Backoff & Dead-Letter Queues (DLQ):**
+     - If OpenAI or GitHub returns a `429 Rate Limit`, the durable queue pauses that specific step, sleeps for the `Retry-After` header duration, and retries automatically up to 5 times without failing the entire repository.
+     - Poison pills (malformed binary files) are caught, dumped to a Dead-Letter Queue (DLQ) with error telemetry, and the pipeline continues gracefully.
+  4. **Client Progress Synchronization:**
+     - The browser doesn'''t hold a blocking connection; it listens via Server-Sent Events (SSE) (`/api/projects/:id/indexing/stream`) or lightweight polling (`/indexing/status`), displaying real-time percentage progress bar updates directly from the job state.

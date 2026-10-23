@@ -330,3 +330,53 @@ RepoSense is an autonomous repository intelligence platform that:
   4. **Why We Don'''t Restart from Zero (Atomic Checkpoints):**
      - Vectors are written in chunk batches to PostgreSQL as they are processed.
      - In durable workflows (`src/server/workflows/indexing.ts`), each phase (manifest fetch, embedding batches, wiki generation) is an idempotent step. A transient failure in step 3 retries only step 3 with exponential backoff, without re-downloading files from GitHub or re-embedding previously completed batches.
+
+
+### P0 Deep-Dive: Comprehensive System Bottlenecks & Architectural Mitigations (Q23)
+
+#### Q23: "What are the primary bottlenecks in this project, why do they happen, and how do we resolve each one?"
+
+1. **GitHub API Rate Limits & Network Round-Trips (The Ingestion Bottleneck)**
+   - **The Problem:** 
+     - Unauthenticated requests from serverless edge nodes share outbound IP pools and hit GitHub'''s strict rate limit of **60 requests/hour**.
+     - Fetching hundreds of source files sequentially or through repetitive Git tree traversal burns rate quotas and adds heavy network latency (100-300ms per file).
+   - **How to Resolve It:**
+     - *BYOK Token Authentication:* Provide user-scoped GitHub Personal Access Tokens (boosting rate limits to **5,000 req/hour**).
+     - *Raw CDN Routing:* Fetch public repositories via `raw.githubusercontent.com` rather than REST API endpoints to bypass API rate accounting entirely.
+     - *Tree Metadata Pre-filtering:* Use a single recursive tree query (`/git/trees/{sha}?recursive=1`) to filter and batch download up to 20 files per connection, caching tree payloads by commit SHA.
+
+2. **Serverless Execution Timeouts & Memory Caps (The Compute Bottleneck)**
+   - **The Problem:**
+     - Cloudflare Workers and serverless functions enforce hard execution ceilings (**15s to 30s CPU limits**).
+     - Ingesting a large codebase (1,000+ files), extracting AST skeletons, calculating embeddings, and writing technical wikis cannot finish inside a single synchronous HTTP request, causing 504 Gateway Timeouts and broken state.
+   - **How to Resolve It:**
+     - *Durable Asynchronous Workflows:* Decouple ingestion into multi-step durable background workflows (`src/server/workflows/indexing.ts` or Inngest/BullMQ).
+     - *Immediate 202 Accepted Response:* The API returns a tracking `jobId` within 100ms while workers process chunking and vector storage asynchronously.
+     - *Fan-Out / Map-Reduce Pattern:* Distribute files into discrete batches (e.g., 50 files per sub-job) that execute in parallel across worker pools with independent checkpoints.
+
+3. **Vector Distance Search at High Row Counts (The Database Bottleneck)**
+   - **The Problem:**
+     - In PostgreSQL using `pgvector`, computing cosine distance (`1 - (embedding <=> query)`) without index structures performs a full sequential table scan ($O(N)$ linear complexity).
+     - As total code chunks grow beyond 100,000+ rows, query latency spikes from 20ms to several seconds, saturating database CPU cores.
+   - **How to Resolve It:**
+     - *HNSW Graph Indexing:* Build a Hierarchical Navigable Small World (HNSW) vector index:
+       `CREATE INDEX ON "SourceCodeEmbedding" USING hnsw ("embeddingOpenAI" vector_cosine_ops) WITH (m = 16, ef_construction = 64);`
+       This changes vector search from an $O(N)$ sequential scan to an $O(\log N)$ graph traversal.
+     - *Relational Partitioning / Scoping:* Strict composite index gating on `(projectId, branch)` ensures the database only scans vectors belonging to the active project revision.
+
+4. **Synchronous LLM Output Limits & Rate Throttling (The AI Bottleneck)**
+   - **The Problem:**
+     - Modern LLMs have strict output token limits (typically 4,096 to 8,192 tokens per request) and tight TPM/RPM (tokens/requests per minute) rate limits.
+     - Asking an LLM to generate an entire repository'''s documentation in one prompt causes mid-sentence truncation, shallow summaries, and frequent 429 Rate Limit errors.
+   - **How to Resolve It:**
+     - *Two-Phase Generation (Plan First, Write Second):* Phase 1 generates a structured JSON table of contents using only the lightweight RepoSkeleton. Phase 2 writes pages individually with dedicated, line-numbered file contexts.
+     - *Concurrency Throttling:* Use bounded concurrency pools (`p-limit = 3`) to generate wiki pages in parallel without exceeding provider RPM caps.
+     - *Exponential Backoff & Jitter:* Wrap all model calls in automatic retry logic that inspects `Retry-After` headers on 429 responses.
+
+5. **Cross-Origin Auth Misrouting & HTML Fallback (The Edge Routing Bottleneck)**
+   - **The Problem:**
+     - In split deployments (frontend on custom domains or Cloudflare Pages, backend on Cloudflare Workers), cross-origin requests do not automatically share host-only session cookies.
+     - If an API route fails auth or hits an unmapped path, hosting layers return a sign-in or 404 HTML document (`<!DOCTYPE html>`), causing frontend JSON parsers to crash with syntax errors.
+   - **How to Resolve It:**
+     - *Public Unauthenticated Route Scoping:* Extract non-sensitive pre-flight operations (URL verification, public wiki readers, explore feeds) into unauthenticated `/api/public/*` endpoints with universal CORS headers.
+     - *Same-Origin Base URL Routing:* Configure the client to prioritize `window.location.origin` in browser runtimes, keeping traffic on the same origin and eliminating cross-site cookie and CORS negotiation latency.

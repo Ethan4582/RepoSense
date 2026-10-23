@@ -303,25 +303,16 @@ RepoSense is an autonomous repository intelligence platform that:
   - **4. Memory Footprint & Throughput:**
     - Hono has zero dependencies and weighs **< 15KB**. Its RegExp-based router (RegExpRouter) compiles all routes into a single regular expression, outperforming Express's sequential linear route matching by over **10x in throughput**.
 
-#### Q21: "Explain how `useSmoothStream` (src/hooks/use-smooth-stream.ts) achieves a locked 60 FPS streaming experience. What problem does it solve?"
-- **The Problem with Naive Streaming:**
-  - Modern LLM providers (Groq, Cerebras, OpenAI) stream tokens at 50 to 100+ tokens per second.
-  - If a React component calls `setText(prev => prev + chunk)` on every arriving token chunk, React triggers **50 to 100 reconciliation and re-render cycles every second**.
-  - Because each chunk alters the DOM, recalculates text layout, and re-renders heavy syntax highlighters / Markdown parsers, the main thread saturates. This causes **layout thrashing, jank, skipped frames, and browser UI freezes**.
-- **How `useSmoothStream` Solves It (Under the Hood):**
-  1. **Ref-Based Decoupled Buffer (`pending.current`):**
-     - When a token arrives via `push(chunk)`, it is appended to a synchronous JavaScript string ref (`pending.current += chunk`).
-     - Appending to a `useRef` does **not** trigger a React re-render.
-  2. **Frame Synchronization via `requestAnimationFrame` (rAF):**
-     - `push()` checks if an animation frame is already scheduled (`if (frame.current === null)`). If not, it requests an animation frame from the browser: `requestAnimationFrame(flush)`.
-     - The browser ensures `flush` executes exactly once per display refresh cycle (every **16.6ms at 60 FPS**).
-  3. **Batch Flushing:**
-     - When `flush()` executes on the next tick, it grabs the accumulated string delta, resets the pending ref, and triggers **one single state update** (`setText(value => value + chunk)`).
-  4. **Clean Lifecycle & Unmount Safety:**
-     - The hook tracks the animation frame ID (`frame.current`) and cancels any scheduled frame on unmount (`cancelAnimationFrame`) or stream reset, preventing memory leaks and state updates on unmounted components.
-
-
-### P0 Deep-Dive: GitHub Rate Limits, Broken Requests & AST Parsing Resilience (Q22)
+#### Q21: "In simple layman'''s terms: How does `useSmoothStream` make AI text look so smooth at 60 FPS instead of jittering or freezing the browser?"
+- **The Simple Analogy:**
+  - Imagine you are reading a book, and someone throws single words at you randomly 80 times a second. Your eyes would get tired, your head would hurt, and you wouldn'''t be able to keep up.
+  - That is exactly what an AI model does to a web browser: it fires tiny word fragments dozens of times every second. If the browser tries to repaint the entire screen on every single word, it chokes, stutters, and freezes.
+- **How We Solve It (The Bucket Analogy):**
+  - Instead of forcing the browser to repaint every time a single word arrives, we put the incoming words into a **holding bucket** (a JavaScript `useRef`). Filling this bucket takes zero effort and does **not** force the screen to repaint.
+  - Meanwhile, we tell the browser: *"Whenever your screen naturally refreshes (which is 60 times a second, or every 16 milliseconds), empty whatever is inside the bucket onto the screen all at once."*
+- **Why It Matters:**
+  - The human eye perceives a seamless, silky-smooth typing effect.
+  - The browser only updates once per screen refresh tick (`requestAnimationFrame`), completely eliminating lag, stuttering, and dropped frames.
 
 #### Q22: "What happens when GitHub rate limits or drops HTTP requests, or an AST/chunking error occurs on a file? Do we have to restart the entire indexing pipeline from scratch?"
 - **Answer:**

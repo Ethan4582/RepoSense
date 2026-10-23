@@ -216,7 +216,7 @@ function CreateProjectContent() {
     setUrlError(null);
     resetVerification();
 
-    try {
+        try {
       const res = await client.projects['verify-repo'].$post({
         json: { repoUrl: base, githubToken: githubToken.trim() || undefined },
       });
@@ -225,8 +225,11 @@ function CreateProjectContent() {
 
       setVerification(data);
       setIsPublicWiki(!data.repository.isPrivate);
+      setVerifying(false);
+
+      // Run estimation in background without holding button state
       setEstimating(true);
-      const estimateRes = await client.projects.estimate.$post({
+      void client.projects.estimate.$post({
         json: {
           repoUrl: base,
           githubToken: githubToken.trim() || undefined,
@@ -234,14 +237,18 @@ function CreateProjectContent() {
           embeddingModelId:
             embeddingProvider === 'OPENAI' ? 'text-embedding-3-small' : 'gemini-embedding-001',
         },
+      }).then(async (estimateRes) => {
+        if (estimateRes.ok) {
+          const payload = await estimateRes.json();
+          if ('estimate' in payload) setEstimate(payload.estimate);
+        }
+      }).catch(() => {
+        // Fallback estimate handles failures silently
+      }).finally(() => {
+        setEstimating(false);
       });
-      if (estimateRes.ok) {
-        const payload = await estimateRes.json();
-        if ('estimate' in payload) setEstimate(payload.estimate);
-      }
     } catch (err) {
       setUrlError(err instanceof Error ? err.message : 'Repository could not be verified.');
-    } finally {
       setVerifying(false);
       setEstimating(false);
     }

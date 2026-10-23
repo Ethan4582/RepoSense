@@ -19,7 +19,8 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "build:worker": "prisma generate"
+    "build:worker": "prisma generate",
+    "pages:build": "npx --legacy-peer-deps @cloudflare/next-on-pages"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.82",

@@ -53,14 +53,51 @@ In large controller or service files, cutting every 120 lines arbitrarily breaks
 - It cuts at these natural boundaries, aiming for roughly 180 lines per chunk.
 - It also grabs the 8 lines right before the function. This captures decorators, docstrings, or TypeScript types that describe what the function does.
 
-### The Secret Weapon: RepoSkeleton
-While chunking files, RepoSense builds a lightweight structural map called the **RepoSkeleton**.
-It extracts:
-- File paths and line counts.
-- Import statements (what does this file depend on?).
-- Exported functions, classes, and types (what does this file give to others?).
+### The Secret Weapon: RepoSkeleton & Structural Analysis
+While chunking files, RepoSense builds a lightweight, high-density structural map called the **RepoSkeleton** (`src/lib/chunker.ts`).
 
-This skeleton fits inside an AI model prompt easily, allowing the documentation generator to understand how the entire codebase connects without reading millions of raw characters.
+Instead of feeding hundreds of thousands of raw lines to an LLM to figure out project architecture, the skeleton extracts the core interface surface of every eligible code file:
+
+#### 1. What does the RepoSkeleton data structure actually look like?
+```typescript
+export interface RepoSkeletonEntry {
+  filePath: string;                  // e.g. "src/server/routes/projects.ts"
+  directory: string;                 // e.g. "src/server/routes"
+  lineCount: number;                 // e.g. 542
+  sizeBytes: number;                 // e.g. 18240
+  imports: Array<{
+    statement: string;               // e.g. "import { db } from '~/server/db';"
+    line: number;                    // Line number in original file
+  }>;
+  exports: Array<{
+    signature: string;               // e.g. "export const projectsRoutes = new Hono()..."
+    line: number;                    // Line number where declaration starts
+  }>;
+}
+
+export interface RepoSkeleton {
+  generatedAt: string;               // ISO Timestamp
+  fileCount: number;                 // Total files analyzed
+  directories: string[];             // Unique sorted directory list
+  files: RepoSkeletonEntry[];        // Per-file breakdown
+}
+```
+
+#### 2. How are imports and exports extracted without heavy AST parsers?
+Running multi-language AST parsers (like Tree-sitter or Babel) in serverless environments (Cloudflare Workers/Edge) incurs heavy cold starts and native binary dependencies. RepoSense uses high-speed, targeted regex pattern engines:
+- **Imports:** Detects ES Modules (`import ... from`), CommonJS (`require(...)`), Python (`from ... import`, `import ...`), and Rust (`use ...;`). Capped at 60 imports per file to prevent prompt flooding.
+- **Exports:** Captures exported functions, classes, interfaces, TypeScript types, Go funcs, Rust `pub fn`, Python top-level `def`, and HTTP routes (`app.get`, `router.post`). Capped at 120 exports per file.
+- **Symbol context extraction:** For symbol-aware chunks, RepoSense grabs 8 preceding lines (`SYMBOL_CONTEXT_LINES = 8`) to preserve decorators (`@Injectable()`, `@Component`), JSDoc/docstrings, and type annotations that explain the declaration.
+
+#### 3. How does the Skeleton turn into the Architecture Brief?
+In `src/lib/wiki/analyzer.ts`, the skeleton is paired with parsed package manifests (`package.json`, `Cargo.toml`, etc.) to automatically classify every file into one of 5 architectural tiers:
+1. `entry`: Bootstrapping & routing (`src/app/layout.tsx`, `src/server/app.ts`, `main.ts`).
+2. `core`: Domain logic and processing services (`src/lib/indexing-workflow.ts`, `src/lib/qa-engine.ts`).
+3. `integrations`: Third-party APIs & SDKs (Clerk, GitHub Octokit, Vercel AI SDK, Cloudinary).
+4. `data`: Database schema, migrations, vector storage (`prisma/schema.prisma`, `src/server/db.ts`).
+5. `utilities`: Shared helpers, formatters, and crypto (`src/lib/utils.ts`, `src/lib/providers/crypto.ts`).
+
+This brief compresses a 50,000-line codebase down to ~3,000 tokens of dense architectural context, giving the documentation planner complete topological awareness of the system.
 
 ---
 

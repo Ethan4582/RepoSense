@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import { db } from "~/server/db";

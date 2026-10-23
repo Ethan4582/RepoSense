@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { auth } from "@clerk/nextjs/server";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";

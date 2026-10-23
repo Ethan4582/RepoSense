@@ -10,18 +10,7 @@ When you paste a URL like `https://github.com/facebook/react` and click **Index*
 
 Instead, RepoSense talks to GitHub's REST API and processes everything in memory through a step-by-step pipeline.
 
-```mermaid
-flowchart TD
-    A["You enter GitHub URL"] --> B["Resolve Target Branch or Commit SHA"]
-    B --> C["Fetch Git Tree Manifest in 1 API Call"]
-    C --> D["Filter Out Garbage: lockfiles, binaries, node_modules"]
-    D --> E["Batch Download Source Files (up to 20 files / 800 KB)"]
-    E --> F["Extract Code Skeletons (imports and exports)"]
-    F --> G["Chunk Files into Bite-Sized Pieces"]
-    G --> H["Generate Vector Embeddings (OpenAI or Gemini)"]
-    H --> I["Plan and Write DeepWiki Documentation Pages"]
-    I --> J["Ready for Q&A and Exploration"]
-```
+![GitHub Ingestion Pipeline](public/docs/7.png)
 
 ### Step 1: Resolving the target
 Before downloading anything, RepoSense resolves your branch name (e.g., `main`, `dev`, or pull request number) to an exact Git commit SHA. This ensures that every file downloaded belongs to the exact same revision.
@@ -51,14 +40,7 @@ AI embedding models cannot read a 3,000-line file all at once. If you stuff an e
 
 RepoSense uses two chunking strategies depending on how big the file is.
 
-```mermaid
-flowchart TD
-    File["Incoming Source File"] --> SizeCheck{"Is file > 800 lines?"}
-    SizeCheck -- "No (<= 800 lines)" --> SlidingWindow["Sliding Window Chunking<br/>120 lines per chunk<br/>20 lines overlap"]
-    SizeCheck -- "Yes (> 800 lines)" --> SymbolChunking["Symbol-Aware Chunking<br/>Split at function / class / endpoint declarations<br/>Target ~180 lines + 8 lines preceding context"]
-    SlidingWindow --> Chunks["Code Chunks with Exact Line Numbers [start-end]"]
-    SymbolChunking --> Chunks
-```
+![Chunking Strategies](public/docs/8.png)
 
 ### Strategy A: Sliding window (for standard files under 800 lines)
 - **Chunk size:** 120 lines.
@@ -86,23 +68,7 @@ This skeleton fits inside an AI model prompt easily, allowing the documentation 
 
 Instead of asking an AI to "write docs for this repo" in one huge prompt (which causes hallucination, truncation, and shallow summaries), RepoSense splits documentation into a two-phase process: **Plan first, write second**.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant LLM as AI Model
-    participant Gen as Wiki Generator
-    participant DB as Postgres Database
-
-    Gen->>LLM: Send RepoSkeleton + Architecture Brief (5 layers)
-    LLM-->>Gen: Return structured JSON Plan (Sections & Pages)
-    Gen->>Gen: Ensure mandatory blueprints (Overview, Architecture, Lifecycle, Data, Setup)
-    loop Up to 3 pages in parallel
-        Gen->>LLM: Send relevant code files + numbered lines for this specific page
-        LLM-->>Gen: Return Markdown content with Mermaid diagrams
-        Gen->>DB: Save WikiPage row
-    end
-    Gen->>DB: Mark Indexing Complete
-```
+![DeepWiki Planning and Generation Flow](public/docs/9.png)
 
 ### Phase 1: Planning
 The model receives the **RepoSkeleton** and an **Architecture Brief** that classifies files into five categories:
@@ -132,19 +98,7 @@ Once the outline is approved:
 
 When you ask: *"How does authentication work in this repo?"*, here is the journey of that question:
 
-```mermaid
-flowchart TD
-    Q["You ask: 'How does authentication work?'"] --> EMB["Embedding Model turns question into 1536 numbers"]
-    EMB --> VEC["pgvector Cosine Search in Database"]
-    VEC --> CHUNKS["Top 12 Most Relevant Code Chunks found"]
-    Q --> WIKI["Keyword Search scans generated Wiki Pages"]
-    CHUNKS --> CTX["Combine into Grounded Prompt with History"]
-    WIKI --> CTX
-    CTX --> LLM["LLM answers with strict citation rules"]
-    LLM --> STREAM["Tokens streamed to UI via useSmoothStream"]
-    STREAM --> PILLS["Parser converts [[file:line-line]] into clickable inspection pills"]
-    PILLS --> USER["User clicks citation: Code panel opens to exact lines"]
-```
+![RAG Question Answering Flow](public/docs/10.png)
 
 ### 1. Vector conversion
 Your question is converted into a vector (a list of 1,536 numbers representing semantic meaning). Words like "auth", "login", "jwt", and "session" all point to similar regions in vector space.

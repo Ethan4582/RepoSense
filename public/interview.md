@@ -284,3 +284,38 @@ RepoSense is an autonomous repository intelligence platform that:
   - **`src/server/db.ts`:** The database abstraction layer. Uses a runtime proxy and environment sniffer (`isCloudflareOrEdge`) to cleanly switch between `PrismaNeon` (for serverless/worker runtimes with WebSockets) and native `PrismaClient` (for local Node.js development).
   - **`src/server/routes/public.ts`:** Dedicated unauthenticated routes for public wikis and explore pages. Completely detached from Clerk auth middleware to enable blazing fast cold starts and zero-auth read access for incognito users.
   - **`src/components/wiki/wiki-reader.tsx`:** The primary UI orchestrator. Manages split-screen state, handles public-to-private API fallback for QA queries, and wires token streaming into `useSmoothStream`.
+
+
+### P0 Deep-Dive: Runtime Selection (Hono vs Node.js) & 60 FPS Token Smoothing (Q20 - Q21)
+
+#### Q20: "Why pick Hono over a traditional Node.js/Express framework? How do you answer this beyond 'it is modern and runs on Cloudflare'?"
+- **The Senior Engineering Answer:**
+  - **Clarification first:** *Node.js* is a JavaScript runtime, while *Hono* is a web standards-based server framework (like Express or Fastify). The exact comparison is **Hono on Edge/V8 isolates (Cloudflare Workers)** vs **Express/Fastify on Node.js containers (AWS ECS/EC2/Heroku)**.
+  - **1. Zero-Cold-Start V8 Isolates vs Container Boot Latency:**
+    - A standard Node.js/Express container takes **1.5s to 4s** to boot up (Node runtime initialization, dependency parsing, memory allocation).
+    - Hono running on Cloudflare Workers runs on **V8 isolates** with a cold start of **< 5ms** globally across 300+ edge locations.
+  - **2. Web Standards Compliance (Fetch API & Request/Response):**
+    - Express relies on legacy Node.js-specific objects (`req`, `res`, `res.send()`, Node `http.IncomingMessage`).
+    - Hono is built natively on modern **W3C Web Standards** (`Request`, `Response`, `ReadableStream`, `Fetch API`). This allows the exact same Hono codebase to run identically in Cloudflare Workers, Next.js Edge route handlers, Deno, Bun, or Node.js without rewriting route handlers.
+  - **3. Native Streaming & Server-Sent Events (SSE):**
+    - Streaming LLM tokens via SSE in Express requires manual header management, chunk flushing, and keeping long-lived Node sockets alive.
+    - Hono provides first-class streaming primitives (`streamSSE`, `streamText`) that pipe directly into web standard ReadableStreams.
+  - **4. Memory Footprint & Throughput:**
+    - Hono has zero dependencies and weighs **< 15KB**. Its RegExp-based router (RegExpRouter) compiles all routes into a single regular expression, outperforming Express's sequential linear route matching by over **10x in throughput**.
+
+#### Q21: "Explain how `useSmoothStream` (src/hooks/use-smooth-stream.ts) achieves a locked 60 FPS streaming experience. What problem does it solve?"
+- **The Problem with Naive Streaming:**
+  - Modern LLM providers (Groq, Cerebras, OpenAI) stream tokens at 50 to 100+ tokens per second.
+  - If a React component calls `setText(prev => prev + chunk)` on every arriving token chunk, React triggers **50 to 100 reconciliation and re-render cycles every second**.
+  - Because each chunk alters the DOM, recalculates text layout, and re-renders heavy syntax highlighters / Markdown parsers, the main thread saturates. This causes **layout thrashing, jank, skipped frames, and browser UI freezes**.
+- **How `useSmoothStream` Solves It (Under the Hood):**
+  1. **Ref-Based Decoupled Buffer (`pending.current`):**
+     - When a token arrives via `push(chunk)`, it is appended to a synchronous JavaScript string ref (`pending.current += chunk`).
+     - Appending to a `useRef` does **not** trigger a React re-render.
+  2. **Frame Synchronization via `requestAnimationFrame` (rAF):**
+     - `push()` checks if an animation frame is already scheduled (`if (frame.current === null)`). If not, it requests an animation frame from the browser: `requestAnimationFrame(flush)`.
+     - The browser ensures `flush` executes exactly once per display refresh cycle (every **16.6ms at 60 FPS**).
+  3. **Batch Flushing:**
+     - When `flush()` executes on the next tick, it grabs the accumulated string delta, resets the pending ref, and triggers **one single state update** (`setText(value => value + chunk)`).
+  4. **Clean Lifecycle & Unmount Safety:**
+     - The hook tracks the animation frame ID (`frame.current`) and cancels any scheduled frame on unmount (`cancelAnimationFrame`) or stream reset, preventing memory leaks and state updates on unmounted components.

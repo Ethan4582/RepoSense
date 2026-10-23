@@ -319,3 +319,23 @@ RepoSense is an autonomous repository intelligence platform that:
      - When `flush()` executes on the next tick, it grabs the accumulated string delta, resets the pending ref, and triggers **one single state update** (`setText(value => value + chunk)`).
   4. **Clean Lifecycle & Unmount Safety:**
      - The hook tracks the animation frame ID (`frame.current`) and cancels any scheduled frame on unmount (`cancelAnimationFrame`) or stream reset, preventing memory leaks and state updates on unmounted components.
+
+
+### P0 Deep-Dive: GitHub Rate Limits, Broken Requests & AST Parsing Resilience (Q22)
+
+#### Q22: "What happens when GitHub rate limits or drops HTTP requests, or an AST/chunking error occurs on a file? Do we have to restart the entire indexing pipeline from scratch?"
+- **Answer:**
+  1. **Dual-Tier Fetching & Token Fallback (`src/lib/github.ts:fetchRawFile`):**
+     - *Primary Tier:* Attempts to stream from raw GitHub CDN (`raw.githubusercontent.com`) which bypasses standard REST API rate limits.
+     - *Secondary Fallback Tier:* If CDN returns `404`, `401`, or `403` (due to private repo or rate limits), it gracefully catches the error and falls back to GitHub REST API (`octokit.rest.repos.getContent`).
+     - *Auth Fallback:* If a user'''s personal access token expires or hits a 401 `Bad credentials`, the system strips the authorization header and immediately retries the request unauthenticated in case the repository is public.
+  2. **Batching with Concurrency Throttling:**
+     - Files are fetched in bounded batches (max 20 files / 800 KB per batch).
+     - Each request has a strict 8-second AbortSignal timeout (`signal: AbortSignal.timeout(8_000)`) so a hung TCP connection never blocks the pipeline indefinitely.
+  3. **AST & Syntax Failure Containment (Graceful Degradation):**
+     - Unlike heavy native AST parsers (like Babel or Tree-sitter) which throw fatal fatal syntax errors on unconventional syntax or unparseable files, RepoSense uses a resilient **Regex Pattern Engine** (`src/lib/chunker.ts`).
+     - *Per-file isolation:* If a file is malformed, binary, or triggers a regex timeout, the error is isolated to that single file.
+     - *Sliding window fallback:* If symbol-aware splitting fails to locate clean function/class boundaries in a file, it does **not** fail the pipeline�it automatically falls back to standard 120-line sliding window chunking.
+  4. **Why We Don'''t Restart from Zero (Atomic Checkpoints):**
+     - Vectors are written in chunk batches to PostgreSQL as they are processed.
+     - In durable workflows (`src/server/workflows/indexing.ts`), each phase (manifest fetch, embedding batches, wiki generation) is an idempotent step. A transient failure in step 3 retries only step 3 with exponential backoff, without re-downloading files from GitHub or re-embedding previously completed batches.

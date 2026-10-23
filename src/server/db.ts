@@ -8,7 +8,7 @@ export const createPrismaClient = (databaseUrl?: string) => {
     throw new Error("DATABASE_URL is not set.");
   }
 
-  const isNode = typeof process !== "undefined" && Boolean(process.versions?.node);
+  const isNode = typeof process !== "undefined" && typeof process.versions === "object" && process.versions !== null && Boolean(process.versions.node);
 
   if (isNode) {
     return new PrismaClient({

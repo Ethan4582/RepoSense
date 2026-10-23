@@ -490,8 +490,11 @@ export function AppSideBar() {
                 type="button"
                 onClick={async () => {
                   setProfileOpen(false);
-                  await signOut();
-                  window.location.href = "/";
+                  try {
+                    await signOut({ redirectUrl: '/sign-in' });
+                  } catch {
+                    window.location.href = '/sign-in';
+                  }
                 }}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
               >

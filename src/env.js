@@ -31,9 +31,9 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: z.string().default("/sign-in"),
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().default("/sign-up"),
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: z.string().default("/sync-user"),
-    NEXT_PUBLIC_APP_URL: z.string().url().optional(),
-    NEXT_PUBLIC_API_URL: z.string().url().optional(),
-    NEXT_PUBLIC_LANDING_PAGE_URL: z.string().url().optional(),
+    NEXT_PUBLIC_APP_URL: z.string().optional(),
+    NEXT_PUBLIC_API_URL: z.string().optional(),
+    NEXT_PUBLIC_LANDING_PAGE_URL: z.string().optional(),
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().optional(),
   },
 

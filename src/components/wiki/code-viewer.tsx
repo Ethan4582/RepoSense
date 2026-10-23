@@ -162,13 +162,13 @@ export function CodeViewer({
                     ref={highlighted && lineNumber === file.startLine ? highlightRef : undefined}
                     className={cn(
                       'flex transition-colors',
-                      highlighted && 'bg-[#1f293d] border-l-2 border-[#3b82f6]'
+                      highlighted && 'bg-primary/[0.08] border-l-2 border-primary'
                     )}
                   >
                     <span className="w-11 shrink-0 select-none pr-3 text-right text-neutral-500">
                       {lineNumber}
                     </span>
-                    <span className={cn('whitespace-pre', highlighted ? 'text-neutral-100 font-medium' : 'text-neutral-300')}>
+                    <span className={cn('whitespace-pre', highlighted ? 'text-foreground font-medium' : 'text-neutral-300')}>
                       {line || ' '}
                     </span>
                   </div>

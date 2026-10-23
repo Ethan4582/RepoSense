@@ -108,8 +108,11 @@ export function WikiQaView({
           question,
           answers: answer,
           branch: activeBranch,
+          isBookmarked: true,
           fileReference: citedFiles.map((f) => ({
             fileName: f.filePath,
+            startLine: f.startLine,
+            endLine: f.endLine,
             sourceCode: '',
             summary: `Citations from ${f.filePath}${f.startLine ? `:${f.startLine}-${f.endLine}` : ''}`,
           })),
@@ -121,7 +124,7 @@ export function WikiQaView({
       }
 
       setSaved(true);
-      toast.success('Answer saved to QA History');
+      toast.success('Answer saved to QA Bookmarks');
     } catch {
       toast.error('Could not save answer. Please try again.');
     } finally {

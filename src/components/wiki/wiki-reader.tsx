@@ -756,9 +756,9 @@ export function WikiReader() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <header
-        className="relative flex h-[64px] shrink-0 items-center justify-between border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-[clamp(20px,5vw,77px)]"
+        className="relative flex h-[64px] shrink-0 items-center justify-between border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-0"
       >
         <div className="flex h-full w-full items-center justify-between border-x border-dashed border-neutral-300 dark:border-neutral-700/80 px-7">
           {/* Left brand segment */}
@@ -886,13 +886,13 @@ export function WikiReader() {
         </div>
       </header>
 
-      {/* ── Indexing progress banner ── */}
+      {/* -- Indexing progress banner -- */}
       {indexing ? (
         <div className="flex shrink-0 items-center gap-3 border-b border-dashed border-border/30 bg-muted/30 px-4 py-2 text-xs text-foreground">
           <Sparkles className="size-3.5 animate-pulse text-muted-foreground" />
           <span className="font-medium">
             {indexing.currentDetail ??
-              `${indexing.currentStep.replaceAll('_', ' ').toLowerCase()} — ${indexing.processedFiles}/${indexing.totalFiles} files`}
+              `${indexing.currentStep.replaceAll('_', ' ').toLowerCase()} � ${indexing.processedFiles}/${indexing.totalFiles} files`}
           </span>
           {indexing.estimatedSecondsRemaining ? (
             <span className="text-muted-foreground">
@@ -902,8 +902,8 @@ export function WikiReader() {
         </div>
       ) : null}
 
-      {/* ── Body: Symmetric Outer Frame with dashed hairlines, separated by spacing ── */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-[clamp(20px,5vw,77px)]">
+      {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-0">
         <div className="flex min-h-0 w-full flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
 
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
@@ -1021,7 +1021,7 @@ export function WikiReader() {
               />
             ) : (
               <div className="flex min-h-0 flex-1 overflow-hidden">
-                {/* Documentation article — scrollable, centered with 48px to 64px empty gutters on each side */}
+                {/* Documentation article � scrollable, centered with 48px to 64px empty gutters on each side */}
                 <article
                   ref={articleRef}
                   className="scrollbar-none min-w-0 flex-1 overflow-y-auto px-[clamp(24px,4vw,56px)] pt-10 pb-[136px]"
@@ -1167,8 +1167,8 @@ export function WikiReader() {
                   </div>
                 </article>
 
-                {/* Floating composer — pinned to bottom of content column */}
-                <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-30 flex justify-center px-[clamp(24px,4vw,56px)] min-[1100px]:pr-[clamp(284px,calc(18vw+56px),356px)]">
+                {/* Floating composer � pinned to bottom of content column */}
+                <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-30 flex justify-center px-4 min-[1100px]:right-[280px]">
                   <div className="pointer-events-auto w-full max-w-[900px]">
                     <WikiComposer
                       question={question}

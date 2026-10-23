@@ -1,11 +1,15 @@
 import { getPullRequestsForProject, getRepoGithubDetails, decryptProjectToken } from "~/lib/github";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { withoutProjectSecrets } from "~/lib/project";
 import type { Prisma } from "@prisma/client";
 
 export const projectRouter = createTRPCRouter({
+  getTotalWikiCount: publicProcedure.query(async ({ ctx }) => {
+    return ctx.db.wikiPage.count();
+  }),
+
   getProjects: protectedProcedure.query(async ({ ctx }) => {
     const projects = await ctx.db.project.findMany({
       where: {

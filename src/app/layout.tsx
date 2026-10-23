@@ -1,7 +1,7 @@
 import "~/styles/globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { type Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Fraunces, Inter_Tight, Martian_Mono } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { Toaster } from "~/components/ui/sonner";
@@ -38,9 +38,22 @@ export const metadata: Metadata = {
   },
 };
 
-const geist = Geist({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  variable: "--font-fraunces",
+  display: "swap",
+});
+
+const interTight = Inter_Tight({
+  subsets: ["latin"],
+  variable: "--font-inter-tight",
+  display: "swap",
+});
+
+const martianMono = Martian_Mono({
+  subsets: ["latin"],
+  variable: "--font-martian-mono",
+  display: "swap",
 });
 
 export default function RootLayout({
@@ -48,15 +61,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider>
-      <html lang="en" suppressHydrationWarning className={`${geist.variable}`}>
-        <head>
-          <script
-            dangerouslySetInnerHTML={{
-              __html:
-                "(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();",
-            }}
-          />
-        </head>
+      <html
+        lang="en"
+        className={`${fraunces.variable} ${interTight.variable} ${martianMono.variable}`}
+      >
         <body>
           <TRPCReactProvider>{children}</TRPCReactProvider>
           <Toaster />

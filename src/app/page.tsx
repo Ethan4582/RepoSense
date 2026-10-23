@@ -85,7 +85,7 @@ export default function LandingPage() {
                       Dashboard
                       <ArrowRight className="size-3.5" />
                     </Link>
-                    <SignOutButton redirectUrl="/sign-in">
+                    <SignOutButton redirectUrl="/">
                       <button className="rounded-full border border-[#e2e8f0] bg-white px-3.5 py-1.5 text-xs sm:text-sm font-medium text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] transition-colors shadow-2xs">
                         Logout
                       </button>

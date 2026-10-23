@@ -28,5 +28,3 @@ MAX_GLOBAL_INDEXING_JOBS = "25"
 # - CLOUDINARY_API_SECRET: (Optional)
 # - CLOUDINARY_CLOUD_NAME: (Optional)
 
-[limits]
-cpu_ms = 50

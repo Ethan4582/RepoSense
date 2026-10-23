@@ -217,10 +217,8 @@ function CreateProjectContent() {
     resetVerification();
 
     try {
-      const res = await fetch('/api/projects/verify-repo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl: base, githubToken: githubToken.trim() || undefined }),
+      const res = await client.projects['verify-repo'].$post({
+        json: { repoUrl: base, githubToken: githubToken.trim() || undefined },
       });
       const data = (await res.json()) as Verification & { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Repository could not be verified.');

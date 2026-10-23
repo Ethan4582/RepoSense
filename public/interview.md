@@ -143,3 +143,33 @@ RepoSense is an autonomous repository intelligence platform that:
 | `src/components/wiki/wiki-reader.tsx` | Primary documentation reader with public/private fallback and QA |
 | `src/components/wiki/code-viewer.tsx` | Interactive code viewer panel with line highlighting |
 | `src/hooks/use-smooth-stream.ts` | `requestAnimationFrame` 60 FPS token buffer stream smoother |
+
+
+### P0 Deep-Dive: Exactly How RAG Chunking, Line Tracking & Citations Work
+
+#### Q10: "Do you index single lines, whole files, or chunks? What exactly is stored in the vector database?"
+- **Answer:** We index **contiguous blocks (chunks)** of code, typically **120 lines at a time with a 20-line overlap** (or at symbol boundaries for files > 800 lines). We do **not** index individual lines, nor do we index only 'relevant' sections.
+- **Why?**
+  - Indexing line-by-line destroys semantic context (a line like `return token;` means nothing in isolation) and would increase database row count by 100x.
+  - Indexing entire multi-thousand line files dilutes the semantic embedding vector, making similarity matching blunt and inaccurate.
+- **What is saved per row in `SourceCodeEmbedding`:**
+  1. `fileName`: File path (e.g., `src/server/auth.ts`).
+  2. `sourceCode`: The exact block of text spanning those lines.
+  3. `embeddingOpenAI` (1536-dim) or `embeddingGemini` (768-dim): A single dense vector generated from that entire chunk.
+  4. `projectId` & `branch`: For strict multi-tenant and multi-branch data isolation.
+
+#### Q11: "Do you chunk the entire file or only sections you find relevant?"
+- **Answer:** We chunk the **entire file from line 1 to the end**.
+- **Why?** At indexing time, the system cannot predict what questions future developers will ask. Pre-filtering lines or trying to guess what is "important" leads to blind spots. Instead, the whole file is sliced into consecutive, overlapping chunks (`0-120`, `100-220`, etc.). Only at query time does pgvector select the specific chunks relevant to the user's question.
+
+#### Q12: "If you index 120-line chunks, how does the system know the exact line numbers (e.g. lines 21-25) where the answer lives?"
+- **Answer:** Through a 3-step line-grounding pipeline:
+  1. **Line Number Injection:** During indexing, each chunk records its `startLine` and `endLine`. When retrieved chunks are assembled into the LLM context, RepoSense physically prepends line numbers to every line (`formatChunkContent` in `src/lib/chunker.ts`):
+     ```text
+     File: src/server/auth.ts (Lines 20-35)
+     20 | export async function clerkAuthMiddleware(c, next) {
+     21 |   const authHeader = c.req.header("Authorization");
+     22 |   if (authHeader?.startsWith("Bearer ")) { ... }
+     ```
+  2. **LLM Pinpointing & Strict Citation Syntax:** The LLM reads the numbered lines and identifies the precise lines that execute the logic. The system prompt mandates the exact syntax: `[[filePath:startLine-endLine]]` (e.g., `[[src/server/auth.ts:21-22]]`).
+  3. **Frontend Parsing & Interactive CodeViewer:** The client Markdown parser converts the citation token into a clickable `CitationPill` badge. Clicking the badge opens the `CodeViewer` panel, fetches the raw file from `/api/public/projects/:id/file`, highlights lines 21-22 in gold/blue, and auto-scrolls to them via `element.scrollIntoView({ behavior: 'smooth', block: 'center' })`.

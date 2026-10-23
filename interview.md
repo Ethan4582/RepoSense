@@ -239,3 +239,48 @@ RepoSense is an autonomous repository intelligence platform that:
      - Poison pills (malformed binary files) are caught, dumped to a Dead-Letter Queue (DLQ) with error telemetry, and the pipeline continues gracefully.
   4. **Client Progress Synchronization:**
      - The browser doesn'''t hold a blocking connection; it listens via Server-Sent Events (SSE) (`/api/projects/:id/indexing/stream`) or lightweight polling (`/indexing/status`), displaying real-time percentage progress bar updates directly from the job state.
+
+
+### P0 Deep-Dive: System Scale, Cost Economics, Security & Deployment (Q16 - Q19)
+
+#### Q16: "Scale: What breaks if RepoSense grows 10x or 100x in concurrent users and repositories?"
+- **Answer:**
+  1. **Neon PostgreSQL Vector Query Latency (10x -> 100x):**
+     - *Bottleneck:* Sequential scans or un-indexed cosine distance queries (`<=>`) across millions of chunk vectors will saturate Postgres CPU.
+     - *Fix:* Create an **HNSW (Hierarchical Navigable Small World)** vector index on `SourceCodeEmbedding (embeddingOpenAI vector_cosine_ops)` with parameters `m = 16, ef_construction = 64`. This changes vector search from $O(N)$ linear scans to $O(\log N)$ graph traversals.
+  2. **Database Connection Pool Exhaustion:**
+     - *Bottleneck:* Neon serverless connections spike under concurrent user traffic.
+     - *Fix:* Enforce PgBouncer connection pooling via Neon's pooler endpoint, paired with `@prisma/adapter-neon` over WebSockets.
+  3. **Edge Cache Thundering Herd:**
+     - *Bottleneck:* If a popular open-source repository's public wiki is accessed by 10,000 users simultaneously, cache misses hit the database.
+     - *Fix:* Cloudflare Cache API with `stale-while-revalidate=86400` (`src/lib/cache.ts`) ensures the edge serves cached HTML/JSON immediately while asynchronously refreshing stale content in the background.
+
+#### Q17: "Cost: How much does it cost to index a repository, and what strategies reduce model and hosting bills?"
+- **Answer:**
+  - **Unit Economics Breakdown:**
+    - *Embedding Cost:* OpenAI `text-embedding-3-small` costs $0.02 per 1M tokens. A typical 50,000-line repo contains ~400k tokens -> Embedding costs **$0.008 (less than one cent)**.
+    - *Wiki Planning & Generation:* ~50k input tokens + ~15k output tokens across 5-8 pages using `gpt-4o-mini` or `gemini-1.5-flash` -> Costs **$0.02 - $0.04**.
+    - *Total per Repository:* Under **$0.05 per full repository indexing**.
+  - **Optimization & Reduction Strategies:**
+    1. **Pre-flight Ignore Rules:** Discarding lockfiles, dependencies, and build artifacts prevents wasting 70-80% of embedding tokens.
+    2. **BYOK (Bring Your Own Key) Architecture:** Users provide their own OpenAI/Gemini/Anthropic API keys, shifting AI compute costs away from our infrastructure.
+    3. **Incremental Git Diff Updates:** Calling GitHub's Compare API on webhook pushes to delete and re-embed only modified files, rather than re-indexing from scratch.
+    4. **Dual-Column Support:** Offering Google Gemini embeddings (`gemini-embedding-001`) allows free-tier indexing for hobbyist developers.
+
+#### Q18: "Deployment: Where does RepoSense run, and how do you manage environment secrets across runtimes?"
+- **Answer:**
+  - **Hosting Split:**
+    - **Frontend:** Cloudflare Pages / Next.js (built via `@cloudflare/next-on-pages`), globally distributed across 300+ edge PoPs with near-zero latency.
+    - **Backend API & Workflows:** Cloudflare Workers (`src/server/worker.ts`) and durable workflows (`src/server/workflows/indexing.ts`).
+    - **Database:** Neon Serverless PostgreSQL in the `ap-southeast-1` / `us-east-1` region with native `pgvector`.
+  - **Secret Management:**
+    - Local development: `.env` file loaded via dotenv / Next.js.
+    - Production runtime: Cloudflare Worker encrypted secrets injected via `wrangler secret put <NAME>` (`ENCRYPTION_KEY`, `DATABASE_URL`, `CLERK_SECRET_KEY`).
+    - Secret integrity: Zero secrets are hardcoded in Git. BYOK user keys are encrypted with AES-256-GCM using a cryptographically derived key before touching the database.
+
+#### Q19: "Can you walk through your own code in the repository and explain why things are structured this way?"
+- **Answer:**
+  - **`src/lib/chunker.ts`:** The core chunking engine. Kept independent of database models or framework runtimes so it can run anywhere (browser, server, edge, CLI).
+  - **`src/server/db.ts`:** The database abstraction layer. Uses a runtime proxy and environment sniffer (`isCloudflareOrEdge`) to cleanly switch between `PrismaNeon` (for serverless/worker runtimes with WebSockets) and native `PrismaClient` (for local Node.js development).
+  - **`src/server/routes/public.ts`:** Dedicated unauthenticated routes for public wikis and explore pages. Completely detached from Clerk auth middleware to enable blazing fast cold starts and zero-auth read access for incognito users.
+  - **`src/components/wiki/wiki-reader.tsx`:** The primary UI orchestrator. Manages split-screen state, handles public-to-private API fallback for QA queries, and wires token streaming into `useSmoothStream`.

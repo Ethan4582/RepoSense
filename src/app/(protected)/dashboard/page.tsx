@@ -252,7 +252,7 @@ export default function DashboardPage() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => void signOut({ redirectUrl: '/sign-in' })}
+                onClick={async () => { await signOut(); window.location.href = '/sign-in'; }}
                 className="gap-2 text-destructive focus:text-destructive cursor-pointer"
               >
                 <LogOut className="size-3.5" />

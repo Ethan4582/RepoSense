@@ -1,5 +1,8 @@
 'use client';
 
+import { getApiBaseUrl } from '~/lib/api-client';
+
+
 import * as React from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -157,7 +160,7 @@ export function WikiReader() {
   React.useEffect(() => {
     if (!questionIdParam || !projectId) return;
 
-    fetch(`/api/projects/${projectId}/questions/${questionIdParam}`)
+    fetch(`${getApiBaseUrl()}/api/projects/${projectId}/questions/${questionIdParam}`)
       .then(async (res) => {
         if (!res.ok) return;
         const data = (await res.json()) as {
@@ -205,7 +208,7 @@ export function WikiReader() {
 
   React.useEffect(() => {
     if (!isSignedIn) return;
-    fetch('/api/keys')
+    fetch(`${getApiBaseUrl()}/api/keys`)
       .then(async (res) => {
         if (!res.ok) return;
         const data = (await res.json()) as { keys?: Array<{ provider: string }> };
@@ -290,8 +293,7 @@ export function WikiReader() {
         : '';
 
       try {
-        const publicRes = await fetch(
-          `/api/public/projects/${projectId}${branchQuery}`,
+        const publicRes = await fetch(`${getApiBaseUrl()}/api/public/projects/${projectId}${branchQuery}`,
           { cache: 'no-store' }
         );
         if (publicRes.ok) {
@@ -307,8 +309,7 @@ export function WikiReader() {
 
           if (isSignedIn) {
             try {
-              const ownerRes = await fetch(
-                `/api/projects/${projectId}${branchQuery}`,
+              const ownerRes = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}${branchQuery}`,
                 { cache: 'no-store' }
               );
               if (ownerRes.ok) {
@@ -337,7 +338,7 @@ export function WikiReader() {
           return;
         }
 
-        const privateRes = await fetch(`/api/projects/${projectId}${branchQuery}`, {
+        const privateRes = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}${branchQuery}`, {
           cache: 'no-store',
         });
         if (!privateRes.ok) {
@@ -377,8 +378,7 @@ export function WikiReader() {
     const localPage = project.wikiPages.find((page) => page.slug === activeSlug);
     if (isPublic) {
       setPageLoading(true);
-      fetch(
-        `/api/public/projects/${projectId}/pages/${activeSlug}?branch=${encodeURIComponent(activeBranch)}`,
+      fetch(`${getApiBaseUrl()}/api/public/projects/${projectId}/pages/${activeSlug}?branch=${encodeURIComponent(activeBranch)}`,
         { cache: 'no-store' }
       )
         .then(async (res) => {
@@ -398,8 +398,7 @@ export function WikiReader() {
 
     const poll = async () => {
       try {
-        const res = await fetch(
-          `/api/projects/${projectId}/indexing/status?branch=${encodeURIComponent(activeBranch)}`,
+        const res = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/indexing/status?branch=${encodeURIComponent(activeBranch)}`,
           { cache: 'no-store' }
         );
         if (!res.ok) return;
@@ -458,7 +457,7 @@ export function WikiReader() {
   }): Promise<boolean> => {
     setBranchBusy(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/indexing/start`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/indexing/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -514,7 +513,7 @@ export function WikiReader() {
     if (!project || visibilityBusy) return;
     setVisibilityBusy(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isPublicWiki: nextPublic }),
@@ -527,8 +526,7 @@ export function WikiReader() {
       if (!nextPublic) {
         setIsPublic(false);
         setProject((prev) => (prev ? { ...prev, isPublicWiki: false } : prev));
-        const privateRes = await fetch(
-          `/api/projects/${projectId}?branch=${encodeURIComponent(activeBranch)}`,
+        const privateRes = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}?branch=${encodeURIComponent(activeBranch)}`,
           { cache: 'no-store' }
         );
         if (privateRes.ok) {
@@ -553,7 +551,7 @@ export function WikiReader() {
     setIsSavingPage(true);
     try {
       // 1. Save currently edited page content & title
-      const res = await fetch(`/api/projects/${projectId}/pages/${activePage.id}`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pages/${activePage.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -577,7 +575,7 @@ export function WikiReader() {
         pageOrder: p.pageOrder,
       }));
 
-      await fetch(`/api/projects/${projectId}/pages/reorder`, {
+      await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pages/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pages: updatedPagesPayload }),
@@ -627,7 +625,7 @@ export function WikiReader() {
     const MIN_LOADER_MS = 1400; // Uniform minimum duration to enjoy the animation
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/qa`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/qa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

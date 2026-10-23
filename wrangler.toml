@@ -10,8 +10,8 @@ class_name = "IndexingWorkflow"
 
 [vars]
 # Application and API URLs for CORS and redirect resolution
-APP_URL = "http://localhost:3000"
-API_URL = "http://localhost:8787"
+APP_URL = "https://reposense.pages.dev"
+API_URL = "https://reposense-api.t7labs.workers.dev"
 
 # Emergency circuit breaker: OFF | READ_ONLY | MAINTENANCE
 EMERGENCY_MODE = "OFF"

@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
 import { db } from '~/server/db';
 import { getFullFileContent } from '~/lib/embeddings';
 import { cachedJson } from '~/lib/cache';
 import { getProjectBranches, pickActiveBranch } from '~/lib/branch';
+import { parseRepoUrlRef, getRepoMetadata, GitHubAccessError } from '~/lib/github';
+import { estimateRoutes } from './estimate';
 
 function plainSummary(markdown: string | undefined): string | null {
   if (!markdown) return null;
@@ -245,4 +249,65 @@ export const publicRoutes = new Hono()
 
     if (!question) return c.json({ error: 'Question not found' }, 404);
     return c.json({ question });
-  });
+  })
+  .route('/estimate', estimateRoutes)
+  .post(
+    '/verify-repo',
+    zValidator(
+      'json',
+      z.object({
+        repoUrl: z.string().min(1).max(500),
+        githubToken: z.string().max(500).optional(),
+      })
+    ),
+    async (c) => {
+      const { repoUrl, githubToken } = c.req.valid('json');
+
+      let coordinates: ReturnType<typeof parseRepoUrlRef>;
+      try {
+        coordinates = parseRepoUrlRef(repoUrl);
+      } catch (err) {
+        return c.json(
+          { error: err instanceof Error ? err.message : 'Please enter a valid GitHub repository URL.' },
+          400
+        );
+      }
+
+      try {
+        const meta = await getRepoMetadata(coordinates.repoUrl, githubToken);
+        const existingWiki = await db.project.findFirst({
+          where: {
+            repoOwner: { equals: coordinates.owner, mode: 'insensitive' },
+            repoName: { equals: coordinates.repo, mode: 'insensitive' },
+            isPublicWiki: true,
+            deletedAt: null,
+            lastIndexedAt: { not: null },
+          },
+          select: { id: true, name: true, lastIndexedBranch: true },
+        });
+
+        return c.json({
+          repository: {
+            owner: coordinates.owner,
+            repo: coordinates.repo,
+            name: `${coordinates.owner}/${coordinates.repo}`,
+            defaultBranch: meta.defaultBranch,
+            isPrivate: meta.isPrivate,
+            sizeKb: meta.sizeKb,
+            repoUrl: meta.repoUrl,
+          },
+          existingWiki,
+        });
+      } catch (err) {
+        const message =
+          err instanceof GitHubAccessError ? err.message : 'Unable to access this GitHub repository.';
+        return c.json(
+          {
+            error: message,
+            code: err instanceof GitHubAccessError ? err.code : 'GITHUB_ERROR',
+          },
+          400
+        );
+      }
+    }
+  );

@@ -10,7 +10,7 @@ When you paste a URL like `https://github.com/facebook/react` and click **Index*
 
 Instead, RepoSense talks to GitHub's REST API and processes everything in memory through a step-by-step pipeline.
 
-![GitHub Ingestion Pipeline](public/docs/7.png)
+![GitHub Ingestion Pipeline](public/docs/HLD.png)
 
 ### Step 1: Resolving the target
 Before downloading anything, RepoSense resolves your branch name (e.g., `main`, `dev`, or pull request number) to an exact Git commit SHA. This ensures that every file downloaded belongs to the exact same revision.

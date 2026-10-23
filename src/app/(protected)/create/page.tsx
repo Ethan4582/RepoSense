@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import useRefetch from '~/hooks/use-refetch';
 import useProject from '~/hooks/use-project';
-import { client } from '~/lib/api-client';
+import { client, getApiBaseUrl } from '~/lib/api-client';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -216,12 +216,24 @@ function CreateProjectContent() {
     setUrlError(null);
     resetVerification();
 
-        try {
-      const res = await client.projects['verify-repo'].$post({
-        json: { repoUrl: base, githubToken: githubToken.trim() || undefined },
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/public/verify-repo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoUrl: base, githubToken: githubToken.trim() || undefined }),
       });
-      const data = (await res.json()) as Verification & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? 'Repository could not be verified.');
+
+      let data: (Verification & { error?: string }) | null = null;
+      try {
+        data = (await res.json()) as Verification & { error?: string };
+      } catch {
+        throw new Error('Failed to verify repository. Please check the URL or try again.');
+      }
+
+      if (!res.ok || !data) {
+        throw new Error(data?.error ?? 'Repository could not be verified.');
+      }
 
       setVerification(data);
       setIsPublicWiki(!data.repository.isPrivate);
@@ -229,18 +241,24 @@ function CreateProjectContent() {
 
       // Run estimation in background without holding button state
       setEstimating(true);
-      void client.projects.estimate.$post({
-        json: {
+      void fetch(`${baseUrl}/api/public/estimate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           repoUrl: base,
           githubToken: githubToken.trim() || undefined,
           modelId: chatModel,
           embeddingModelId:
             embeddingProvider === 'OPENAI' ? 'text-embedding-3-small' : 'gemini-embedding-001',
-        },
+        }),
       }).then(async (estimateRes) => {
         if (estimateRes.ok) {
-          const payload = await estimateRes.json();
-          if ('estimate' in payload) setEstimate(payload.estimate);
+          try {
+            const payload = (await estimateRes.json()) as { estimate?: any };
+            if (payload && 'estimate' in payload) setEstimate(payload.estimate);
+          } catch {
+            // Ignore parse error on background estimate
+          }
         }
       }).catch(() => {
         // Fallback estimate handles failures silently

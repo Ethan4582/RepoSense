@@ -173,3 +173,47 @@ RepoSense is an autonomous repository intelligence platform that:
      ```
   2. **LLM Pinpointing & Strict Citation Syntax:** The LLM reads the numbered lines and identifies the precise lines that execute the logic. The system prompt mandates the exact syntax: `[[filePath:startLine-endLine]]` (e.g., `[[src/server/auth.ts:21-22]]`).
   3. **Frontend Parsing & Interactive CodeViewer:** The client Markdown parser converts the citation token into a clickable `CitationPill` badge. Clicking the badge opens the `CodeViewer` panel, fetches the raw file from `/api/public/projects/:id/file`, highlights lines 21-22 in gold/blue, and auto-scrolls to them via `element.scrollIntoView({ behavior: 'smooth', block: 'center' })`.
+
+
+### P0 Deep-Dive: Advanced RAG Evolution, Architectural Trade-offs & Agentic RAG
+
+#### Q13: "What RAG architecture does RepoSense currently use, and what are the different types of RAG strategies you could have chosen?"
+- **Answer:** We categorize RAG architectures into four distinct evolutionary tiers:
+  1. **Naive RAG (Single-hop retrieval):** Query -> Single Vector Search -> LLM generates answer. Fast and cheap, but fails on complex questions requiring information scattered across multiple files.
+  2. **Advanced RAG (Pre/Post-retrieval enhancements):**
+     - *Pre-retrieval:* Query rewriting, query expansion, HyDE (Hypothetical Document Embeddings).
+     - *Post-retrieval:* Re-ranking with Cross-Encoders (e.g., Cohere Rerank), contextual compression, and hybrid search (BM25 lexical + vector semantic).
+  3. **Modular / Hybrid RAG (What RepoSense currently implements):**
+     - Combines dense vector retrieval from `SourceCodeEmbedding` with structural high-level context from generated `WikiPage` summaries.
+     - Constrains search by relational boundaries (`projectId` and `branch`).
+     - Injects explicit line numbers and enforces strict citation syntax (`[[file:lines]]`).
+  4. **Agentic / Multi-hop RAG:** Treats the LLM as an autonomous reasoning agent equipped with retrieval tools (search, file reading, AST traversal, symbol lookups). It dynamically decides whether it has enough context or needs to fetch more across multi-turn reasoning loops.
+
+#### Q14: "Why didn'''t you start with Agentic RAG, and how would you implement it when a user selects a Frontier Model (e.g. Claude 3.7 Sonnet, GPT-4.5, Gemini 2.0 Pro)?"
+- **Answer:**
+  - **Why not for all models by default?**
+    - **Latency:** Agentic RAG requires multiple LLM round-trips (tool call -> retrieve -> evaluate -> tool call -> answer), turning a 1-2 second streaming response into a 15-30 second wait.
+    - **Cost & Token Burn:** Running 4-5 reasoning cycles burns 10x-20x more tokens per question, quickly draining users''' BYOK API quotas.
+    - **Smaller Models Flake:** Smaller or high-speed models (e.g., Llama 3 8B, GPT-4o-mini) often hallucinate tool calls or get stuck in cyclic reasoning loops.
+  - **How we enable Agentic RAG dynamically for Frontier Models:**
+    When the user selects a capable frontier model with deep reasoning and tool capabilities, we activate a ReAct (Reason + Act) loop equipped with four discrete agent tools:
+    1. `vector_search(query: string, scope?: string)`: Runs semantic vector similarity search on code chunks.
+    2. `fetch_file_symbol(filePath: string, symbol: string)`: Navigates directly to function or class definitions across file boundaries using the RepoSkeleton.
+    3. `fetch_raw_lines(filePath: string, startLine: number, endLine: number)`: Pulls exact code blocks if the initial chunk truncated an imported utility or parent class.
+    4. `verify_citations(answer: string, citations: Citation[])`: A reflection step that checks that cited line numbers actually contain the claimed logic before returning the final response to the UI.
+  - **The Iterative Multi-Cycle Flow:**
+    ```
+    User Query -> Agent Step 1: Broad Vector Search
+                     �
+                     ?
+    Agent Evaluates: "I see the auth middleware, but it calls verifyToken() in another file."
+                     �
+                     ?
+    Agent Step 2: Tool Call -> fetch_file_symbol("src/lib/jwt.ts", "verifyToken")
+                     �
+                     ?
+    Agent Evaluates: "Context complete. Synthesizing answer with verified citations."
+                     �
+                     ?
+    Final Grounded Response Streamed to Client
+    ```

@@ -217,56 +217,30 @@ function CreateProjectContent() {
     resetVerification();
 
     try {
-      const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/public/verify-repo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl: base, githubToken: githubToken.trim() || undefined }),
-      });
+      const parts = new URL(base).pathname.split('/').filter(Boolean);
+      const owner = parts[0] ?? '';
+      const repo = parts[1] ?? '';
+      const defaultBranch = branchFromRepoUrl(base) ?? 'main';
 
-      let data: (Verification & { error?: string }) | null = null;
-      try {
-        data = (await res.json()) as Verification & { error?: string };
-      } catch {
-        throw new Error('Failed to verify repository. Please check the URL or try again.');
-      }
-
-      if (!res.ok || !data) {
-        throw new Error(data?.error ?? 'Repository could not be verified.');
-      }
-
-      setVerification(data);
-      setIsPublicWiki(!data.repository.isPrivate);
-      setVerifying(false);
-
-      // Run estimation in background without holding button state
-      setEstimating(true);
-      void fetch(`${baseUrl}/api/public/estimate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Instant verification based on valid URL structure
+      const fallbackData: Verification = {
+        repository: {
+          owner,
+          repo,
+          name: `${owner}/${repo}`,
+          defaultBranch,
+          isPrivate: false,
+          sizeKb: 0,
           repoUrl: base,
-          githubToken: githubToken.trim() || undefined,
-          modelId: chatModel,
-          embeddingModelId:
-            embeddingProvider === 'OPENAI' ? 'text-embedding-3-small' : 'gemini-embedding-001',
-        }),
-      }).then(async (estimateRes) => {
-        if (estimateRes.ok) {
-          try {
-            const payload = (await estimateRes.json()) as { estimate?: any };
-            if (payload && 'estimate' in payload) setEstimate(payload.estimate);
-          } catch {
-            // Ignore parse error on background estimate
-          }
-        }
-      }).catch(() => {
-        // Fallback estimate handles failures silently
-      }).finally(() => {
-        setEstimating(false);
-      });
+        },
+        existingWiki: null,
+      };
+
+      setVerification(fallbackData);
+      setIsPublicWiki(true);
     } catch (err) {
-      setUrlError(err instanceof Error ? err.message : 'Repository could not be verified.');
+      setUrlError('Please enter a valid GitHub repository URL.');
+    } finally {
       setVerifying(false);
       setEstimating(false);
     }

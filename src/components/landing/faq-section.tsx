@@ -12,27 +12,27 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'How does RepoSense index a repository?',
     answer:
-      'We parse your Git tree, build structural AST skeletons, and index code chunks into PostgreSQL with pgvector using cosine distance and HNSW acceleration. Every chunk is tied to an immutable commit SHA so documentation never drifts.',
+      'We parse your Git AST tree and pgvector index every chunk tied to an immutable commit SHA.',
   },
   {
     question: 'How does Bring Your Own Key (BYOK) work?',
     answer:
-      'Connect your own API keys for OpenAI, Anthropic, Google Gemini, Groq, DeepSeek, or xAI. Keys are encrypted at rest with AES-256-GCM in your private vault, and LLM requests stream directly under your control.',
+      'Add your OpenAI, Gemini, Anthropic, or Groq keys. They stay AES-256-GCM encrypted in your private vault.',
   },
   {
     question: 'Can I verify the citations in AI answers?',
     answer:
-      'Yes. RepoSense never hallucinates citations. Every answer includes verifiable inline badges that link directly to line-level code ranges in the stacked interactive source inspector.',
+      'Yes. Every answer has inline badges that open the exact code line in the stacked file inspector.',
   },
   {
     question: 'Does RepoSense stay in sync with branches and PRs?',
     answer:
-      'Yes. RepoSense is branch- and commit-aware. You can switch between feature branches or pull requests to compare architecture changes and query documentation against exact revisions.',
+      'Yes. RepoSense tracks branch commits and pull requests so documentation never drifts from code.',
   },
   {
     question: 'Is my source code stored or used to train models?',
     answer:
-      'No. Your source code is never used for training. Vectors and AST maps reside in your isolated database, and LLM calls operate under your own enterprise BYOK terms.',
+      'Never. Your code is not used for model training and runs under your private BYOK keys.',
   },
 ];
 
@@ -79,7 +79,7 @@ export function FaqSection() {
           <div className="absolute right-6 sm:right-[64px] top-0 z-20">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border-l border-b border-[#ececec] font-mono text-[9px] uppercase tracking-[0.06em] text-[#47474e]">
               <span className="size-[5px] bg-[#2337ff] inline-block shrink-0" />
-              <span>09 FAQ</span>
+              <span>05 FAQ</span>
             </div>
           </div>
         </div>

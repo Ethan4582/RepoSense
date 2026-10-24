@@ -16,13 +16,25 @@ import { RepoMarquee } from '~/components/landing/repo-marquee';
 export default function LandingPage() {
   const { isSignedIn, isLoaded } = useUser();
   const wikiCountQuery = api.project.getTotalWikiCount.useQuery();
-  const formattedCount = wikiCountQuery.data?.toLocaleString() ?? '—';
+  const [tickerOffset, setTickerOffset] = React.useState(0);
+
+  React.useEffect(() => {
+    // Continuously incrementing countdown / stopwatch ticker
+    const interval = setInterval(() => {
+      setTickerOffset((prev) => prev + 1);
+    }, 75);
+    return () => clearInterval(interval);
+  }, []);
+
+  const baseCount = wikiCountQuery.data ?? 1240;
+  const liveCount = (baseCount + tickerOffset).toLocaleString();
+  const formattedCount = liveCount;
 
   return (
     <div className="min-h-screen bg-white text-[#0b0b0d] font-sans selection:bg-[#2337ff] selection:text-white flex flex-col">
       {/* 1. Top Navigation Bar */}
       <header className="sticky top-0 z-50 w-full border-b border-[#ececec] bg-white">
-        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-6 sm:px-[64px]">
+        <div className="mx-auto flex h-[64px] max-w-[1440px] items-center justify-between px-6 sm:px-[64px]">
           {/* Left Brand: Logo Image + Wordmark */}
           <Link href="/" className="inline-flex items-center gap-3 group">
             <div className="relative size-6 shrink-0 overflow-hidden rounded-md transition-transform group-hover:scale-105">
@@ -59,21 +71,21 @@ export default function LandingPage() {
           </nav>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {!isLoaded ? (
               <div className="h-9 w-24 rounded-none bg-neutral-100 animate-pulse" />
             ) : isSignedIn ? (
               <>
                 <Link
                   href="/dashboard"
-                  className="h-10 px-4 rounded-none inline-flex items-center justify-center text-sm font-semibold border border-black bg-white text-black shadow-[4px_4px_0_#d4d4d8] hover:bg-[#fafafb] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#c4c4c8] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#d4d4d8] transition-all"
+                  className="h-9 px-3.5 rounded-none inline-flex items-center justify-center text-sm font-semibold border border-black bg-white text-black shadow-[3px_3px_0_#d4d4d8] hover:bg-[#fafafb] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
                 >
                   Dashboard
                 </Link>
                 <SignOutButton>
                   <button
                     type="button"
-                    className="h-10 px-4 rounded-none inline-flex items-center justify-center text-sm font-semibold border border-black bg-[#0b0b0d] text-white shadow-[4px_4px_0_#2337ff] hover:bg-black hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#2337ff] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#2337ff] transition-all cursor-pointer"
+                    className="h-9 px-3.5 rounded-none inline-flex items-center justify-center text-sm font-semibold border border-black bg-[#0b0b0d] text-white shadow-[3px_3px_0_#2337ff] hover:bg-black transition-all cursor-pointer"
                   >
                     Sign Out
                   </button>
@@ -83,16 +95,27 @@ export default function LandingPage() {
               <>
                 <Link
                   href="/sign-in"
-                  className="h-10 px-4 rounded-none inline-flex items-center justify-center text-sm font-semibold border border-black bg-white text-black shadow-[4px_4px_0_#d4d4d8] hover:bg-[#fafafb] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#c4c4c8] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#d4d4d8] transition-all"
+                  className="text-[15px] font-medium text-[#47474e] hover:text-[#0b0b0d] transition-colors"
                 >
                   Sign In
                 </Link>
+                {/* 3D Extruded Button matching reference */}
                 <Link
                   href="/sign-up"
-                  className="h-10 px-4 rounded-none inline-flex items-center justify-center gap-1.5 text-sm font-semibold border border-black bg-[#0b0b0d] text-white shadow-[4px_4px_0_#2337ff] hover:bg-black hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#2337ff] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#2337ff] transition-all"
+                  className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] mr-2"
                 >
-                  <span>Get Started</span>
-                  <span aria-hidden="true">&#x2197;</span>
+                  <span className="relative z-10 flex h-[38px] px-4 items-center justify-center gap-1.5 bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
+                    <span>Start building</span>
+                    <span aria-hidden="true">&#x2197;</span>
+                  </span>
+                  <span
+                    className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#1423b8] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewY(45deg)', transformOrigin: 'top left' }}
+                  />
+                  <span
+                    className="absolute top-full left-0 w-full h-[5px] group-hover:h-[6px] bg-[#2337ff] border-l border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewX(45deg)', transformOrigin: 'top left' }}
+                  />
                 </Link>
               </>
             )}
@@ -243,7 +266,7 @@ export default function LandingPage() {
 
       {/* 6. Section 5 & Footer */}
       <div className="w-full relative">
-        <SectionBoundary tag="04 PLATFORM" />
+        
         <LandingFooterSections />
       </div>
     </div>

@@ -8,68 +8,7 @@ import { FolderBrickWordmark } from '~/components/landing/folder-brick-wordmark'
 export function LandingFooterSections() {
   return (
     <>
-      {/* Section 4 — How It Works */}
-      <section id="how-it-works" className="w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col">
-        <div className="relative border-x border-[#d4d4d8] border-t border-[#d4d4d8] px-6 sm:px-[64px] py-16 bg-[#fafafb]">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal text-[#0b0b0d] leading-[1.15]">
-              From GitHub URL to complete intelligence in 60 seconds.
-            </h2>
-            <p className="mt-3.5 text-sm sm:text-base text-[#47474e]">
-              Point to any repository. Watch it index, vectorize, and create a verifiable knowledge base.
-            </p>
-          </div>
 
-          <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-[1240px] mx-auto">
-            <div className="p-6 bg-white border border-[#d4d4d8] rounded-sm">
-              <div className="font-mono text-xs text-[#2337ff] font-semibold mb-2">01 / REPOSITORY INGEST</div>
-              <h3 className="text-base font-semibold text-[#0b0b0d] mb-2">Connect Any Git Repo</h3>
-              <p className="text-sm text-[#47474e] leading-relaxed">
-                Provide any public or authenticated GitHub URL. RepoSense maps tree structures and symbol dependencies in seconds.
-              </p>
-            </div>
-
-            <div className="p-6 bg-white border border-[#d4d4d8] rounded-sm">
-              <div className="font-mono text-xs text-[#2337ff] font-semibold mb-2">02 / VECTOR GROUNDING</div>
-              <h3 className="text-base font-semibold text-[#0b0b0d] mb-2">Dual-Layer Indexing</h3>
-              <p className="text-sm text-[#47474e] leading-relaxed">
-                AST tree mapping meets dense semantic vector embeddings. Every code chunk is tied to an immutable commit SHA.
-              </p>
-            </div>
-
-            <div className="p-6 bg-white border border-[#d4d4d8] rounded-sm">
-              <div className="font-mono text-xs text-[#2337ff] font-semibold mb-2">03 / CONTINUOUS CODERAG</div>
-              <h3 className="text-base font-semibold text-[#0b0b0d] mb-2">Ask, Verify &amp; Ship</h3>
-              <p className="text-sm text-[#47474e] leading-relaxed">
-                Ask architectural questions, debug issues, or extract pull-request summaries. Verify all outputs with line-exact citations.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 5 — Final CTA */}
-      <section className="w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col">
-        <div className="relative border-x border-[#d4d4d8] border-t border-[#d4d4d8] px-6 sm:px-[64px] py-20 bg-white text-center">
-          <div className="max-w-xl mx-auto">
-            <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal text-[#0b0b0d] leading-tight">
-              Start understanding your code with zero drift.
-            </h2>
-            <p className="mt-4 text-[#47474e] text-base leading-relaxed">
-              No credit card required. Connect any repository and generate your first interactive architecture wiki in minutes.
-            </p>
-            <div className="mt-8 flex justify-center">
-              <Link
-                href="/sign-up"
-                className="h-12 px-7 rounded-none inline-flex items-center justify-center gap-2 bg-[#0b0b0d] text-[15px] font-semibold text-white border border-black shadow-[4px_4px_0_#2337ff] hover:bg-black hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#2337ff] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#2337ff] transition-all"
-              >
-                <span>Get Started Free</span>
-                <span aria-hidden="true">&#x2197;</span>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Original Main Footer: 4-Column Directory + RepoSense Wordmark */}
       <footer className="w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col">

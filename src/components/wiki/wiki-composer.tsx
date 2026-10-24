@@ -93,7 +93,7 @@ export function WikiComposer({
 
   return (
     <div className="pointer-events-none w-full flex justify-center">
-      <div className="pointer-events-auto w-full max-w-[900px] group rounded-2xl border border-white/10 bg-background/50 shadow-2xl backdrop-blur-2xl transition-all focus-within:border-white/20 focus-within:bg-background/70 dark:border-white/10 dark:bg-card/40 dark:focus-within:bg-card/60">
+      <div className="pointer-events-auto w-full max-w-[900px] group rounded-2xl border border-black/10 bg-white/40 shadow-xl backdrop-blur-xl transition-all focus-within:border-black/20 focus-within:bg-white/60 dark:border-white/10 dark:bg-black/35 dark:focus-within:bg-black/55">
         <textarea
           ref={textareaRef}
           value={question}

@@ -758,9 +758,9 @@ export function WikiReader() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* -- Header -- */}
       <header
-        className="relative flex h-[64px] shrink-0 items-center justify-between border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-0"
+        className="relative flex h-[64px] shrink-0 items-center justify-center border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-6 sm:px-[64px]"
       >
-        <div className="flex h-full w-full items-center justify-between border-x border-dashed border-neutral-300 dark:border-neutral-700/80 px-7">
+        <div className="flex h-full w-full max-w-[1440px] items-center justify-between border-x border-dashed border-neutral-300 dark:border-neutral-700/80 px-7">
           {/* Left brand segment */}
           <div className="flex items-center gap-2.5">
             <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -889,8 +889,8 @@ export function WikiReader() {
       ) : null}
 
       {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-0">
-        <div className="flex min-h-0 w-full flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-6 sm:px-[64px]">
+        <div className="flex min-h-0 w-full max-w-[1440px] flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
 
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
           {!qaOpen ? (

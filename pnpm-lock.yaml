@@ -158,6 +158,9 @@ importers:
       '@uiw/react-md-editor':
         specifier: ^4.0.8
         version: 4.1.2(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(supports-color@7.2.0)
+      '@web-kits/audio':
+        specifier: ^0.2.0
+        version: 0.2.0(react@19.3.1)
       ai:
         specifier: ^4.3.19
         version: 4.3.19(react@19.3.1)(zod@3.25.76)
@@ -459,6 +462,12 @@ packages:
 
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
+
+  '@clack/core@0.4.1':
+    resolution: {integrity: sha512-Pxhij4UXg8KSr7rPek6Zowm+5M22rbd2g1nfojHJkxp5YkFqiZ2+YLEM/XGVIzvGOcM0nqjIFxrpDwWRZYWYjA==}
+
+  '@clack/prompts@0.9.1':
+    resolution: {integrity: sha512-JIpyaboYZeWYlyP0H+OoPPxd6nqueG/CmN6ixBiNFsIDHREevjIf0n0Ohh5gr5C8pEDknzgvz+pIJ8dMhzWIeg==}
 
   '@clerk/backend@1.34.0':
     resolution: {integrity: sha512-9rZ8hQJVpX5KX2bEpiuVXfpjhojQCiqCWADJDdCI0PCeKxn58Ep0JPYiIcczg4VKUc3a7jve9vXylykG2XajLQ==}
@@ -3423,6 +3432,16 @@ packages:
   '@vue/shared@3.5.44':
     resolution: {integrity: sha512-H82XLH0DjmSOdbEwO15x3QTo1f5PWEtv237eLpYKc0mqLu+B8hnq16lFWmuBmNurkeiG3wr+oM1FhOll/YVFRg==}
 
+  '@web-kits/audio@0.2.0':
+    resolution: {integrity: sha512-4naddQeSNBPsgQUEoCqes9jlNg3u+XDYu8x73I9YcxuWIdN1YhCSR+ANtOE61vllU55EY7e/eVKc48rsIRieSw==}
+    engines: {node: '>=20.0.0'}
+    hasBin: true
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
+
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
 
@@ -6105,6 +6124,9 @@ packages:
   simple-wcswidth@1.1.2:
     resolution: {integrity: sha512-j7piyCjAeTDSjzTSQ7DokZtMNwNlEAyxqSZeCS+CXH7fJ4jx3FuJ/mTW3mE+6JLs4VJBbcll0Kjn+KXI5t21Iw==}
 
+  sisteransi@1.0.5:
+    resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
+
   snake-case@3.0.4:
     resolution: {integrity: sha512-LAOh4z89bGQvl9pFfNF8V146i7o7/CqFPbqzYgP+yYzDIDeS9HaNFtXABamRW+AQzEVODcvE79ljJ+8a9YSdMg==}
 
@@ -6796,6 +6818,17 @@ snapshots:
   '@cfworker/json-schema@4.1.1': {}
 
   '@chevrotain/types@11.1.2': {}
+
+  '@clack/core@0.4.1':
+    dependencies:
+      picocolors: 1.1.1
+      sisteransi: 1.0.5
+
+  '@clack/prompts@0.9.1':
+    dependencies:
+      '@clack/core': 0.4.1
+      picocolors: 1.1.1
+      sisteransi: 1.0.5
 
   '@clerk/backend@1.34.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
@@ -9626,6 +9659,13 @@ snapshots:
       '@vue/shared': 3.5.44
 
   '@vue/shared@3.5.44': {}
+
+  '@web-kits/audio@0.2.0(react@19.3.1)':
+    dependencies:
+      '@clack/prompts': 0.9.1
+      picocolors: 1.1.1
+    optionalDependencies:
+      react: 19.3.1
 
   '@workflow/serde@4.1.0': {}
 
@@ -12871,6 +12911,8 @@ snapshots:
       side-channel-weakmap: 1.0.2
 
   simple-wcswidth@1.1.2: {}
+
+  sisteransi@1.0.5: {}
 
   snake-case@3.0.4:
     dependencies:

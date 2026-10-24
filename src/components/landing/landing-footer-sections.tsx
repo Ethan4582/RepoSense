@@ -165,7 +165,7 @@ export function LandingFooterSections() {
               </li>
               <li>
                 <Link href="/dashboard" className="hover:text-[#0b0b0d] transition-colors duration-150 block">
-                  Models &amp; Pricing
+                  Models
                 </Link>
               </li>
               <li>

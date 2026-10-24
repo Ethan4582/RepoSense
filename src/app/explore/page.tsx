@@ -87,7 +87,7 @@ export default function ExplorePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-[#ececec] bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
           <Link href="/" className="flex items-center gap-2">
             <img src="/logo.png" alt="RepoSense" className="size-7 rounded-md" />
@@ -116,7 +116,7 @@ export default function ExplorePage() {
 
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-12">
         <section className="mx-auto max-w-2xl text-center">
-          <Badge variant="outline" className="mb-4 gap-1.5 border-primary/30 bg-primary/5 text-[11px] text-primary">
+          <Badge variant="outline" className="mb-4 gap-1.5 border border-[#ececec] bg-primary/5 text-[11px] text-primary">
             <Globe2 className="size-3" /> Community wikis
           </Badge>
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
@@ -127,7 +127,7 @@ export default function ExplorePage() {
             source and links to exact file lines.
           </p>
 
-          <div className="mx-auto mt-7 flex max-w-xl items-center gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-sm focus-within:border-primary/40">
+          <div className="mx-auto mt-7 flex max-w-xl items-center gap-2 rounded-[12px] border border-[#ececec] bg-card px-3 py-2.5 focus-within:border-primary/40">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input
               value={query}
@@ -151,17 +151,17 @@ export default function ExplorePage() {
           </div>
 
           {error ? (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+            <div className="rounded-[12px] border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
               {error}
             </div>
           ) : loading && projects.length === 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="h-44 animate-pulse rounded-xl border bg-muted/30" />
+                <div key={index} className="h-44 animate-pulse rounded-[12px] border border-[#ececec] bg-muted/30" />
               ))}
             </div>
           ) : projects.length === 0 ? (
-            <div className="rounded-xl border border-dashed px-6 py-16 text-center">
+            <div className="rounded-[12px] border border-dashed border-[#ececec] px-6 py-16 text-center">
               <Globe2 className="mx-auto mb-3 size-9 text-muted-foreground/40" />
               <h3 className="text-sm font-semibold">
                 {query.trim() ? 'No public wikis match your search' : 'No public wikis yet'}
@@ -189,13 +189,13 @@ export default function ExplorePage() {
                 <Link
                   key={project.id}
                   href={`/wiki/${project.id}`}
-                  className="group flex flex-col rounded-xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                  className="group flex flex-col rounded-[12px] border border-[#ececec] bg-card p-4 transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/50">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-[#ececec] bg-muted/50">
                       <GitBranch className="size-4 text-primary" />
                     </div>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-[10px] rounded-[999px] border border-[#ececec]">
                       {project.pageCount} pages
                     </Badge>
                   </div>
@@ -208,7 +208,7 @@ export default function ExplorePage() {
                   <p className="mt-2.5 line-clamp-3 flex-1 text-xs leading-5 text-muted-foreground">
                     {cleanSummary(project.summary)}
                   </p>
-                  <div className="mt-4 flex items-center justify-between border-t pt-3 text-[10px] text-muted-foreground">
+                  <div className="mt-4 flex items-center justify-between border-t border-[#f0f0f0] pt-3 text-[10px] text-muted-foreground">
                     <span>Updated {timeAgo(project.lastIndexedAt)}</span>
                     <span className="flex items-center gap-1 font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
                       Open wiki <ArrowRight className="size-3" />

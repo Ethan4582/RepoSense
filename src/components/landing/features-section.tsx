@@ -3,11 +3,11 @@
 import * as React from 'react';
 import { cn } from '~/lib/utils';
 
-// Faint isometric background pattern
+// Clear isometric background pattern
 function IsometricPattern() {
   return (
     <svg
-      className="absolute inset-0 size-full pointer-events-none opacity-40 group-hover:opacity-65 transition-opacity duration-300"
+      className="absolute inset-0 size-full pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity duration-300"
       xmlns="http://www.w3.org/2000/svg"
       width="100%"
       height="100%"
@@ -15,17 +15,16 @@ function IsometricPattern() {
       <defs>
         <pattern
           id="feat-iso-grid"
-          width="40"
-          height="23.094"
+          width="48"
+          height="27.712"
           patternUnits="userSpaceOnUse"
         >
-          {/* 30-degree isometric grid lines */}
+          {/* Isometric grid lines */}
           <path
-            d="M0 11.547 L20 0 L40 11.547 L20 23.094 Z"
+            d="M0 13.856 L24 0 L48 13.856 L24 27.712 Z"
             fill="none"
-            stroke="#d4d4d8"
-            strokeWidth="0.75"
-            strokeDasharray="1.5 2.5"
+            stroke="#cfcfd4"
+            strokeWidth="0.85"
           />
         </pattern>
       </defs>
@@ -115,31 +114,30 @@ function VisualTrace() {
         xmlns="http://www.w3.org/2000/svg"
       >
         {/* Block helper path macro */}
-        {/* Sequence of snake blocks in isometric projection */}
-        {/* Background inactive blocks */}
+        {/* Stepped sequence of isometric blocks matching reference structure */}
         {[
-          { x: 145, y: 35 },
-          { x: 165, y: 45 },
-          { x: 185, y: 55 },
-          { x: 175, y: 70 },
-          { x: 165, y: 85 },
-          { x: 145, y: 95 },
-          { x: 125, y: 105 },
-          { x: 105, y: 95 },
+          { x: 136, y: 34 },
+          { x: 154, y: 44 },
+          { x: 172, y: 54 },
+          { x: 154, y: 64 },
+          { x: 136, y: 74 },
+          { x: 100, y: 94 },
+          { x: 82, y: 104 },
         ].map((pt, i) => (
-          <g key={i} opacity="0.85">
+          <g key={i}>
             <path
-              d={`M${pt.x} ${pt.y} l12 -6 l12 6 l-12 6 z`}
+              d={`M${pt.x} ${pt.y} l16 -9 l16 9 l-16 9 z`}
               fill="#ffffff"
-              stroke="#18181b"
-              strokeWidth="1.1"
+              stroke="#0b0b0d"
+              strokeWidth="1.2"
             />
             <path
-              d={`M${pt.x} ${pt.y} v5 l12 6 l12 -6 v-5`}
-              stroke="#18181b"
-              strokeWidth="1.1"
+              d={`M${pt.x} ${pt.y} v7 l16 9 l16 -9 v-7`}
+              fill="#ffffff"
+              stroke="#0b0b0d"
+              strokeWidth="1.2"
             />
-            <path d={`M${pt.x + 12} ${pt.y + 6} v5`} stroke="#18181b" strokeWidth="1.1" />
+            <path d={`M${pt.x + 16} ${pt.y + 9} v7`} stroke="#0b0b0d" strokeWidth="1.2" />
           </g>
         ))}
 
@@ -147,26 +145,26 @@ function VisualTrace() {
         <g className="transition-transform duration-300 group-hover:-translate-y-1">
           <g className="motion-safe:animate-[featFloat_4s_ease-in-out_infinite] group-hover:motion-safe:animate-[featFloat_3s_ease-in-out_infinite]">
             <path
-              d="M135 72 l15 -8 l15 8 l-15 8 z"
+              d="M118 84 l16 -9 l16 9 l-16 9 z"
               fill="#2337ff"
               stroke="#000000"
               strokeWidth="1.25"
             />
             <path
-              d="M135 72 v12 l15 8 l15 -8 v-12"
+              d="M118 84 v9 l16 9 l16 -9 v-9"
               fill="#1827b6"
               stroke="#000000"
               strokeWidth="1.25"
             />
-            <path d="M150 80 v12" stroke="#000000" strokeWidth="1.25" />
+            <path d="M134 93 v9" stroke="#000000" strokeWidth="1.25" />
           </g>
         </g>
 
         {/* Label */}
-        <text x="56" y="112" className="fill-[#8d8d95] font-mono text-[9px] tracking-wider select-none">
-          14 BLOCKS · 2.4 S
+        <text x="56" y="116" className="fill-[#8d8d95] font-mono text-[9px] tracking-wider select-none">
+          14 FILES · 2.4 S
         </text>
-        <line x1="108" y1="109" x2="130" y2="88" stroke="#8d8d95" strokeWidth="0.75" strokeDasharray="1.5 2" />
+        <line x1="102" y1="113" x2="116" y2="98" stroke="#8d8d95" strokeWidth="0.75" strokeDasharray="1.5 2" />
       </svg>
     </div>
   );
@@ -511,7 +509,7 @@ export type FeatureVariant =
 
 export function FeatureVisual({ variant }: { variant: FeatureVariant }) {
   return (
-    <div className="relative w-full h-[174px] bg-[#f5f5f3] overflow-hidden flex items-center justify-center">
+    <div className="relative w-full h-[174px] bg-[#f8f8f9] overflow-hidden flex items-center justify-center border-b border-[#d4d4d8]">
       <IsometricPattern />
       {variant === 'versions' && <VisualVersions />}
       {variant === 'trace' && <VisualTrace />}
@@ -534,38 +532,38 @@ const FEATURES: FeatureItem[] = [
   {
     variant: 'versions',
     title: 'Versioned codebase wikis',
-    body: 'Every indexed wiki keeps its history. Diff two versions, see what changed in each file, and roll back in one click.',
+    body: 'Every indexed wiki tracks commit history. Diff two versions, inspect documentation updates per file, and roll back instantly.',
     caption: 'V14 · LIVE · 3 REVIEWERS',
   },
   {
     variant: 'trace',
     title: 'Traced, line-numbered answers',
-    body: 'Ask a question and follow each answer through the files, functions, and line numbers it came from.',
+    body: 'Ask questions across entire repositories. Every generated answer maps directly to concrete files, functions, and line ranges.',
     caption: '30-DAY TRACES ON TEAM',
   },
   {
     variant: 'cage',
     title: 'Agents with spend limits',
-    body: 'Agents run inside the spend, tool, and data limits you set. Anything outside those limits pauses and asks a person.',
+    body: 'Keep autonomous repository indexing and Q&A inside exact token and cost limits. Automated runs pause before exceeding budget.',
     caption: '$40 / RUN CAP',
   },
   {
     variant: 'approval',
-    title: 'Approvals in Slack',
-    body: 'Route sensitive steps to a teammate. They approve from Slack or email, and the run picks up where it paused.',
+    title: 'Approvals before merging',
+    body: 'Route generated pull request wikis and architectural summaries to team maintainers for review before publishing to production.',
     caption: 'MEDIAN APPROVAL 4 MIN',
   },
   {
     variant: 'replay',
     title: 'Replay before you publish',
-    body: "Run a draft against last week's real repository changes and compare its output with production before anything goes live.",
+    body: 'Benchmark generated wiki pages against previous commits and pull requests to ensure explanations remain accurate over time.',
     caption: '7 DAYS OF REPLAY',
   },
   {
     variant: 'regions',
-    title: 'Your data stays put',
-    body: 'Pin your workspace to the EU, US, or APAC. Indexing and queries run in that region, and your code never leaves it.',
-    caption: '12 REGIONS · 3 JURISDICTIONS',
+    title: 'Your codebase stays secure',
+    body: 'Index private and public repositories with dedicated regional isolation. Your source code and vector embeddings stay strictly protected.',
+    caption: '12 REGIONS · ISOLATED STORAGE',
   },
 ];
 
@@ -611,10 +609,9 @@ export function FeaturesSection() {
           </div>
         </div>
 
-        {/* 3x2 Card Grid with shared 1px #ececec border */}
-        <div className="w-full border border-[#ececec] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 -space-y-px md:space-y-0">
+        {/* 3x2 Card Grid with clear #d4d4d8 borders */}
+        <div className="w-full border border-[#d4d4d8] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 -space-y-px md:space-y-0">
           {FEATURES.map((item, idx) => {
-            // Compute shared border classes so grid shares 1px lines without double thickness
             const isRightCol = (idx + 1) % 3 === 0;
             const isBottomRow = idx >= 3;
 
@@ -623,14 +620,14 @@ export function FeaturesSection() {
                 key={item.variant}
                 className={cn(
                   'group flex flex-col bg-white transition-colors duration-200',
-                  'border-b border-[#ececec] lg:border-b-0',
-                  !isBottomRow && 'lg:border-b lg:border-[#ececec]',
-                  'md:border-r md:border-[#ececec]',
+                  'border-b border-[#d4d4d8] lg:border-b-0',
+                  !isBottomRow && 'lg:border-b lg:border-[#d4d4d8]',
+                  'md:border-r md:border-[#d4d4d8]',
                   isRightCol && 'lg:border-r-0',
-                  idx % 2 === 1 && 'md:border-r-0 lg:border-r lg:border-[#ececec]'
+                  idx % 2 === 1 && 'md:border-r-0 lg:border-r lg:border-[#d4d4d8]'
                 )}
               >
-                {/* Visual Image Area (height ~174px, faint isometric pattern) */}
+                {/* Visual Image Area */}
                 <FeatureVisual variant={item.variant} />
 
                 {/* Content Area with 24px padding */}
@@ -647,8 +644,8 @@ export function FeaturesSection() {
                     </p>
                   </div>
 
-                  {/* Caption: Martian Mono 9-10px uppercase in light-slate-gray */}
-                  <div className="mt-7 pt-3 border-t border-[#f0f0f2]">
+                  {/* Caption: Martian Mono 9-10px uppercase */}
+                  <div className="mt-7 pt-3 border-t border-[#e4e4e7]">
                     <span className="font-mono text-[9.5px] uppercase tracking-[0.06em] text-[#8d8d95]">
                       {item.caption}
                     </span>

@@ -63,59 +63,29 @@ const LETTERS: Record<string, number[][]> = {
 
 const WORD = ['r', 'e', 'p', 'o', 's', 'e', 'n', 's', 'e'];
 
-export function FolderBrickIcon({ className }: { className?: string }) {
+export function FolderBrickIcon({
+  isOpen = false,
+  className,
+}: {
+  isOpen?: boolean;
+  className?: string;
+}) {
   return (
-    <svg
-      viewBox="0 0 24 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className ?? "size-full"}
-    >
-      <defs>
-        <linearGradient id="folderTabGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#93c5fd" />
-          <stop offset="100%" stopColor="#3b82f6" />
-        </linearGradient>
-        <linearGradient id="folderBodyGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="35%" stopColor="#2563eb" />
-          <stop offset="100%" stopColor="#126dfb" />
-        </linearGradient>
-        <linearGradient id="folderShine" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {/* Folder Back Tab */}
-      <path
-        d="M2 4C2 2.89543 2.89543 2 4 2H8.5C9.32843 2 10.0898 2.50734 10.4074 3.27365L10.8 4.2C11.0118 4.71087 11.5193 5.04918 12.0717 5.04918H20C21.1046 5.04918 22 5.94461 22 7.04918V8H2V4Z"
-        fill="url(#folderTabGrad)"
-      />
-      {/* Folder Front Body with 3D Bevel */}
-      <rect
-        x="1.5"
-        y="5.5"
-        width="21"
-        height="13"
-        rx="2.5"
-        fill="url(#folderBodyGrad)"
-      />
-      {/* Top Gloss Highlight */}
-      <path
-        d="M2 7.5C2 6.39543 2.89543 5.5 4 5.5H20C21.1046 5.5 22 6.39543 22 7.5V11H2V7.5Z"
-        fill="url(#folderShine)"
-      />
-      {/* Subtle Bottom Rim */}
-      <line
-        x1="3"
-        y1="17.5"
-        x2="21"
-        y2="17.5"
-        stroke="#0e58cc"
-        strokeWidth="0.8"
-        strokeLinecap="round"
-      />
-    </svg>
+    <div className={className ?? 'relative size-full flex items-center justify-center'}>
+      {isOpen ? (
+        <img
+          src="/open-folder.png"
+          alt="Folder Open"
+          className="size-full object-contain pointer-events-none select-none"
+        />
+      ) : (
+        <img
+          src="/close-folder.png"
+          alt="Folder Closed"
+          className="size-full object-contain pointer-events-none select-none"
+        />
+      )}
+    </div>
   );
 }
 
@@ -203,14 +173,13 @@ export function FolderBrickWordmark() {
               gridTemplateColumns: `repeat(${totalCols}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${totalRows}, minmax(0, 1fr))`,
               width: '100%',
-              maxWidth: '920px',
+              maxWidth: '1020px',
               aspectRatio: `${totalCols} / ${totalRows}`,
-              gap: '3px',
+              gap: '4px',
             }}
           >
             {bricks.map((brick) => {
-              // Calculate interactive displacement
-              let transformStyle = '';
+              let isHovered = false;
               if (mousePos && containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
                 const brickWidth = rect.width / totalCols;
@@ -221,18 +190,9 @@ export function FolderBrickWordmark() {
                 const dx = brickCenterX - mousePos.x;
                 const dy = brickCenterY - mousePos.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const radius = 90;
+                const radius = 64;
 
-                if (dist < radius && dist > 0) {
-                  const factor = (1 - dist / radius);
-                  const push = factor * 22;
-                  const angle = Math.atan2(dy, dx);
-                  const tx = Math.cos(angle) * push;
-                  const ty = Math.sin(angle) * push;
-                  const rot = (tx * 1.6);
-                  const sc = 1 + factor * 0.25;
-                  transformStyle = `translate3d(${tx}px, ${ty}px, 0px) rotate(${rot}deg) scale(${sc})`;
-                }
+                isHovered = dist < radius;
               }
 
               return (
@@ -241,24 +201,36 @@ export function FolderBrickWordmark() {
                   style={{
                     gridColumnStart: brick.col + 1,
                     gridRowStart: brick.row + 1,
-                    transform: transformStyle || undefined,
-                    transition: transformStyle ? 'transform 0.08s ease-out' : 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
                   }}
-                  className="size-full flex items-center justify-center drop-shadow-[0_2px_4px_rgba(18,109,251,0.18)]"
+                  className="size-full flex items-center justify-center p-[1px]"
                 >
-                  <FolderBrickIcon className="w-full h-full object-contain" />
+                  <FolderBrickIcon
+                    isOpen={isHovered}
+                    className="w-full h-full object-contain transition-transform duration-150 ease-out hover:scale-110"
+                  />
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Right Standalone 3D Blue Folder Desktop Icon */}
-        <div className="hidden sm:flex flex-col items-center gap-1.5 group cursor-pointer">
-          <div className="relative size-16 sm:size-20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3 drop-shadow-[0_12px_24px_rgba(18,109,251,0.25)]">
-            <FolderBrickIcon className="size-full" />
+        {/* Right Standalone 3D Folder Desktop Icon with Open/Close on Hover */}
+        <div className="hidden sm:flex flex-col items-center gap-2 group cursor-pointer select-none">
+          <div className="relative size-16 sm:size-20 flex items-center justify-center">
+            {/* Closed Folder (Default) */}
+            <img
+              src="/close-folder.png"
+              alt="Folder"
+              className="size-full object-contain block group-hover:hidden"
+            />
+            {/* Open Folder (On Hover) */}
+            <img
+              src="/open-folder.png"
+              alt="Folder Open"
+              className="size-full object-contain hidden group-hover:block"
+            />
           </div>
-          <span className="text-[11px] font-medium text-[#64748b] group-hover:text-[#126dfb] transition-colors">
+          <span className="text-[13px] sm:text-[14px] font-semibold text-[#334155] group-hover:text-[#126dfb] transition-colors tracking-tight">
             RepoSense
           </span>
         </div>

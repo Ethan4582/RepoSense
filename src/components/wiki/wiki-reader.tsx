@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { getApiBaseUrl } from '~/lib/api-client';
 
@@ -868,20 +868,6 @@ export function WikiReader() {
                 ) : null}
               </PopoverContent>
             </Popover>
-            <button
-              type="button"
-              className="inline-flex size-8 items-center justify-center rounded-[8px] border border-border/60 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-              title="Toggle theme"
-              onClick={() => {
-                const isDark = document.documentElement.classList.toggle('dark');
-                try {
-                  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-                } catch {}
-              }}
-            >
-              <Sun className="size-4 dark:hidden" />
-              <Moon className="hidden size-4 dark:block" />
-            </button>
           </div>
         </div>
       </header>

@@ -129,21 +129,21 @@ export function WikiMarkdown({
           ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-6">{children}</ol>,
           li: ({ children }) => <li className="text-foreground/90">{children}</li>,
           table: ({ children }) => (
-            <div className="my-5 overflow-x-auto rounded-lg border">
+            <div className="my-5 overflow-x-auto rounded-[10px] border border-[#ececec]">
               <table className="w-full border-collapse text-xs">{children}</table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+          thead: ({ children }) => <thead className="bg-[#f8f8f9]">{children}</thead>,
           th: ({ children }) => (
-            <th className="border-b px-3 py-2 text-left font-semibold text-foreground">{children}</th>
+            <th className="border-b border-[#ececec] px-3 py-2 text-left font-semibold text-foreground">{children}</th>
           ),
-          td: ({ children }) => <td className="border-b px-3 py-2 align-top">{children}</td>,
+          td: ({ children }) => <td className="border-b border-[#ececec] px-3 py-2 align-top">{children}</td>,
           blockquote: ({ children }) => (
-            <blockquote className="my-4 border-l-2 border-primary/40 pl-4 text-muted-foreground">
+            <blockquote className="my-4 border-l-2 border-[#2337ff]/60 pl-4 text-muted-foreground">
               {children}
             </blockquote>
           ),
-          hr: () => <hr className="my-8 border-border" />,
+          hr: () => <hr className="my-8 border-t border-[#ececec]" />,
           a: ({ href, children }) => {
             if (href?.startsWith('citation:')) {
               const raw = href.slice('citation:'.length);
@@ -193,6 +193,7 @@ export function WikiMarkdown({
               </a>
             );
           },
+          pre: ({ children }) => <>{children}</>,
           code: ({ className: codeClassName, children, ...props }) => {
             const language = /language-(\w+)/.exec(codeClassName ?? '')?.[1];
             const raw = nodeToText(children).replace(/\n$/, '');
@@ -201,18 +202,18 @@ export function WikiMarkdown({
               return <MermaidDiagram chart={raw} />;
             }
 
-            if (language) {
+            if (language || raw.includes('\n')) {
               return (
-                <div className="my-4 overflow-hidden rounded-lg border">
+                <div className="my-4 overflow-hidden rounded-[10px] border border-[#ececec] bg-[#fbfbfb]">
                   <SyntaxHighlighter
-                    language={language}
-                    style={isDark ? oneDark : oneLight}
+                    language={language || 'bash'}
+                    style={oneLight}
                     customStyle={{
                       margin: 0,
                       padding: '1rem',
-                      fontSize: '12px',
+                      fontSize: '12.5px',
                       lineHeight: '1.6',
-                      background: 'var(--muted)',
+                      background: 'transparent',
                     }}
                     codeTagProps={{ style: { fontFamily: 'var(--font-mono, monospace)' } }}
                     wrapLongLines
@@ -224,7 +225,7 @@ export function WikiMarkdown({
             }
 
             return (
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px]" {...props}>
+              <code className="rounded-[4px] border border-[#ececec] bg-[#f4f4f5]/60 px-1.5 py-0.5 font-mono text-[12px]" {...props}>
                 {children}
               </code>
             );

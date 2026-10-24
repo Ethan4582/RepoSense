@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import * as React from 'react';
 import { cn } from '~/lib/utils';
@@ -187,16 +187,11 @@ export function IndexingLoader({
     }
 
     function drawBox(x: number, y: number, h: number) {
-      const isDark =
-        document.documentElement.classList.contains('dark') ||
-        (!document.documentElement.classList.contains('light') &&
-          window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-      // Light mode: grayish; Dark mode: blue
-      const top = isDark ? '#38bdf8' : '#f3f4f6';
-      const left = isDark ? '#0284c7' : '#d1d5db';
-      const right = isDark ? '#0369a1' : '#b4bac4';
-      const edge = isDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(75, 85, 99, 0.35)';
+      // Lighter, vibrant RepoSense blue palette matching hero cube
+      const top = '#5a6cff';
+      const left = '#384ef2';
+      const right = '#253be0';
+      const edge = 'rgba(28, 28, 28, 0.45)';
 
       const p = (dx: number, dy: number, z: number) => project(x + dx, y + dy, z);
 
@@ -257,16 +252,12 @@ export function IndexingLoader({
       <canvas ref={canvasRef} aria-hidden="true" className="block" />
       <div
         className={cn(
-          'inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium tracking-wide transition-all duration-300',
-          'border bg-[rgba(107,114,128,0.08)] border-[rgba(107,114,128,0.2)] text-[#6b7280]',
-          'dark:bg-[rgba(56,189,248,0.08)] dark:border-[rgba(56,189,248,0.2)] dark:text-[#94a3b8]'
+          'inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition-all duration-300',
+          'border bg-[rgba(35,55,255,0.06)] border-[rgba(35,55,255,0.2)] text-[#0b0b0d]'
         )}
       >
         <span
-          className={cn(
-            'size-1.5 rounded-full animate-pulse',
-            'bg-[#9ca3af] dark:bg-[#38bdf8]'
-          )}
+          className="size-1.5 rounded-full animate-pulse bg-[#2337ff]"
         />
         <span
           className="transition-opacity duration-250 ease-in-out"

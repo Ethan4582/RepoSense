@@ -1,4 +1,4 @@
-﻿import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";
 import { PrismaClient } from "@prisma/client";
 
@@ -11,14 +11,13 @@ export const createPrismaClient = (databaseUrl?: string) => {
   const isCloudflareOrEdge =
     typeof (globalThis as any).WebSocketPair !== "undefined" ||
     (typeof navigator !== "undefined" && navigator.userAgent?.includes("Cloudflare")) ||
-    (typeof process !== "undefined" && (process as any).release?.name === "workerd") ||
     (typeof process !== "undefined" && process.env.NEXT_RUNTIME === "edge");
 
   const isPureNode =
     !isCloudflareOrEdge &&
     typeof process !== "undefined" &&
-    process.release?.name === "node" &&
-    process.env.NEXT_RUNTIME !== "edge";
+    process.env.NEXT_RUNTIME !== "edge" &&
+    typeof window === "undefined";
 
   if (isPureNode) {
     return new PrismaClient({

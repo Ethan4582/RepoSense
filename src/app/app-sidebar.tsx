@@ -125,12 +125,6 @@ export function AppSideBar() {
   // Delete Dialog State
   const [projectToDelete, setProjectToDelete] = React.useState<ProjectSummary | null>(null);
 
-  const toggleTheme = () => {
-    const isDark = document.documentElement.classList.toggle('dark');
-    try {
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    } catch {}
-  };
 
   const updateProject = async (id: string, data: Record<string, unknown>) => {
     setBusyProject(id);
@@ -474,17 +468,6 @@ export function AppSideBar() {
             </div>
 
             <div className="space-y-0.5 border-t border-border/40 pt-1">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-              >
-                <div className="flex items-center gap-2">
-                  <Sun className="size-3.5 text-muted-foreground dark:hidden" />
-                  <Moon className="hidden size-3.5 text-muted-foreground dark:block" />
-                  <span>Toggle theme</span>
-                </div>
-              </button>
 
               <button
                 type="button"

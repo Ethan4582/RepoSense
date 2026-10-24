@@ -112,12 +112,6 @@ export default function DashboardPage() {
     }
   }, [isLoading, rawProjects, router]);
 
-  const toggleTheme = () => {
-    const isDark = document.documentElement.classList.toggle('dark');
-    try {
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    } catch {}
-  };
 
   const copyShareLink = async (projectId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -216,16 +210,6 @@ export default function DashboardPage() {
       {/* Top Controls */}
       <div className="flex h-14 items-center justify-end px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
-            title="Toggle theme"
-            onClick={toggleTheme}
-          >
-            <Moon className="size-4 hidden dark:block" />
-            <Sun className="size-4 block dark:hidden" />
-          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

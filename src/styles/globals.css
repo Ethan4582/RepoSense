@@ -106,6 +106,7 @@
   --sidebar-ring: #d4d4d8;
 }
 
+
 /* Hide scrollbars completely while keeping full scrollability */
 .scrollbar-none::-webkit-scrollbar {
   display: none !important;

@@ -221,22 +221,26 @@ export function IsometricCubeField({ className }: { className?: string }) {
       const rightCubeX = (N - 1 - centerOffset) * (1 + currentGap);
       const rightCubeY = (0 - centerOffset) * (1 + currentGap);
 
-      for (const label of LAYER_LABELS) {
-        // Vertical midpoint of the layer
-        const zPos = label.k * (1 + currentGap + zGapExtra) + 0.5;
-        // p1 on the right edge is at (x+1, y)
-        const edgePoint = project(rightCubeX + 1, rightCubeY, zPos, baseSize);
+      // Compute uniform maximum text width and placement for all 4 layer labels
+      const maxTextWidth = Math.max(
+        ...LAYER_LABELS.map((l) => ctx!.measureText(l.text).width)
+      );
+      const uniformBoxWidth = maxTextWidth + 18;
+      const boxHeight = 22;
 
+      // Find the right-most projection point across all layers to ensure sufficient horizontal gap
+      const samplePoints = LAYER_LABELS.map((label) => {
+        const zPos = label.k * (1 + currentGap + zGapExtra) + 0.5;
+        return project(rightCubeX + 1, rightCubeY, zPos, baseSize);
+      });
+      const maxEdgeX = Math.max(...samplePoints.map((p) => p.x));
+      const targetChipX = Math.max(maxEdgeX + 28, width - uniformBoxWidth - 14);
+
+      LAYER_LABELS.forEach((label, idx) => {
+        const edgePoint = samplePoints[idx]!;
         const textWidth = ctx!.measureText(label.text).width;
         const boxWidth = textWidth + 18;
-        const boxHeight = 22;
-
-        // Position chip to the right of the cube edge, ensuring full visibility inside canvas
-        const minGap = 28;
-        const chipLeftX = Math.min(
-          Math.max(edgePoint.x + minGap, width - boxWidth - 12),
-          width - boxWidth - 8
-        );
+        const chipLeftX = targetChipX;
         const textY = edgePoint.y;
         const boxX = chipLeftX;
         const boxY = textY - boxHeight / 2;
@@ -247,7 +251,7 @@ export function IsometricCubeField({ className }: { className?: string }) {
         const borderCol = isBlue ? '#2337ff' : '#ececec';
         const bgCol = isBlue ? '#ffffff' : '#ffffff';
 
-        // Continuous 1px connector line with no gap at either end
+        // Continuous 1px connector line from cube edge to chip
         ctx!.strokeStyle = lineCol;
         ctx!.lineWidth = 1;
         ctx!.beginPath();
@@ -261,12 +265,10 @@ export function IsometricCubeField({ className }: { className?: string }) {
         ctx!.beginPath();
         ctx!.rect(boxX, boxY, boxWidth, boxHeight);
         ctx!.fill();
-        ctx!.stroke();
-
         ctx!.fillStyle = textCol;
         ctx!.textBaseline = 'middle';
         ctx!.fillText(label.text, boxX + 9, textY);
-      }
+      });
       ctx!.restore();
     }
 

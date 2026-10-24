@@ -21,10 +21,7 @@ export const createPrismaClient = (databaseUrl?: string) => {
 
   if (isPureNode) {
     return new PrismaClient({
-      log:
-        process.env.NODE_ENV === "development"
-          ? ["query", "error", "warn"]
-          : ["error"],
+      log: ["error"],
     });
   }
 
@@ -36,10 +33,7 @@ export const createPrismaClient = (databaseUrl?: string) => {
 
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
+    log: ["error"],
   });
 };
 

@@ -191,5 +191,3 @@ Bad AI systems hallucinate, skip edge cases, or produce blurry summaries. RepoSe
    Link import statements directly to target file definitions. Clicking a function name in the code viewer could take you straight to where it is defined in another file.
 3. **Background job queues (Inngest / BullMQ):**
    For giant repositories with 5,000 files, serverless HTTP functions can time out. Moving ingestion to a durable background queue with automatic retries would make indexing bulletproof.
-4. **Local model execution (Ollama / WebLLM):**
-   Allow privacy-conscious teams to run embeddings and queries completely offline on their own machines without sending code to any cloud API.

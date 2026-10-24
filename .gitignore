@@ -1,5 +1,5 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
+notes.md
 # dependencies
 /node_modules
 /.pnp
@@ -60,3 +60,9 @@ plans/
 design.md
 *plan*.md
 *.plan.md
+
+# generated artifacts & mockups
+hero.html
+index.html
+*.generated.html
+

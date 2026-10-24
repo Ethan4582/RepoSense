@@ -13,6 +13,7 @@ import {
   Compass,
   FolderGit2,
   Globe2,
+  History,
   KeyRound,
   Lock,
   LogOut,
@@ -22,6 +23,7 @@ import {
   PanelLeftClose,
   Pencil,
   Plus,
+  Search,
   Settings,
   Sun,
   Trash2,
@@ -80,6 +82,7 @@ const NAV_ITEMS = [
   { title: 'Dashboard', icon: Compass, url: '/dashboard' },
   { title: 'Public Wikis', icon: Globe2, url: '/explore' },
   { title: 'QA', icon: Bookmark, url: '/qa' },
+  { title: 'History', icon: History, url: '/history' },
   { title: 'Pull Requests', icon: GitPullRequest, url: '/pulls' },
   { title: 'Meetings', icon: Video, url: '/meetings' },
   { title: 'API Keys', icon: KeyRound, url: '/settings' },
@@ -213,6 +216,26 @@ export function AppSideBar() {
             {open ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
           </Button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
+          className={cn(
+            'flex h-9 items-center rounded-[12px] border border-[#e0e0e0] bg-background text-xs text-muted-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted hover:text-foreground',
+            open ? 'w-full justify-between px-3' : 'mx-auto size-8 justify-center p-0'
+          )}
+          title="Search anything (Ctrl+K)"
+        >
+          <div className="flex items-center gap-2">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            {open && <span>Search...</span>}
+          </div>
+          {open && (
+            <kbd className="pointer-events-none rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+              Ctrl K
+            </kbd>
+          )}
+        </button>
 
         <Link href="/create" className="block">
           <Button
@@ -529,7 +552,7 @@ export function AppSideBar() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete the &ldquo;{projectToDelete?.name}&rdquo; wiki and remove all its generated documentation pages. This action cannot be undone.
+              This will permanently delete the &ldquo;{projectToDelete?.name}&rdquo; repository and all associated data, including chat questions, conversation history, indexing jobs, indexed files, and generated wiki content. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

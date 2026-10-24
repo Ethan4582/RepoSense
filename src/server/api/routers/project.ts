@@ -271,6 +271,61 @@ export const projectRouter = createTRPCRouter({
       });
     }),
 
+  getAllQuestions: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.string().optional(),
+        query: z.string().optional(),
+      }).optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const pid = input?.projectId;
+      let projectFilter: string | { in: string[] };
+
+      if (pid && pid !== "all") {
+        projectFilter = pid;
+      } else {
+        const userProjects = await ctx.db.project.findMany({
+          where: {
+            userToProjects: {
+              some: {
+                userId: ctx.user.userId,
+              },
+            },
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        projectFilter = { in: userProjects.map((p) => p.id) };
+      }
+
+      return await ctx.db.question.findMany({
+        where: {
+          projectId: projectFilter,
+          project: { userToProjects: { some: { userId: ctx.user.userId } } },
+          ...(input?.query
+            ? {
+                question: {
+                  contains: input.query,
+                  mode: "insensitive",
+                },
+              }
+            : {}),
+        },
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, imageUrl: true },
+          },
+          project: {
+            select: { id: true, name: true, repoUrl: true, isPublicWiki: true },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+    }),
+
   getBookmarkedQuestions: protectedProcedure
     .input(
       z.object({

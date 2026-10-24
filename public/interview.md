@@ -62,10 +62,11 @@ RepoSense is an autonomous repository intelligence platform that:
 - **Phase 1 (Planning):** LLM receives Architecture Brief + Skeleton and returns a JSON section/page manifest. Blueprint pages (System Architecture, Runtime Lifecycle, Data Storage) are enforced even if the LLM skips them.
 - **Phase 2 (Concurrent Page Generation):** Pages are written in parallel (concurrency limit = 3 via `p-limit` to prevent 429 rate limits). Numbered lines (`1 | import...`) are injected for exact citation grounding.
 
-### 5. Grounded QA & Line-Level Citations Flow (`src/lib/qa-engine.ts`)
-- User question -> Vector embedding -> Cosine distance query (`<=>`) in PostgreSQL filtered by project and branch.
-- LLM receives retrieved code snippets and system prompts requiring `[[path/to/file.ts:start-end]]` syntax.
-- Frontend Markdown parser catches citation tokens and turns them into clickable `CitationPill` components that trigger the split-screen `CodeViewer` with auto-scroll.
+### 5. Grounded QA & Isolated Thread Instances (`src/lib/qa-engine.ts`, `src/components/wiki/wiki-qa-view.tsx`, `src/components/wiki/qa-history-sidebar.tsx`)
+- **Query & Retrieval:** User query -> Vector embedding -> Cosine distance query (`<=>`) in PostgreSQL filtered by project and branch.
+- **Strict Citation Syntax:** LLM generates streamed responses embedding citations in `[[filePath:startLine-endLine]]` format with line-level grounding.
+- **Isolated Instances & URL Routing:** Each question is rendered as an independent, isolated canvas instance with its own URL query parameter (`?questionId=[id]`). Previous threads are accessible via a toggleable `QaHistorySidebar` that preserves the global sidebar's top search & creation tools.
+- **Live Verification & Inspector:** Frontend markdown parser converts citation tokens into interactive badges that synchronize with the split-screen `CodeViewer`.
 
 ---
 

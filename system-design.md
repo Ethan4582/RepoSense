@@ -27,7 +27,7 @@ RepoSense is an open source repository intelligence platform. It analyzes Git re
 3. Chunking: Chunk standard files using sliding windows. For files exceeding 800 lines, chunk along class, function, or endpoint declaration boundaries.
 4. Vector indexing: Generate dense vector embeddings using OpenAI (`text-embedding-3-small`, 1536 dimensions) or Google Gemini (`text-embedding-004`, 768 dimensions). Store vectors in PostgreSQL using the pgvector extension.
 5. Wiki generation: Plan a multi-page documentation hierarchy and generate markdown content in parallel with bounded worker concurrency.
-6. Grounding and citations: Retrieve relevant source chunks and wiki pages for user questions. Produce markdown answers where every technical statement references exact file paths and line ranges.
+6. Grounding and citations: Retrieve relevant source chunks and wiki pages for user questions. Produce markdown answers where every technical statement references exact file paths and line ranges. Render isolated question instances mapped to unique question URLs with toggleable session history.
 7. Branch isolation: Partition all embeddings, wiki pages, and chat sessions by `(projectId, branch)`. Allow users to switch between branches or pull requests without re-indexing common roots.
 
 ### Non-functional requirements

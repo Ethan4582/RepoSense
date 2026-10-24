@@ -57,6 +57,91 @@ function useIsDark() {
   return isDark;
 }
 
+function CodeBlock({
+  raw,
+  language,
+  isDark,
+}: {
+  raw: string;
+  language?: string;
+  isDark: boolean;
+}) {
+  const lineCount = React.useMemo(() => raw.split('\n').length, [raw]);
+  const isLong = lineCount > 8;
+  const [collapsed, setCollapsed] = React.useState(isLong);
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(raw);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const badgeText = (language || 'text').toUpperCase();
+
+  return (
+    <div className="my-4 overflow-hidden rounded-[10px] border border-[#ececec] bg-[#fbfbfb] dark:border-[#27272a] dark:bg-[#0d1117]">
+      <div
+        onClick={() => isLong && setCollapsed(!collapsed)}
+        className={cn(
+          'flex select-none items-center justify-between border-b border-[#ececec] bg-[#f4f4f5]/50 px-3 py-1.5 text-xs text-muted-foreground dark:border-[#27272a] dark:bg-neutral-900/60',
+          isLong && 'cursor-pointer hover:bg-[#f4f4f5] dark:hover:bg-neutral-900'
+        )}
+      >
+        <div className="flex items-center gap-2">
+          {isLong ? (
+            collapsed ? (
+              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+            ) : (
+              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+            )
+          ) : null}
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground dark:bg-neutral-800">
+            {badgeText}
+          </span>
+        </div>
+        <button
+          onClick={handleCopy}
+          type="button"
+          className="flex items-center gap-1 rounded px-2 py-1 font-mono text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground dark:hover:bg-neutral-800"
+          title="Copy code"
+        >
+          {copied ? (
+            <>
+              <svg className="size-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Copied</span>
+            </>
+          ) : (
+            <>
+              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {!collapsed ? (
+        <SyntaxHighlighter
+          language={language || 'bash'}
+          style={isDark ? oneDark : oneLight}
+          customStyle={{
+            margin: 0,
+            padding: '1rem',
+            fontSize: '12.5px',
+            lineHeight: '1.6',
+            background: 'transparent',
+          }}
+          codeTagProps={{ style: { fontFamily: 'var(--font-mono, monospace)' } }}
+          wrapLongLines
+        >
+          {raw}
+        </SyntaxHighlighter>
+      ) : null}
+    </div>
+  );
+}
+
 export function WikiMarkdown({
   content,
   onCitation,
@@ -193,6 +278,7 @@ export function WikiMarkdown({
               </a>
             );
           },
+
           pre: ({ children }) => <>{children}</>,
           code: ({ className: codeClassName, children, ...props }) => {
             const language = /language-(\w+)/.exec(codeClassName ?? '')?.[1];
@@ -203,29 +289,11 @@ export function WikiMarkdown({
             }
 
             if (language || raw.includes('\n')) {
-              return (
-                <div className="my-4 overflow-hidden rounded-[10px] border border-[#ececec] bg-[#fbfbfb]">
-                  <SyntaxHighlighter
-                    language={language || 'bash'}
-                    style={oneLight}
-                    customStyle={{
-                      margin: 0,
-                      padding: '1rem',
-                      fontSize: '12.5px',
-                      lineHeight: '1.6',
-                      background: 'transparent',
-                    }}
-                    codeTagProps={{ style: { fontFamily: 'var(--font-mono, monospace)' } }}
-                    wrapLongLines
-                  >
-                    {raw}
-                  </SyntaxHighlighter>
-                </div>
-              );
+              return <CodeBlock raw={raw} language={language} isDark={isDark} />;
             }
 
             return (
-              <code className="rounded-[4px] border border-[#ececec] bg-[#f4f4f5]/60 px-1.5 py-0.5 font-mono text-[12px]" {...props}>
+              <code className="rounded-[4px] border border-[#ececec] bg-[#f4f4f5]/60 px-1.5 py-0.5 font-mono text-[12px] dark:border-[#27272a] dark:bg-neutral-800" {...props}>
                 {children}
               </code>
             );

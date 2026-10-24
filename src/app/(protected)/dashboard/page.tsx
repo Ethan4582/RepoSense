@@ -12,13 +12,12 @@ import {
   ExternalLink,
   FolderGit2,
   GitBranch,
-  Globe2,
   KeyRound,
   Link as LinkIcon,
   Loader2,
-  Lock,
   LogOut,
   Moon,
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
@@ -26,11 +25,13 @@ import {
   Sparkles,
   Star,
   Sun,
+  Trash2,
   User as UserIcon,
 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Switch } from '~/components/ui/switch';
+import { Input } from '~/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
 import useProject from '~/hooks/use-project';
 import { cn } from '~/lib/utils';
@@ -101,6 +120,9 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
   const [localVisibility, setLocalVisibility] = React.useState<Record<string, boolean>>({});
+  const [projectToRename, setProjectToRename] = React.useState<EnrichedProject | null>(null);
+  const [renameValue, setRenameValue] = React.useState('');
+  const [projectToDelete, setProjectToDelete] = React.useState<EnrichedProject | null>(null);
 
   const projects = (rawProjects as unknown as EnrichedProject[] | undefined) ?? [];
 
@@ -112,6 +134,42 @@ export default function DashboardPage() {
     }
   }, [isLoading, rawProjects, router]);
 
+  const handleStartRename = (project: EnrichedProject, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setProjectToRename(project);
+    setRenameValue(project.name);
+  };
+
+  const handleConfirmRename = async () => {
+    if (!projectToRename || !renameValue.trim()) return;
+    try {
+      const res = await fetch(`/api/projects/${projectToRename.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameValue.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to rename repository');
+      toast.success('Repository renamed');
+      setProjectToRename(null);
+      await refetchProjects();
+    } catch {
+      toast.error('Could not rename repository');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+    const target = projectToDelete;
+    setProjectToDelete(null);
+    try {
+      const res = await fetch(`/api/projects/${target.id}/archive`, { method: 'PATCH' });
+      if (!res.ok) throw new Error('Could not delete repository');
+      toast.success('Repository permanently deleted');
+      await refetchProjects();
+    } catch {
+      toast.error('Could not delete repository');
+    }
+  };
 
   const copyShareLink = async (projectId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -314,9 +372,9 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/wiki/${project.id}`)}
-                  className="group relative flex flex-col justify-between rounded-[12px] border border-[#e5e5e5] bg-card p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] cursor-pointer min-h-[170px]"
+                  className="group relative flex flex-col justify-between rounded-xl border border-[#e5e5e5] bg-card p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] cursor-pointer min-h-[170px]"
                 >
-                  {/* Top: Repo name & Visibility / Share controls */}
+                  {/* Top: Repo name & Visibility / Actions */}
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="font-medium text-[15px] text-foreground tracking-tight truncate flex-1" title={`${project.repoOwner}/${project.repoName}`}>
@@ -329,11 +387,6 @@ export default function DashboardPage() {
                           className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 transition-colors"
                           title={project.isPrivateRepo ? 'Private repository' : `Toggle visibility (currently ${isPublic ? 'Public' : 'Private'})`}
                         >
-                          {isPublic ? (
-                            <Globe2 className="size-2.5 text-emerald-500" />
-                          ) : (
-                            <Lock className="size-2.5 text-muted-foreground" />
-                          )}
                           <span className="font-normal">{isPublic ? 'Public' : 'Private'}</span>
                           {!project.isPrivateRepo && (
                             <Switch
@@ -345,28 +398,55 @@ export default function DashboardPage() {
                           )}
                         </div>
 
-                        {/* Edit wiki button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/wiki/${project.id}?mode=edit`);
-                          }}
-                          title="Edit wiki"
-                          className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-
-                        {/* Share link button */}
-                        <button
-                          type="button"
-                          onClick={(e) => copyShareLink(project.id, e)}
-                          title="Share wiki link"
-                          className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                        >
-                          <LinkIcon className="size-3.5" />
-                        </button>
+                        {/* Three-dot Action Menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              title="More options"
+                              className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 text-xs">
+                            <DropdownMenuItem
+                              onClick={(e) => handleStartRename(project, e)}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Pencil className="size-3.5 text-muted-foreground" />
+                              <span>Edit filename</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/wiki/${project.id}?mode=edit`);
+                              }}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Pencil className="size-3.5 text-muted-foreground" />
+                              <span>Edit wiki</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => copyShareLink(project.id, e)}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <LinkIcon className="size-3.5 text-muted-foreground" />
+                              <span>Repository URL</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProjectToDelete(project);
+                              }}
+                              className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                            >
+                              <Trash2 className="size-3.5" />
+                              <span>Delete</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
@@ -414,6 +494,61 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+
+      {/* Rename Dialog */}
+      <Dialog open={!!projectToRename} onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Filename / Name</DialogTitle>
+            <DialogDescription>
+              Enter a new display name for the &ldquo;{projectToRename?.name}&rdquo; repository.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleConfirmRename();
+            }}
+            className="space-y-4 py-2"
+          >
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Repository name"
+              autoFocus
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setProjectToRename(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!renameValue.trim() || renameValue.trim() === projectToRename?.name}>
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog open={!!projectToDelete} onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the &ldquo;{projectToDelete?.name}&rdquo; repository and all associated data, including chat questions, conversation history, indexing jobs, indexed files, and generated wiki content. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleConfirmDelete()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete repository
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

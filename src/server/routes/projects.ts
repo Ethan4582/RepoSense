@@ -489,13 +489,32 @@ export const projectsRoutes = new Hono<AuthContext>()
     });
     if (!member) return c.json({ error: "Project not found" }, 404);
 
-    const updated = await db.project.update({
-      where: { id: projectId },
-      data: { deletedAt: new Date() },
+    await purgeProjectWiki(db, projectId);
+
+    // Completely delete all associated database records: embeddings, wikiPages, qaThreads, questions, meetings, userToProject, and project
+    await db.$transaction(async (tx) => {
+      await tx.sourceCodeEmbedding.deleteMany({ where: { projectId } });
+      await tx.wikiPage.deleteMany({ where: { projectId } });
+      await tx.indexingJob.deleteMany({ where: { projectId } });
+      await tx.question.deleteMany({ where: { projectId } });
+
+      const threads = await tx.qaThread.findMany({ where: { projectId }, select: { id: true } });
+      if (threads.length > 0) {
+        await tx.qaMessage.deleteMany({ where: { threadId: { in: threads.map((t) => t.id) } } });
+        await tx.qaThread.deleteMany({ where: { projectId } });
+      }
+
+      const meetings = await tx.meeting.findMany({ where: { projectId }, select: { id: true } });
+      if (meetings.length > 0) {
+        await tx.issue.deleteMany({ where: { meetingId: { in: meetings.map((m) => m.id) } } });
+        await tx.meeting.deleteMany({ where: { projectId } });
+      }
+
+      await tx.userToProject.deleteMany({ where: { projectId } });
+      await tx.project.delete({ where: { id: projectId } });
     });
 
-    await purgeProjectWiki(db, projectId);
-    return c.json({ project: withoutProjectSecrets(updated) });
+    return c.json({ success: true, message: "Project and all associated data permanently deleted." });
   })
   .post(
     "/:id/pages",

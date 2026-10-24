@@ -6,6 +6,7 @@ import { Fraunces, Inter_Tight, Martian_Mono } from "next/font/google";
 import { TRPCReactProvider } from "~/trpc/react";
 import { Toaster } from "~/components/ui/sonner";
 import { SoundEffects } from "~/components/ui/sound";
+import { GlobalCommandPalette } from "~/components/global-command-palette";
 
 export const metadata: Metadata = {
   title: "RepoSense - AI Codebase Intelligence",
@@ -68,7 +69,10 @@ export default function RootLayout({
       >
         <body className="font-sans antialiased">
           <SoundEffects>
-            <TRPCReactProvider>{children}</TRPCReactProvider>
+            <TRPCReactProvider>
+              <GlobalCommandPalette />
+              {children}
+            </TRPCReactProvider>
             <Toaster />
           </SoundEffects>
         </body>

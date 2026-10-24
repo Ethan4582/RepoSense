@@ -37,6 +37,7 @@ import type { ProviderId } from '~/lib/providers/types';
 import { WikiMarkdown, type CitationTarget } from './markdown';
 import { CodeViewer, type ActiveFile } from './code-viewer';
 import { WikiComposer } from './wiki-composer';
+import { QaHistorySidebar } from './qa-history-sidebar';
 import { WikiQaView } from './wiki-qa-view';
 import { useSmoothStream } from '~/hooks/use-smooth-stream';
 import { IndexingLoader } from '~/components/indexing-loader';
@@ -132,6 +133,7 @@ export function WikiReader() {
   const [pageLoading, setPageLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const [historySidebarOpen, setHistorySidebarOpen] = React.useState(false);
   const [appNavOpen, setAppNavOpen] = React.useState(false);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [visibilityBusy, setVisibilityBusy] = React.useState(false);
@@ -152,6 +154,15 @@ export function WikiReader() {
   const [qaQuestion, setQaQuestion] = React.useState('');
   const [answer, setAnswer] = React.useState('');
   const [scanning, setScanning] = React.useState<Array<{ filePath: string; startLine: number; endLine: number }>>([]);
+  const [qaTurns, setQaTurns] = React.useState<Array<{
+    id: string;
+    question: string;
+    answer: string;
+    model?: string;
+    scanning?: Array<{ filePath: string; startLine: number; endLine: number }>;
+    qaError?: string | null;
+    streaming?: boolean;
+  }>>([]);
   const [qaError, setQaError] = React.useState<string | null>(null);
   const [streaming, setStreaming] = React.useState(false);
   const [threadId, setThreadId] = React.useState<string | null>(null);
@@ -161,11 +172,26 @@ export function WikiReader() {
   const smoothStream = useSmoothStream();
 
   React.useEffect(() => {
-    if (qaOpen && streaming) setAnswer(smoothStream.text);
+    if (qaOpen && streaming) {
+      setAnswer(smoothStream.text);
+      setQaTurns((prev) => {
+        if (prev.length === 0) return prev;
+        const lastIdx = prev.length - 1;
+        const updated = [...prev];
+        const last = updated[lastIdx]!;
+        updated[lastIdx] = {
+          ...last,
+          answer: smoothStream.text,
+          streaming: true,
+        };
+        return updated;
+      });
+    }
   }, [qaOpen, streaming, smoothStream.text]);
 
+  // Load question by questionIdParam if present, isolating each question instance
   React.useEffect(() => {
-    if (!questionIdParam || !projectId) return;
+    if (!projectId || !questionIdParam) return;
 
     const loadQuestion = async () => {
       try {
@@ -208,13 +234,34 @@ export function WikiReader() {
             setScanning(parsedScans);
             setActiveFile({ filePath: parsedScans[0]!.filePath, startLine: parsedScans[0]!.startLine, endLine: parsedScans[0]!.endLine });
           }
+
+          setQaTurns([
+            {
+              id: data.question.id,
+              question: data.question.question,
+              answer: data.question.answers,
+              model: selectedModel,
+              scanning: parsedScans,
+              streaming: false,
+            },
+          ]);
         }
       } catch {
         // Fallback or network error
       }
     };
     void loadQuestion();
-  }, [questionIdParam, projectId]);
+  }, [questionIdParam, projectId, selectedModel]);
+
+  // Persist turns to sessionStorage whenever updated
+  React.useEffect(() => {
+    if (!projectId || qaTurns.length === 0) return;
+    try {
+      sessionStorage.setItem(`reposense_qa_turns_${projectId}`, JSON.stringify(qaTurns));
+    } catch {
+      // quota or private mode
+    }
+  }, [projectId, qaTurns]);
 
   React.useEffect(() => {
     if (project?.chatModel) {
@@ -626,6 +673,7 @@ export function WikiReader() {
       return;
     }
 
+    const currentTurnId = `turn-${Date.now()}`;
     setQaOpen(true);
     setQaQuestion(text);
     smoothStream.reset();
@@ -636,6 +684,17 @@ export function WikiReader() {
     setActiveFile(null);
     setStreaming(true);
     setQuestion('');
+
+    setQaTurns([
+      {
+        id: currentTurnId,
+        question: text,
+        answer: '',
+        model: selectedModel,
+        scanning: [],
+        streaming: true,
+      },
+    ]);
 
     const qaStartTime = Date.now();
     const MIN_LOADER_MS = 1400; // Uniform minimum duration to enjoy the animation
@@ -667,6 +726,7 @@ export function WikiReader() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let accumulatedAnswer = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -695,9 +755,18 @@ export function WikiReader() {
             if (!scanningRef.current.some((item) => item.filePath === payload.filePath)) {
               scanningRef.current = [...scanningRef.current, payload];
               setScanning(scanningRef.current);
+              setQaTurns((prev) =>
+                prev.map((t) => (t.id === currentTurnId ? { ...t, scanning: scanningRef.current } : t))
+              );
             }
           } else if (payload.type === 'token') {
-            smoothStream.push(payload.text);
+            accumulatedAnswer += payload.text;
+            setAnswer(accumulatedAnswer);
+            setQaTurns((prev) =>
+              prev.map((t) =>
+                t.id === currentTurnId ? { ...t, answer: accumulatedAnswer, streaming: true } : t
+              )
+            );
             const firstScan = scanningRef.current[0];
             if (firstScan) {
               setActiveFile((prev) =>
@@ -716,12 +785,22 @@ export function WikiReader() {
             window.history.replaceState(null, '', currentUrl.toString());
           } else if (payload.type === 'error') {
             setQaError(payload.message);
+            setQaTurns((prev) =>
+              prev.map((t) => (t.id === currentTurnId ? { ...t, qaError: payload.message, streaming: false } : t))
+            );
           }
         }
       }
-      smoothStream.flush();
+      setAnswer(accumulatedAnswer);
+      setQaTurns((prev) =>
+        prev.map((t) => (t.id === currentTurnId ? { ...t, answer: accumulatedAnswer, streaming: false } : t))
+      );
     } catch (err) {
-      setQaError(err instanceof Error ? err.message : 'Could not answer this question.');
+      const msg = err instanceof Error ? err.message : 'Could not answer this question.';
+      setQaError(msg);
+      setQaTurns((prev) =>
+        prev.map((t) => (t.id === currentTurnId ? { ...t, qaError: msg, streaming: false } : t))
+      );
     } finally {
       setStreaming(false);
     }
@@ -814,7 +893,7 @@ export function WikiReader() {
               <PopoverTrigger asChild>
                 <Button
                   size="sm"
-                  className="h-8 rounded-[8px] border-none bg-[#2563eb] px-3.5 text-xs font-medium text-white shadow-xs hover:bg-[#1d4ed8] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb]"
+                  className="h-8 rounded-[8px] border-none bg-[#2563eb] px-3.5 text-xs font-medium text-white shadow-xs opacity-90 transition-all duration-200 hover:opacity-100 hover:scale-[1.03] active:scale-[0.98] hover:bg-[#1d4ed8] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb]"
                 >
                   <Share2 className="mr-1.5 size-3.5" />
                   <span>Share</span>
@@ -852,7 +931,7 @@ export function WikiReader() {
                   </Button>
                 </div>
                 {project.isOwner && !project.isPrivateRepo ? (
-                  <div className="flex items-center justify-between gap-3 border-t pt-3">
+                  <div className="flex items-center justify-between gap-3 border-t border-border/50 pt-3">
                     <div>
                       <p className="text-xs font-medium text-foreground">
                         {isPublic ? 'Public wiki' : 'Private wiki'}
@@ -990,8 +1069,10 @@ export function WikiReader() {
                 scanning={scanning}
                 qaError={qaError}
                 streaming={streaming}
+                turns={qaTurns}
                 activeFile={activeFile}
                 isSignedIn={Boolean(isSignedIn)}
+                onOpenHistory={() => setHistorySidebarOpen(true)}
                 onBack={() => {
                   setQaOpen(false);
                   const currentUrl = new URL(window.location.href);
@@ -1164,8 +1245,8 @@ export function WikiReader() {
                 </article>
 
                 {/* Floating composer � pinned to bottom of content column */}
-                <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-30 flex justify-center px-4 min-[1100px]:right-[280px]">
-                  <div className={cn("pointer-events-auto w-full", isEmbed ? "max-w-4xl" : "max-w-[900px]")}>
+                <div className="pointer-events-none fixed bottom-6 left-0 right-0 z-30 flex justify-center px-4">
+                  <div className={cn("pointer-events-auto w-full", isEmbed ? "max-w-4xl" : "max-w-[760px]")}>
                     <WikiComposer
                       question={question}
                       onQuestionChange={setQuestion}
@@ -1253,6 +1334,19 @@ export function WikiReader() {
           </div>
         </div>
       ) : null}
+
+      {/* Dedicated QA History Sidebar */}
+      <QaHistorySidebar
+        projectId={projectId}
+        projectName={project.name}
+        activeQuestionId={threadId ?? questionIdParam}
+        open={historySidebarOpen}
+        onClose={() => setHistorySidebarOpen(false)}
+        onSelectQuestion={(selectedId) => {
+          setHistorySidebarOpen(false);
+          router.push(`/wiki/${projectId}?questionId=${selectedId}`);
+        }}
+      />
     </div>
 
       {/* App nav hover zone */}

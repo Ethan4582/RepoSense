@@ -3,6 +3,7 @@ import { getModel } from '~/lib/providers';
 import type { ProviderId } from '~/lib/providers';
 import { extractHeadings, type RepoSkeleton } from './chunker';
 import { formatArchitectureBrief, type RepoArchitecture } from './repo-normalizer';
+import { determineRepoScale, DynamicWikiPlanSchema, type RepoScale } from './wiki/planner';
 
 export interface WikiPlanPage {
   slug: string;
@@ -332,39 +333,53 @@ export async function planWiki(context: WikiGenerationContext): Promise<WikiPlan
   );
 
   const fileCount = context.skeleton.files.length;
-  const repoSize = fileCount < 50 ? 'small' : fileCount <= 500 ? 'medium' : 'large';
-  const groupRange = repoSize === 'small' ? '1 to 2 groups' : repoSize === 'medium' ? '3 to 6 groups' : '6 to 10 groups';
+  const approxLoc = context.files.reduce((sum, f) => sum + (f.content ? f.content.split('\n').length : 0), 0);
+  const repoScale = determineRepoScale(fileCount, approxLoc);
+
+  const limits: Record<RepoScale, { minSec: number; maxSec: number; minPages: number }> = {
+    COMPACT:    { minSec: 3,  maxSec: 4,  minPages: 1 },
+    SUB_MEDIUM: { minSec: 5,  maxSec: 7,  minPages: 2 },
+    MEDIUM:     { minSec: 8,  maxSec: 11, minPages: 2 },
+    LARGE:      { minSec: 12, maxSec: 18, minPages: 2 },
+  };
+  const cfg = limits[repoScale];
+  const groupRange = `${cfg.minSec} to ${cfg.maxSec} sections (minimum ${cfg.minPages} subpages each)`;
 
   const prompt = `You are a senior software architect planning a DeepWiki documentation site for ${context.projectName}, specifically the ${branchDescription(context)}.
 
-This repository is classified as ${repoSize} (${fileCount} source files). Generate ${groupRange}.
+This repository is classified as ${repoScale} (${fileCount} source files, ~${approxLoc} lines of code).
+You MUST generate between ${cfg.minSec} and ${cfg.maxSec} sections, each containing at least ${cfg.minPages} subpages.
 
 Return ONLY valid JSON, no prose, no markdown fences. The shape must be:
 {
+  "repoScale": "${repoScale}",
   "sections": [
     {
-      "sectionTitle": "Overview",
+      "sectionTitle": "Emergent domain module, e.g. Authentication & Session Boundary",
       "description": "System introduction, core value proposition, and entry points.",
       "sectionOrder": 1,
       "pages": [
-        { "slug": "overview", "title": "Overview", "pageOrder": 1, "relevantFiles": ["README.md", "package.json"] }
+        {
+          "slug": "jwt-auth-guards",
+          "title": "JWT Verification & RBAC Guards",
+          "description": "Token issuance, refresh lifecycle, and role guards.",
+          "targetFilePaths": ["src/lib/auth.ts"],
+          "focusSymbols": ["verifyToken", "requireAuth"]
+        }
       ]
     }
   ]
 }
 
 Rules:
-- Generate ${groupRange} based on the repository size.
-- Always place "Overview" first as a single page. Add "Getting Started" or "Setup and Usage" when a README or install script exists.
-- Build groups from domains, not raw directories. Merge related directories that share a responsibility (e.g. routes and middleware into an "HTTP Transport" group). Use names from code symbols, README headings, and package names. Never use raw folder names or generic labels such as "Module 1" or "Misc".
-- Order groups by reader need: entry points and overview, core domain logic, interfaces (API, UI, CLI), data and persistence, infrastructure and tooling, and legacy code last.
-- Give each group a one-sentence description in the JSON under "description".
-- Page titles must be Title Case, 2 to 6 words, maximum 60 characters, specific rather than generic.
-- Add sub-pages only when a topic covers more than roughly 800 lines or two distinct subsystems.
+- Generate ${groupRange} based on the repository scale.
+- CRITICAL: Page titles CANNOT duplicate their parent section title. Subpages must represent concrete subsystems.
+- Always place "Overview" or introductory domain section first.
+- Build groups from domains, not raw directories. Merge related directories that share a responsibility.
 - Slugs must be lowercase kebab-case and globally unique.
-- relevantFiles must be exact paths from the repository skeleton or normalized profile.
-- Tailor sections to this repository's real architecture, not a generic web-app template.
-- Documentation for this branch must be branch-specific. Describe only behavior present on ${branchDescription(context)}.
+- targetFilePaths must be exact paths from the repository skeleton.
+- Tailor sections to this repository's real architecture.
+- Describe only behavior present on ${branchDescription(context)}.
 
 NORMALIZED REPOSITORY PROFILE:
 ${formatArchitectureBrief(context.architecture).slice(0, 12000)}
@@ -385,7 +400,35 @@ ${manifest?.content.slice(0, 6000) ?? 'No manifest found. Infer setup from file 
     abortSignal: AbortSignal.timeout(90_000),
   });
 
-  const parsed = parseJsonPlan(text);
+  let rawJson: unknown = null;
+  try {
+    const cleaned = text.trim().replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+    rawJson = JSON.parse(cleaned);
+  } catch {
+    rawJson = parseJsonPlan(text);
+  }
+
+  let validatedPlan: WikiPlan | null = null;
+  if (rawJson && typeof rawJson === 'object') {
+    const withScale = { ...(rawJson as object), repoScale: (rawJson as { repoScale?: string }).repoScale ?? repoScale };
+    const result = DynamicWikiPlanSchema.safeParse(withScale);
+    if (result.success) {
+      validatedPlan = {
+        sections: result.data.sections.map((sec, secIdx) => ({
+          sectionTitle: sec.sectionTitle,
+          sectionOrder: secIdx + 1,
+          pages: sec.pages.map((p, pIdx) => ({
+            slug: p.slug,
+            title: p.title,
+            pageOrder: pIdx + 1,
+            relevantFiles: p.targetFilePaths,
+          })),
+        })),
+      };
+    }
+  }
+
+  const parsed = validatedPlan ?? parseJsonPlan(text);
   const plan = parsed ?? fallbackPlan(context.skeleton, context.architecture);
 
   const seen = new Set<string>();

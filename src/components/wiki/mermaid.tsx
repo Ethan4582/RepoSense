@@ -12,13 +12,14 @@ function sanitizeMermaidChart(raw: string): string {
   // If chart is empty, return empty
   if (!chart) return '';
 
-  // Sanitize node labels with unbalanced/unquoted parentheses, square brackets or colons inside [label]
-  chart = chart.replace(/\[([^\]\n]+)\]/g, (_match, label: string) => {
-    // If label contains quotes or special characters, normalize quotes
-    if (label.includes('"')) {
-      return `["${label.replace(/"/g, "'")}"]`;
+  // Sanitize node labels to ensure labels are wrapped in quotes: id["Label"]
+  chart = chart.replace(/([a-zA-Z0-9_-]+)\[([^\]\n]+)\]/g, (_match, id: string, label: string) => {
+    let cleanedLabel = label.trim();
+    if (cleanedLabel.startsWith('"') && cleanedLabel.endsWith('"')) {
+      cleanedLabel = cleanedLabel.slice(1, -1);
     }
-    return `["${label.replace(/[()]/g, ' ')}"]`;
+    cleanedLabel = cleanedLabel.replace(/"/g, "'");
+    return `${id}["${cleanedLabel}"]`;
   });
 
   return chart;

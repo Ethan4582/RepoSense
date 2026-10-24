@@ -46,6 +46,7 @@ export interface IndexingLoaderProps {
   mode?: 'indexing' | 'qa' | 'general';
   customText?: string;
   size?: 'default' | 'sm';
+  showCountdown?: boolean;
   className?: string;
 }
 
@@ -55,6 +56,7 @@ export function IndexingLoader({
   mode = 'indexing',
   customText,
   size = 'default',
+  showCountdown = false,
   className,
 }: IndexingLoaderProps) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -62,6 +64,42 @@ export function IndexingLoader({
   // Cycling text state when no static step is provided
   const [cycleIndex, setCycleIndex] = React.useState(0);
   const [textVisible, setTextVisible] = React.useState(true);
+
+  // Adaptive Countdown State (starts at 4:00, adapts to stages)
+  const [secondsRemaining, setSecondsRemaining] = React.useState(240);
+  const isDone = step === 'DONE' || step === 'COMPLETED';
+
+  // Adjust estimate based on actual pipeline progress
+  React.useEffect(() => {
+    if (!step || isDone) return;
+    if (step === 'LOADING_REPO') {
+      setSecondsRemaining((prev) => Math.min(prev, 235));
+    } else if (step === 'CHUNKING_AND_EMBEDDING') {
+      setSecondsRemaining((prev) => Math.min(prev, 180));
+    } else if (step === 'PLANNING_WIKI') {
+      setSecondsRemaining((prev) => Math.min(prev, 120));
+    } else if (step === 'GENERATING_PAGES') {
+      setSecondsRemaining((prev) => Math.min(prev, 75));
+    } else if (step === 'FINALIZING') {
+      setSecondsRemaining((prev) => Math.min(prev, 25));
+    }
+  }, [step, isDone]);
+
+  // Timer tick down
+  React.useEffect(() => {
+    if (isDone || mode === 'qa') return;
+    const timer = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev <= 1) return 1; // do not show 0 until done
+        // If still in early stages, slow down countdown when running low
+        if (step === 'LOADING_REPO' && prev <= 190) return prev;
+        if (step === 'CHUNKING_AND_EMBEDDING' && prev <= 130) return prev;
+        if (step === 'PLANNING_WIKI' && prev <= 80) return prev;
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [step, isDone, mode]);
 
   const cycleList = React.useMemo(() => {
     return mode === 'qa' ? QUIRKY_QA_STEPS : DEFAULT_INDEXING_STEPS;
@@ -85,6 +123,13 @@ export function IndexingLoader({
     if (step) return STAGE_LABELS[step] ?? step.replaceAll('_', ' ').toLowerCase();
     return cycleList[cycleIndex] ?? 'Processing…';
   }, [customText, detail, step, cycleList, cycleIndex]);
+
+  const countdownText = React.useMemo(() => {
+    if (isDone) return null;
+    const mins = Math.floor(secondsRemaining / 60);
+    const secs = secondsRemaining % 60;
+    return `~${mins}:${secs.toString().padStart(2, '0')} est. remaining`;
+  }, [secondsRemaining, isDone]);
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -266,6 +311,11 @@ export function IndexingLoader({
           {activeText}
         </span>
       </div>
+      {showCountdown && countdownText && mode === 'indexing' && (
+        <span className="text-[11px] font-mono font-medium text-muted-foreground transition-opacity">
+          {countdownText}
+        </span>
+      )}
     </div>
   );
 }

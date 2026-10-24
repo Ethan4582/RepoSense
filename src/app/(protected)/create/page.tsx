@@ -238,11 +238,34 @@ function CreateProjectContent() {
 
       setVerification(fallbackData);
       setIsPublicWiki(true);
+
+      // Restore cost estimation & timeline calculation
+      setEstimating(true);
+      void fetch('/api/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoUrl: base,
+          githubToken: githubToken || undefined,
+          modelId: chatModel,
+          embeddingModelId: embeddingProvider === 'GEMINI' ? 'gemini-embedding-001' : 'text-embedding-3-small',
+        }),
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = (await res.json()) as { estimate?: Estimate };
+          if (data.estimate) {
+            setEstimate(data.estimate);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setEstimating(false);
+        });
     } catch (err) {
       setUrlError('Please enter a valid GitHub repository URL.');
     } finally {
       setVerifying(false);
-      setEstimating(false);
     }
   };
 
@@ -340,7 +363,7 @@ function CreateProjectContent() {
   if (indexingSession) {
     return (
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl flex-col items-center justify-center px-4">
-        <IndexingLoader step={indexingSession.currentStep} />
+        <IndexingLoader step={indexingSession.currentStep} showCountdown={true} />
         {indexingSession.status === 'FAILED' ? (
           <div className="mt-2 text-center">
             <p className="text-sm text-destructive">{indexingSession.errorMessage ?? 'Indexing failed. No wiki was generated.'}</p>
@@ -578,7 +601,7 @@ function CreateProjectContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-start justify-between gap-4 rounded-lg border border-[#ececec] bg-muted/20 p-3">
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-xs font-semibold">
                     {isPrivateRepo ? (
@@ -696,7 +719,7 @@ function CreateProjectContent() {
                 </div>
               ) : null}
 
-              <div className="flex items-center justify-between border-t pt-4">
+              <div className="flex items-center justify-between border-t border-[#ececec] pt-4">
                 <p className="text-[11px] text-muted-foreground">
                   Indexing runs in the background. You can close this tab.
                 </p>

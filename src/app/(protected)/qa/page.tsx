@@ -78,7 +78,7 @@ export default function QaBookmarksPage() {
   return (
     <div className="flex flex-col h-full w-full px-6 py-8 md:px-12 lg:px-16 space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#ececec] pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
             <Bookmark className="size-6 text-primary fill-primary/20" />
@@ -109,7 +109,7 @@ export default function QaBookmarksPage() {
               }
             }}
           >
-            <SelectTrigger className="h-9 min-w-[200px] text-xs gap-2 border-border/80 bg-background">
+            <SelectTrigger className="h-9 min-w-[200px] text-xs gap-2 rounded-[12px] border border-[#e0e0e0] bg-background transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
               <FolderGit2 className="size-3.5 text-primary shrink-0" />
               <SelectValue placeholder="All Repositories" />
             </SelectTrigger>
@@ -134,7 +134,7 @@ export default function QaBookmarksPage() {
           placeholder="Search saved answers, code citations, and questions..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-10 h-11 text-sm bg-muted/20 border-border/70 rounded-lg shadow-xs"
+          className="pl-10 h-11 text-sm bg-muted/20 border border-[#e0e0e0] rounded-[12px] transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
         />
       </div>
 
@@ -161,7 +161,7 @@ export default function QaBookmarksPage() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border/60">
+          <div className="divide-y divide-[#f0f0f0]">
             {bookmarks.map((b) => {
               const repoUrl = (b as unknown as { project?: { repoUrl?: string } }).project?.repoUrl ?? project?.repoUrl;
               const targetProjectId = b.projectId || projectId;
@@ -286,6 +286,7 @@ export default function QaBookmarksPage() {
                         content={b.answers}
                         githubRepo={repoOwner && repoName ? { owner: repoOwner, repo: repoName } : undefined}
                         branch={b.branch ?? 'main'}
+                        className="compact"
                         onCitation={(target) => {
                           if (targetProjectId) {
                             router.push(`/wiki/${targetProjectId}?questionId=${b.id}`);

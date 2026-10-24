@@ -136,10 +136,10 @@
 }
 
 :root {
-  --radius: 0.75rem;
-  --line-subtle: #f0f0f0;
-  --line-default: #e5e5e5;
-  --line-strong: #d4d4d4;
+  --radius: 0.55rem;
+  --line-subtle: #f4f4f4;
+  --line-default: #ececec;
+  --line-strong: #dedede;
   --focus: #2337ff;
   --background: #ffffff;
   --foreground: #09090b;
@@ -156,8 +156,8 @@
   --accent: #eff4ff;
   --accent-foreground: #2c64e3;
   --destructive: #ef4444;
-  --border: #e5e5e5;
-  --input: #e0e0e0;
+  --border: #ececec;
+  --input: #e5e5e5;
   --ring: #2337ff;
   --sidebar: #fafafa;
   --sidebar-foreground: #18181b;

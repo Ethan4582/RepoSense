@@ -99,9 +99,15 @@ interface IndexingJob {
 function groupSections(pages: WikiPageMeta[]) {
   const map = new Map<string, WikiPageMeta[]>();
   for (const page of pages) {
-    const list = map.get(page.sectionTitle) ?? [];
-    list.push(page);
-    map.set(page.sectionTitle, list);
+    // If a page in the "Overview" section is also titled "Overview", label it "System Introduction" to avoid repetitive double Overview titles
+    const adjustedPage =
+      page.sectionTitle.trim().toLowerCase() === 'overview' &&
+      page.title.trim().toLowerCase() === 'overview'
+        ? { ...page, title: 'System Introduction' }
+        : page;
+    const list = map.get(adjustedPage.sectionTitle) ?? [];
+    list.push(adjustedPage);
+    map.set(adjustedPage.sectionTitle, list);
   }
   return Array.from(map.entries());
 }
@@ -906,21 +912,21 @@ export function WikiReader() {
                 </div>
               </div>
 
-              <nav className="space-y-6">
+              <nav className="space-y-4">
                 {sections.map(([sectionTitle, pages]) => (
-                  <div key={sectionTitle} className="space-y-2">
-                    <div className="text-[15px] font-semibold text-foreground">
+                  <div key={sectionTitle} className="space-y-1">
+                    <div className="text-[14px] font-semibold text-foreground">
                       {isEditing ? (
                         <input
                           value={sectionTitle}
                           onChange={(event) => {
                             setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.sectionTitle === sectionTitle ? { ...item, sectionTitle: event.target.value } : item) } : current);
                           }}
-                          className="min-w-0 w-full bg-transparent text-[15px] font-semibold outline-none"
+                          className="min-w-0 w-full bg-transparent text-[14px] font-semibold outline-none"
                         />
                       ) : sectionTitle}
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       {pages
                         .slice()
                         .sort((a, b) => a.pageOrder - b.pageOrder)
@@ -936,7 +942,7 @@ export function WikiReader() {
                                 setQaOpen(false);
                               }}
                               className={cn(
-                                'relative flex w-full items-center justify-between rounded-md py-2 pr-3 pl-3 text-left text-[15px] transition-all duration-150',
+                                'relative flex w-full items-center justify-between rounded-md py-1.5 pr-2.5 pl-2.5 text-left text-[14px] transition-all duration-150',
                                 isActive
                                   ? 'bg-neutral-100/80 font-medium text-foreground dark:bg-neutral-800/50'
                                   : 'text-foreground/70 hover:bg-neutral-100/40 hover:text-foreground dark:hover:bg-neutral-800/30'
@@ -950,7 +956,7 @@ export function WikiReader() {
                                   value={page.title}
                                   onClick={(event) => event.stopPropagation()}
                                   onChange={(event) => setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.id === page.id ? { ...item, title: event.target.value } : item) } : current)}
-                                  className="min-w-0 w-full bg-transparent text-[15px] outline-none"
+                                  className="min-w-0 w-full bg-transparent text-[14px] outline-none"
                                 />
                               ) : (
                                 <span className="line-clamp-2 leading-snug">{page.title}</span>
@@ -1180,10 +1186,10 @@ export function WikiReader() {
                     className="scrollbar-none hidden w-[280px] shrink-0 overflow-y-auto p-6 min-[1100px]:block"
                   >
                     <div className="sticky top-6">
-                      <div className="mb-4 text-[20px] font-bold text-foreground">
+                      <div className="mb-3 text-[17px] font-bold text-foreground">
                         On this page
                       </div>
-                      <div className="space-y-[14px]">
+                      <div className="space-y-[9px]">
                         {displayHeadings.map((heading, idx) =>
                           isEditing ? (
                             <input
@@ -1200,7 +1206,7 @@ export function WikiReader() {
                                 );
                               }}
                               className={cn(
-                                'w-full bg-transparent text-[15px] text-muted-foreground outline-none',
+                                'w-full bg-transparent text-[14px] text-muted-foreground outline-none',
                                 heading.level === 3 ? 'pl-[14px]' : ''
                               )}
                             />
@@ -1210,7 +1216,7 @@ export function WikiReader() {
                               href={`#${heading.id}`}
                               onClick={(event) => { event.preventDefault(); scrollToHeading(heading.id); }}
                               className={cn(
-                                'relative block text-[15px] transition-colors',
+                                'relative block text-[14px] leading-snug transition-colors',
                                 heading.level === 3 ? 'pl-[14px]' : '',
                                 activeHeadingId === heading.id
                                   ? 'font-medium text-foreground'
@@ -1218,7 +1224,7 @@ export function WikiReader() {
                               )}
                             >
                               {activeHeadingId === heading.id ? (
-                                <span className="absolute -left-3 top-1.5 bottom-1.5 w-[2px] rounded-full bg-[#2563eb] dark:bg-[#3b82f6]" />
+                                <span className="absolute -left-3 top-1 bottom-1 w-[2px] rounded-full bg-[#2563eb] dark:bg-[#3b82f6]" />
                               ) : null}
                               {heading.text}
                             </a>

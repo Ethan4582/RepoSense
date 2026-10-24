@@ -228,13 +228,13 @@ export default function ExplorePage() {
                 <Link
                   key={project.id}
                   href={`/wiki/${project.id}`}
-                  className="group flex flex-col rounded-[12px] border border-[#d4d4d8] bg-card p-4 transition-colors duration-200 ease-out hover:border-black/50"
+                  className="group flex flex-col rounded-[12px] border border-[#e5e5e5] bg-card p-4 transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-[#d4d4d8] bg-muted/40">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-[#e0e0e0] bg-muted/40">
                       <GitBranch className="size-4 text-primary" />
                     </div>
-                    <Badge variant="outline" className="text-[10px] rounded-[999px] border border-[#d4d4d8]">
+                    <Badge variant="outline" className="text-[10px] rounded-[999px] border border-[#e0e0e0]">
                       {project.pageCount} pages
                     </Badge>
                   </div>

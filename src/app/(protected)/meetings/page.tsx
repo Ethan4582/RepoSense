@@ -64,7 +64,7 @@ export default function MeetingsPage() {
   return (
     <div className="flex flex-col h-full w-full max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#ececec] pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Video className="size-6 text-primary" />
@@ -96,7 +96,7 @@ export default function MeetingsPage() {
                 }
               }}
             >
-              <SelectTrigger className="h-8 min-w-[180px] max-w-[260px] text-xs gap-2 border-border/80 bg-background">
+              <SelectTrigger className="h-8 min-w-[180px] max-w-[260px] text-xs gap-2 rounded-[12px] border border-[#e0e0e0] bg-background transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
                 <FolderGit2 className="size-3.5 text-primary shrink-0" />
                 <SelectValue placeholder="All Repositories" />
               </SelectTrigger>
@@ -116,7 +116,7 @@ export default function MeetingsPage() {
           <Button
             size="sm"
             onClick={() => setUploadDialogOpen(true)}
-            className="h-8 gap-1.5 text-xs font-medium"
+            className="h-8 gap-1.5 text-xs font-medium rounded-[12px]"
           >
             <Plus className="size-3.5" />
             <span>+ Upload Meeting Audio</span>
@@ -125,8 +125,8 @@ export default function MeetingsPage() {
       </div>
 
       {/* Notion-Style Document List */}
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-xs">
-        <div className="border-b border-border/60 bg-muted/20 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+      <div className="rounded-[12px] border border-[#e5e5e5] bg-card overflow-hidden transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+        <div className="border-b border-[#f0f0f0] bg-muted/20 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Processed Recordings ({meetings?.length ?? 0})</span>
         </div>
 
@@ -147,14 +147,14 @@ export default function MeetingsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setUploadDialogOpen(true)}
-                className="h-7 text-xs"
+                className="h-7 text-xs rounded-[12px] border-[#e0e0e0] hover:border-[#d4d4d4]"
               >
                 Upload First Recording
               </Button>
             </div>
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-[#f0f0f0]">
             {meetings.map((meeting) => {
               const isProcessing = meeting.status === 'PROCESSING';
               const issuesCount = meeting.issues?.length ?? 0;

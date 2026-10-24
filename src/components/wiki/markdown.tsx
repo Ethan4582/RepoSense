@@ -98,7 +98,7 @@ export function WikiMarkdown({
   };
 
   return (
-    <div className={cn('wiki-prose max-w-none text-[17px] leading-[1.7] text-foreground', className)}>
+    <div className={cn('wiki-prose max-w-none text-[17px] leading-[1.7] text-foreground [&.compact]:text-[14px] [&.compact]:leading-[1.65] [&.compact_h1]:text-[18px] [&.compact_h1]:mt-1 [&.compact_h1]:mb-3 [&.compact_h2]:text-[16px] [&.compact_h2]:mt-4 [&.compact_h2]:mb-2 [&.compact_h3]:text-[15px] [&.compact_h3]:mt-3 [&.compact_h3]:mb-1.5 [&.compact_p]:my-2.5', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

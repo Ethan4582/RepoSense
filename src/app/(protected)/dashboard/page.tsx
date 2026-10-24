@@ -262,7 +262,7 @@ export default function DashboardPage() {
           </h1>
 
           <form onSubmit={handleSearchSubmit} className="mt-8 relative">
-            <div className="relative flex items-center rounded-xl border border-border/80 bg-card/60 shadow-xs focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+            <div className="relative flex items-center rounded-[12px] border border-[#e0e0e0] bg-card/60 transition-colors duration-200 ease-out hover:border-[#d4d4d4] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
               <Search className="size-4 shrink-0 text-muted-foreground ml-3.5" />
               <input
                 value={searchQuery}
@@ -274,7 +274,7 @@ export default function DashboardPage() {
                 <Button
                   type="submit"
                   size="sm"
-                  className="h-7 text-xs mr-2 gap-1 bg-primary text-primary-foreground"
+                  className="h-7 text-xs mr-2 gap-1 bg-primary text-primary-foreground rounded-[12px]"
                 >
                   <Sparkles className="size-3" />
                   Index
@@ -290,7 +290,7 @@ export default function DashboardPage() {
             {/* Card 1: Dedicated "+ Add repo" card */}
             <Link
               href="/create"
-              className="group relative flex flex-col justify-between rounded-2xl border border-dashed border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06] p-5 shadow-xs transition-all hover:border-primary/60 hover:shadow-sm min-h-[170px]"
+              className="group relative flex flex-col justify-between rounded-[12px] border border-dashed border-[#e0e0e0] bg-primary/[0.03] hover:bg-primary/[0.06] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] min-h-[170px]"
             >
               <div className="flex items-center gap-2 text-primary font-semibold">
                 <Plus className="size-5" />
@@ -314,7 +314,7 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/wiki/${project.id}`)}
-                  className="group relative flex flex-col justify-between rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all hover:border-primary/40 hover:shadow-sm cursor-pointer min-h-[170px]"
+                  className="group relative flex flex-col justify-between rounded-[12px] border border-[#e5e5e5] bg-card p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] cursor-pointer min-h-[170px]"
                 >
                   {/* Top: Repo name & Visibility / Share controls */}
                   <div>

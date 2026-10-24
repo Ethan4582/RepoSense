@@ -189,8 +189,8 @@ export function AppSideBar() {
   const visibleProjects = (projects ?? []).filter((project) => !project.deletedAt);
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border bg-sidebar select-none">
-      <SidebarHeader className="border-b border-border/40 p-3 space-y-3">
+    <Sidebar collapsible="icon" className="border-r border-[#ececec] bg-sidebar select-none">
+      <SidebarHeader className="border-b border-[#ececec] p-3 space-y-3">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
@@ -218,7 +218,7 @@ export function AppSideBar() {
           <Button
             variant="outline"
             className={cn(
-              'h-9 border-border/80 bg-background text-xs font-semibold text-foreground shadow-xs transition-all hover:bg-muted',
+              'h-9 rounded-[12px] border border-[#e0e0e0] bg-background text-xs font-semibold text-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted',
               open ? 'w-full justify-start gap-2' : 'mx-auto size-8 p-0'
             )}
             title="New Repository Wiki"
@@ -277,7 +277,7 @@ export function AppSideBar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               {visibleProjects.length === 0 ? (
-                <div className="mx-1 rounded-lg border border-dashed px-3 py-4 text-center">
+                <div className="mx-1 rounded-[12px] border border-dashed border-[#e0e0e0] px-3 py-4 text-center">
                   <BookOpen className="mx-auto mb-1.5 size-4 text-muted-foreground/40" />
                   <p className="text-[10px] leading-4 text-muted-foreground">
                     No wikis yet. Link a GitHub repository to generate one.
@@ -294,10 +294,10 @@ export function AppSideBar() {
                       <SidebarMenuItem key={project.id}>
                         <div
                           className={cn(
-                            'group relative flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors',
+                            'group relative flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs transition-colors duration-200 ease-out',
                             isCurrent
-                              ? 'bg-primary/10 font-medium text-foreground'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              ? 'border-[#2c64e3]/30 bg-[#2c64e3]/18 font-medium text-foreground dark:bg-[#2c64e3]/25 dark:border-[#2c64e3]/40'
+                              : 'border-transparent text-muted-foreground hover:border-[#ececec] hover:bg-muted hover:text-foreground'
                           )}
                         >
                           <Link
@@ -371,15 +371,15 @@ export function AppSideBar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border/40 p-2">
+      <SidebarFooter className="border-t border-[#ececec] p-2">
         <Popover open={profileOpen} onOpenChange={setProfileOpen}>
           <div className="flex w-full items-center justify-between">
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="flex flex-1 items-center gap-2.5 overflow-hidden rounded-lg p-1 text-left transition-colors hover:bg-muted/60"
+                className="flex flex-1 items-center gap-2.5 overflow-hidden rounded-[12px] p-1 text-left transition-colors hover:bg-muted/60"
               >
-                <Avatar className="size-7 shrink-0 border border-border">
+                <Avatar className="size-7 shrink-0 border border-[#e0e0e0]">
                   <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
                   <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
                     {user?.firstName?.[0] ??

@@ -115,6 +115,7 @@ export function WikiReader() {
   const branchParam = searchParams.get('branch');
   const prParam = searchParams.get('pr');
   const questionIdParam = searchParams.get('questionId');
+  const isEmbed = searchParams.get('embed') === 'true';
   const { isSignedIn } = useUser();
 
   const [project, setProject] = React.useState<WikiProject | null>(null);
@@ -1010,9 +1011,12 @@ export function WikiReader() {
                 {/* Documentation article � scrollable, centered with 48px to 64px empty gutters on each side */}
                 <article
                   ref={articleRef}
-                  className="scrollbar-none min-w-0 flex-1 overflow-y-auto px-[clamp(24px,4vw,56px)] pt-10 pb-[136px]"
+                  className={cn(
+                    "scrollbar-none min-w-0 flex-1 overflow-y-auto pb-[136px]",
+                    isEmbed ? "px-6 sm:px-10 pt-6" : "px-[clamp(24px,4vw,56px)] pt-10"
+                  )}
                 >
-                  <div className="mx-auto w-full max-w-[900px]">
+                  <div className={cn("mx-auto w-full", isEmbed ? "max-w-4xl" : "max-w-[900px]")}>
                     {indexing && (!activePage?.content || project.wikiPages.length === 0) ? (
                       <div className="flex min-h-[380px] w-full items-center justify-center py-16">
                         <IndexingLoader step={indexing.currentStep} detail={indexing.currentDetail} />
@@ -1155,7 +1159,7 @@ export function WikiReader() {
 
                 {/* Floating composer � pinned to bottom of content column */}
                 <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-30 flex justify-center px-4 min-[1100px]:right-[280px]">
-                  <div className="pointer-events-auto w-full max-w-[900px]">
+                  <div className={cn("pointer-events-auto w-full", isEmbed ? "max-w-4xl" : "max-w-[900px]")}>
                     <WikiComposer
                       question={question}
                       onQuestionChange={setQuestion}

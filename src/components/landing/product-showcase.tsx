@@ -3,8 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-
-const TARGET_PATH = '/wiki/cmvjlqiy50000hrb0g2o7e4wk';
+import { LandingDemoWiki } from './landing-demo-wiki';
 
 // Provider list using clean authentic SVGs directly from public/models
 const PROVIDERS = [
@@ -18,55 +17,16 @@ const PROVIDERS = [
   { name: 'Groq', logo: '/models/groq.svg' },
 ];
 
+const TARGET_PATH = '/wiki/cmvjlqiy50000hrb0g2o7e4wk?embed=true';
+
 export function ProductShowcase() {
-  const [iframeSrc, setIframeSrc] = React.useState<string>(TARGET_PATH);
-  const [isLoaded, setIsLoaded] = React.useState(false);
-  const [hasError, setHasError] = React.useState(false);
-
-  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  // Safety timeout: if iframe fails or is blocked by network, show error state
-  React.useEffect(() => {
-    if (iframeSrc && !isLoaded) {
-      timerRef.current = setTimeout(() => {
-        if (!isLoaded) {
-          setHasError(true);
-        }
-      }, 14000);
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, [iframeSrc, isLoaded]);
-
-  const handleIframeLoad = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-    setIsLoaded(true);
-    setHasError(false);
-  };
-
-  const handleIframeError = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-    setHasError(true);
-  };
-
-  const handleRetry = () => {
-    setHasError(false);
-    setIsLoaded(false);
-    setIframeSrc(`${TARGET_PATH}?_r=${Date.now()}`);
-  };
+  const [iframeLoaded, setIframeLoaded] = React.useState(false);
+  const [useFallback, setUseFallback] = React.useState(false);
 
   return (
     <section
       id="product-showcase"
-      className="w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col"
+      className="relative w-full bg-white max-w-[1440px] mx-auto px-6 sm:px-[64px]"
     >
       <div className="relative border-x border-[#d4d4d8] px-6 sm:px-[64px] pt-8 pb-12 flex flex-col justify-between">
         
@@ -124,108 +84,33 @@ export function ProductShowcase() {
           </div>
         </div>
 
-        {/* Embed Container: Crisp framed panel with minimal surrounding gutters */}
-        <div className="w-full bg-[#f8f8fa] border border-[#e5e5ea] rounded-[10px] md:rounded-[12px] p-1.5 sm:p-2 box-border">
-          {/* Embed Viewport: Generous height and aspect ratio so wiki layout never compacts */}
-          <div className="relative w-full bg-white border border-[#e5e5ea] rounded-[6px] md:rounded-[8px] overflow-hidden min-h-[640px] md:min-h-[760px] xl:min-h-[840px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
-            
-            {/* Loading Skeleton */}
-            <div
-              className={`absolute inset-0 bg-[#fafafb] flex flex-col z-10 pointer-events-none transition-opacity duration-400 ease-out ${
-                isLoaded ? 'opacity-0 invisible' : 'opacity-100 visible'
-              }`}
-              aria-hidden={isLoaded}
-            >
-              <div className="h-12 border-b border-[#ededf0] flex items-center px-5 gap-3 bg-white">
-                <span className="size-2.5 rounded-full bg-[#e5e5ea]" />
-                <span className="size-2.5 rounded-full bg-[#e5e5ea]" />
-                <span className="size-2.5 rounded-full bg-[#e5e5ea]" />
-                <div className="w-48 h-6 rounded bg-[#f0f0f4] ml-2 animate-pulse" />
-              </div>
-              <div className="flex-1 flex overflow-hidden">
-                <div className="hidden sm:flex w-[220px] border-r border-[#ededf0] p-6 flex-col gap-3 bg-[#fafafb]">
-                  <div className="h-3.5 w-4/5 rounded bg-[#e9e9ed] animate-pulse" />
-                  <div className="h-3.5 w-3/5 rounded bg-[#e9e9ed] animate-pulse" />
-                  <div className="h-3.5 w-11/12 rounded bg-[#e9e9ed] animate-pulse" />
-                  <div className="h-3.5 w-1/2 rounded bg-[#e9e9ed] animate-pulse" />
-                  <div className="h-3.5 w-3/4 rounded bg-[#e9e9ed] mt-4 animate-pulse" />
-                  <div className="h-3.5 w-5/6 rounded bg-[#e9e9ed] animate-pulse" />
-                </div>
-                <div className="flex-1 p-6 md:p-8 flex flex-col gap-4 bg-white">
-                  <div className="h-7 w-2/5 rounded bg-[#e9e9ed] animate-pulse" />
-                  <div className="h-3.5 w-11/12 rounded bg-[#f0f0f4] animate-pulse" />
-                  <div className="h-3.5 w-4/5 rounded bg-[#f0f0f4] animate-pulse" />
-                  <div className="h-3.5 w-5/6 rounded bg-[#f0f0f4] animate-pulse" />
-                  <div className="h-3.5 w-2/3 rounded bg-[#f0f0f4] animate-pulse" />
-                  <div className="h-44 w-full rounded-lg bg-[#f4f4f7] mt-3 animate-pulse" />
-                </div>
-              </div>
-            </div>
-
-            {/* Error State with retry and fallback link */}
-            {hasError && (
-              <div
-                className="absolute inset-0 bg-white flex flex-col items-center justify-center z-20 p-6 text-center"
-                role="alert"
-              >
-                <div className="size-11 rounded-full bg-[#fef2f2] border border-[#fee2e2] text-[#ef4444] inline-flex items-center justify-center mb-4">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                </div>
-                <h3 className="text-base font-semibold text-[#0b0b0d] mb-1.5">
-                  Unable to load live showcase
-                </h3>
-                <p className="text-sm text-[#47474e] max-w-[420px] mb-5 leading-relaxed">
-                  The embedded preview could not be loaded directly. You can retry loading or open the interactive showcase directly in a new tab.
-                </p>
-                <div className="flex items-center gap-3 flex-wrap justify-center">
-                  <button
-                    type="button"
-                    onClick={handleRetry}
-                    className="h-10 px-5 rounded-none inline-flex items-center justify-center bg-[#0b0b0d] text-sm font-semibold text-white border border-black shadow-[3px_3px_0_#2337ff] hover:bg-black transition-all"
-                  >
-                    Retry
-                  </button>
-                  <a
-                    href={TARGET_PATH}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="h-10 px-5 rounded-none inline-flex items-center justify-center border border-black bg-white text-sm font-semibold text-black shadow-[3px_3px_0_#d4d4d8] hover:bg-[#fafafb] transition-all"
-                  >
-                    <span>Open in new tab</span>
-                    <span aria-hidden="true">&nearr;</span>
-                  </a>
-                </div>
-              </div>
+        {/* Live Stretched Wiki Container: minimal surrounding bezel, stretched content, full interactivity */}
+        <div className="w-full bg-[#f8f8fa] border border-[#e5e5ea] rounded-[10px] md:rounded-[12px] p-1 box-border">
+          <div className="relative w-full bg-white border border-[#e5e5ea] rounded-[8px] overflow-hidden h-[660px] md:h-[760px] xl:h-[820px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
+            {!useFallback ? (
+              <>
+                <iframe
+                  src={TARGET_PATH}
+                  title="RepoSense Live Wiki - Agent Architecture"
+                  loading="lazy"
+                  allow="clipboard-write; clipboard-read; fullscreen; web-share"
+                  onLoad={() => setIframeLoaded(true)}
+                  onError={() => setUseFallback(true)}
+                  className="w-full h-full border-0 absolute inset-0 bg-white"
+                  style={{ pointerEvents: 'auto' }}
+                />
+                {!iframeLoaded && (
+                  <div className="absolute inset-0 bg-white flex items-center justify-center pointer-events-none">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="size-2 rounded-full bg-[#2337ff] animate-ping" />
+                      Loading live showcase...
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <LandingDemoWiki />
             )}
-
-            {/* Live Interactive iframe: never unmounted once loaded */}
-            {iframeSrc && (
-              <iframe
-                src={iframeSrc}
-                title="RepoSense Live Product Showcase - Agent &amp; Architecture Wiki"
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allow="clipboard-write; clipboard-read; fullscreen; web-share"
-                onLoad={handleIframeLoad}
-                onError={handleIframeError}
-                className="w-full h-full border-0 absolute inset-0 bg-white"
-                style={{ pointerEvents: 'auto' }}
-              />
-            )}
-
           </div>
         </div>
 

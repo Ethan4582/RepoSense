@@ -291,7 +291,7 @@ export default function PullRequestsPage() {
           </p>
         </div>
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
           {filtered.map((pr) => {
             const status = prStatus(pr);
             const isExpanded = expanded.has(pr.id);

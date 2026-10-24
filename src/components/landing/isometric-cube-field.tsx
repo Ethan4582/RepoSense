@@ -125,8 +125,12 @@ export function IsometricCubeField({ className }: { className?: string }) {
     function project(x: number, y: number, z: number, size: number) {
       const isoX = (x - y) * UW * size;
       const isoY = (x + y) * UH * size - z * size;
-      // Cube horizontal center positioned slightly more right at ~43% width
-      return { x: width * 0.43 + isoX, y: height / 2 + 14 + isoY };
+      // === CUBE POSITION CONFIGURATION ===
+      // Adjust width multiplier (e.g. 0.50 -> 0.52 to move further right)
+      // Adjust vertical pixel offset (+40 -> +50 to move further down)
+      const centerX = width * 0.50;
+      const centerY = height / 2 + 42;
+      return { x: centerX + isoX, y: centerY + isoY };
     }
 
     function drawCube(x: number, y: number, z: number, size: number, palette: { top: string; left: string; right: string }) {

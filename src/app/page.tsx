@@ -266,7 +266,7 @@ export default function LandingPage() {
 
       {/* 6. Section 5 & Footer */}
       <div className="w-full relative">
-        
+        <SectionBoundary tag="05 FOOTER" />
         <LandingFooterSections />
       </div>
     </div>

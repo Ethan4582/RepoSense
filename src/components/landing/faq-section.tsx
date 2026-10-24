@@ -75,11 +75,11 @@ export function FaqSection() {
             <polygon points="7,0.5 13.5,4 7,7.5 0.5,4" stroke="#111111" strokeWidth="1.5" />
           </svg>
 
-          {/* Top-right section tag: small blue square + 09 FAQ (Martian Mono 9px, uppercase) in 1px border box */}
+          {/* Top-right section tag: matching uniform SectionBoundary styling */}
           <div className="absolute right-6 sm:right-[64px] top-0 z-20">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border-l border-b border-[#ececec] font-mono text-[9px] uppercase tracking-[0.06em] text-[#47474e]">
-              <span className="size-[5px] bg-[#2337ff] inline-block shrink-0" />
-              <span>05 FAQ</span>
+            <div className="inline-flex items-center gap-2 pl-3 pr-4 py-1.5 bg-white border-l border-b border-[#ececec] font-mono text-[11px] uppercase tracking-[0.04em] text-[#47474e] -mt-[1px]">
+              <span className="size-[7px] bg-[#2337ff] inline-block shrink-0" />
+              <span className="font-medium whitespace-nowrap">04 FAQ</span>
             </div>
           </div>
         </div>

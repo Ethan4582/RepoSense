@@ -1,10 +1,11 @@
 import "~/styles/globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { type Metadata } from "next";
-import { Fraunces, Inter_Tight, Martian_Mono, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Inter_Tight, Martian_Mono } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { Toaster } from "~/components/ui/sonner";
+import { SoundEffects } from "~/components/ui/sound";
 
 export const metadata: Metadata = {
   title: "RepoSense - AI Codebase Intelligence",
@@ -56,12 +57,6 @@ const martianMono = Martian_Mono({
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
-  display: "swap",
-});
-
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -69,11 +64,13 @@ export default function RootLayout({
     <ClerkProvider>
       <html
         lang="en"
-        className={`${fraunces.variable} ${interTight.variable} ${martianMono.variable} ${jetbrainsMono.variable}`}
+        className={`${fraunces.variable} ${interTight.variable} ${martianMono.variable}`}
       >
-        <body>
-          <TRPCReactProvider>{children}</TRPCReactProvider>
-          <Toaster />
+        <body className="font-sans antialiased">
+          <SoundEffects>
+            <TRPCReactProvider>{children}</TRPCReactProvider>
+            <Toaster />
+          </SoundEffects>
         </body>
       </html>
     </ClerkProvider>

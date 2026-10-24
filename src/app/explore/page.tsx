@@ -99,9 +99,8 @@ export default function ExplorePage() {
                 href="/dashboard"
                 className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] mr-2"
               >
-                <span className="relative z-10 flex h-[38px] px-4 items-center justify-center gap-1.5 bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
+                <span className="relative z-10 flex h-[38px] px-5 items-center justify-center bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
                   <span>Dashboard</span>
-                  <span aria-hidden="true">&#x2197;</span>
                 </span>
                 <span
                   className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#1423b8] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
@@ -134,9 +133,8 @@ export default function ExplorePage() {
                   href="/sign-up"
                   className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] mr-2"
                 >
-                  <span className="relative z-10 flex h-[38px] px-4 items-center justify-center gap-1.5 bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
+                  <span className="relative z-10 flex h-[38px] px-5 items-center justify-center bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
                     <span>Get started</span>
-                    <span aria-hidden="true">&#x2197;</span>
                   </span>
                   <span
                     className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#1423b8] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"

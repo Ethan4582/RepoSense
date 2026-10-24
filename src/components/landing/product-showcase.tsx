@@ -111,10 +111,9 @@ export function ProductShowcase() {
           <div className="flex flex-wrap items-center gap-4 mt-1">
             <Link
               href="/sign-up"
-              className="h-12 px-6 rounded-none inline-flex items-center justify-center gap-2 bg-[#0b0b0d] text-[15px] font-semibold text-white border border-black shadow-[4px_4px_0_#2337ff] hover:bg-black hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#2337ff] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#2337ff] transition-all"
+              className="h-12 px-7 rounded-none inline-flex items-center justify-center bg-[#0b0b0d] text-[15px] font-semibold text-white border border-black shadow-[4px_4px_0_#2337ff] hover:bg-black hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0_#2337ff] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#2337ff] transition-all"
             >
               <span>Get Started</span>
-              <span aria-hidden="true">&#x2197;</span>
             </Link>
             <Link
               href="/explore"

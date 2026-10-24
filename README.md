@@ -1,5 +1,12 @@
 # RepoSense
 
+<p align="left">
+  <a href="README.md"><b>README</b></a> &nbsp;|&nbsp;
+  <a href="system-design.md"><b>System Design</b></a> &nbsp;|&nbsp;
+  <a href="how-it-works.md"><b>How It Works</b></a> &nbsp;|&nbsp;
+  <a href="LICENSE"><b>MIT License</b></a>
+</p>
+
 [![Demo Video](hero_image.png)](https://www.youtube.com/watch?v=PQqPkdpA0V0)
 
 

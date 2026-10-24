@@ -48,75 +48,74 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.625rem;
   --background: #ffffff;
-  --foreground: #0b0b0d;
+  --foreground: #000000;
   --card: #ffffff;
-  --card-foreground: #0b0b0d;
+  --card-foreground: #000000;
   --popover: #ffffff;
-  --popover-foreground: #0b0b0d;
-  --primary: #2337ff;
+  --popover-foreground: #000000;
+  --primary: #000000;
   --primary-foreground: #ffffff;
-  --secondary: #fafafb;
-  --secondary-foreground: #0b0b0d;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
   --muted: #f4f4f5;
-  --muted-foreground: #47474e;
+  --muted-foreground: #71717a;
   --accent: #f4f4f5;
-  --accent-foreground: #0b0b0d;
+  --accent-foreground: #18181b;
   --destructive: #ef4444;
-  --border: #e6e6e8;
-  --input: #e6e6e8;
-  --ring: #2337ff;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0b0b0d;
-  --sidebar-primary: #2337ff;
-  --sidebar-primary-foreground: #ffffff;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #000000;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #18181b;
+  --sidebar-primary: #18181b;
+  --sidebar-primary-foreground: #fafafa;
   --sidebar-accent: #f4f4f5;
-  --sidebar-accent-foreground: #0b0b0d;
-  --sidebar-border: #e6e6e8;
-  --sidebar-ring: #2337ff;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #f4f4f5;
+  --sidebar-ring: #d4d4d8;
 }
 
-/* Enforce uniform light mode across entire app */
 .dark {
-  --background: #ffffff;
-  --foreground: #0b0b0d;
-  --card: #ffffff;
-  --card-foreground: #0b0b0d;
-  --popover: #ffffff;
-  --popover-foreground: #0b0b0d;
-  --primary: #2337ff;
-  --primary-foreground: #ffffff;
-  --secondary: #fafafb;
-  --secondary-foreground: #0b0b0d;
-  --muted: #f4f4f5;
-  --muted-foreground: #47474e;
-  --accent: #f4f4f5;
-  --accent-foreground: #0b0b0d;
-  --destructive: #ef4444;
-  --border: #e6e6e8;
-  --input: #e6e6e8;
-  --ring: #2337ff;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0b0b0d;
-  --sidebar-primary: #2337ff;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #09090b;
+  --card-foreground: #fafafa;
+  --popover: #09090b;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #7f1d1d;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #d4d4d8;
+  --sidebar: #18181b;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: #1d4ed8;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f4f4f5;
-  --sidebar-accent-foreground: #0b0b0d;
-  --sidebar-border: #e6e6e8;
-  --sidebar-ring: #2337ff;
+  --sidebar-accent: #27272a;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #d4d4d8;
 }
 
-@layer base{
-  *{
-    @apply border-border;
-  }
-  body{
-    @apply bg-background text-foreground ;
-  }
+/* Hide scrollbars completely while keeping full scrollability */
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+}
+.scrollbar-none {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
-/* Dynamic Light & Dark Mode Markdown and Code Formatting */
+/* Light / clean theme overrides for markdown containers */
 .wmde-markdown {
   background-color: transparent !important;
   color: var(--foreground) !important;
@@ -236,5 +235,22 @@
   }
   100% {
     transform: translateX(-50%);
+  }
+}
+
+/* Gentle floating loop for features isometric blocks */
+@keyframes featFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe\:animate-\[featFloat_4s_ease-in-out_infinite\],
+  .motion-safe\:animate-\[featFloat_3s_ease-in-out_infinite\] {
+    animation: none !important;
   }
 }

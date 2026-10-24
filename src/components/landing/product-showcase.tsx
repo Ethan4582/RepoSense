@@ -66,9 +66,9 @@ export function ProductShowcase() {
   return (
     <section
       id="product-showcase"
-      className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 md:px-8 flex flex-col py-16 md:py-24 border-t border-[#ececec]"
+      className="w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col"
     >
-      <div className="relative border-x border-[#ececec] px-4 sm:px-6 md:px-8 pt-10 pb-12 flex flex-col justify-between">
+      <div className="relative border-x border-[#d4d4d8] px-6 sm:px-[64px] pt-8 pb-12 flex flex-col justify-between">
         
         {/* Header Block (top-left aligned) */}
         <div className="flex flex-col items-start gap-5 max-w-[840px] mb-8">

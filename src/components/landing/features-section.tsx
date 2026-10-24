@@ -573,9 +573,9 @@ export function FeaturesSection() {
   return (
     <section
       id="features"
-      className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 md:px-8 pt-[120px] pb-24 border-t border-[#ececec]"
+      className="w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col"
     >
-      <div className="relative border-x border-[#ececec] px-4 sm:px-6 md:px-8">
+      <div className="relative border-x border-[#d4d4d8] px-6 sm:px-[64px] pt-16 pb-20">
         
         {/* Section Header: 2-column layout (Left ~50% / Right ~50%) */}
         <div className="flex flex-col md:flex-row items-start justify-between gap-8 pb-[100px]">

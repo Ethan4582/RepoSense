@@ -2,18 +2,17 @@
 
 import * as React from 'react';
 
-const N = 4;
-const L = 4;
-const BLUE_LAYER = 2;
-const BREATH_PERIOD = 6;
-const GAP_MIN = 0.04;
-const GAP_MAX = 0.16;
-const EXPLODE_EXTRA = 0.35;
-const INTRO_DURATION = 0.9;
-const DROP_HEIGHT = 14;
+const N = 4;                 // footprint size (N x N)
+const L = 4;                 // number of layers
+const BLUE_LAYER = 2;        // layer index that carries accent cubes
+const BREATH_PERIOD = 6;     // seconds for one full inhale/exhale
+const GAP_MIN = 0.04;        // resting gap (in cube units)
+const GAP_MAX = 0.16;        // maximum breathing gap
+const INTRO_DURATION = 0.9;  // seconds for each cube to settle
+const DROP_HEIGHT = 14;      // starting height (in cube units) for intro fall
 
-const UW = Math.cos(Math.PI / 6);
-const UH = 0.5;
+const UW = Math.cos(Math.PI / 6); // isometric horizontal factor
+const UH = 0.5;                   // isometric depth factor
 
 const COLORS = {
   white: { top: '#f3f3f1', left: '#e7e7e4', right: '#dadad6' },
@@ -23,14 +22,14 @@ const STROKE = '#1c1c1c';
 const FLOOR_STROKE = '#9a9a9a';
 
 const LAYER_LABELS = [
-  { text: '04 SURFACES', k: 3, blue: false },
-  { text: '03 AGENTS',   k: 2, blue: true },
-  { text: '02 LOGIC',    k: 1, blue: false },
-  { text: '01 SOURCES',  k: 0, blue: false }
+  { text: '04 WIKI PAGES',          k: 3, blue: false },
+  { text: '03 CODEBASE Q&A',        k: 2, blue: true },
+  { text: '02 CITATION TRACING',    k: 1, blue: false },
+  { text: '01 GITHUB REPO', k: 0, blue: false }
 ];
 
 function mulberry32(a: number) {
-  return function() {
+  return function () {
     let t = (a += 0x6d2b79f5);
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -109,10 +108,10 @@ export function IsometricCubeField({ className }: { className?: string }) {
     const onPointerMove = (e: MouseEvent) => {
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const cx = rect.width / 2;
+      const cx = rect.width * 0.40;
       const cy = rect.height / 2;
       const dist = Math.hypot(e.clientX - rect.left - cx, e.clientY - rect.top - cy);
-      hovered = dist < Math.min(rect.width, rect.height) * 0.48;
+      hovered = dist < Math.min(rect.width, rect.height) * 0.46;
     };
 
     canvas.addEventListener('mouseenter', onPointerEnter);
@@ -126,7 +125,8 @@ export function IsometricCubeField({ className }: { className?: string }) {
     function project(x: number, y: number, z: number, size: number) {
       const isoX = (x - y) * UW * size;
       const isoY = (x + y) * UH * size - z * size;
-      return { x: width / 2 - 36 + isoX, y: height / 2 + isoY + 16 };
+      // Cube horizontal center positioned slightly more right at ~43% width
+      return { x: width * 0.43 + isoX, y: height / 2 + 14 + isoY };
     }
 
     function drawCube(x: number, y: number, z: number, size: number, palette: { top: string; left: string; right: string }) {
@@ -178,7 +178,7 @@ export function IsometricCubeField({ className }: { className?: string }) {
     }
 
     function drawFloorBoundary(baseSize: number, currentGap: number, time: number, hoverProg: number) {
-      const pad = 0.55 + hoverProg * 0.45;
+      const pad = 0.55 + hoverProg * 0.35;
       const halfExtent = (N / 2) * (1 + currentGap) + pad;
       const zFloor = -0.12;
 
@@ -205,7 +205,7 @@ export function IsometricCubeField({ className }: { className?: string }) {
       ctx!.restore();
     }
 
-    function drawLayerLabels(baseSize: number, currentGap: number, hoverProg: number) {
+    function drawLayerLabels(baseSize: number, currentGap: number, zGapExtra: number, hoverProg: number) {
       if (hoverProg < 0.05) return;
 
       ctx!.save();
@@ -213,37 +213,45 @@ export function IsometricCubeField({ className }: { className?: string }) {
       ctx!.font = '500 11px "Martian Mono", monospace';
 
       const centerOffset = (N - 1) / 2;
-      const labelXExtent = (N - 1 - centerOffset) * (1 + currentGap) + 1.2;
-      const labelYExtent = (0 - centerOffset) * (1 + currentGap);
+      // The right-most tip of the layer sits at cube (i=N-1, j=0) right corner (p1 / b1 in project coordinates)
+      const rightCubeX = (N - 1 - centerOffset) * (1 + currentGap);
+      const rightCubeY = (0 - centerOffset) * (1 + currentGap);
 
       for (const label of LAYER_LABELS) {
-        const zPos = label.k * (1 + currentGap + hoverProg * EXPLODE_EXTRA) + 0.5;
-        const anchor = project(labelXExtent, labelYExtent, zPos, baseSize);
-
-        const lineStartX = anchor.x + 12;
-        const lineEndX = anchor.x + 45;
-        const textX = lineEndX + 10;
-        const textY = anchor.y;
-
-        const isBlue = label.blue;
-        const strokeCol = isBlue ? '#2337ff' : '#9ca3af';
-        const textCol = isBlue ? '#2337ff' : '#4b5563';
-        const borderCol = isBlue ? '#2337ff' : '#e5e7eb';
-        const bgCol = isBlue ? 'rgba(239, 246, 255, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-
-        ctx!.strokeStyle = strokeCol;
-        ctx!.lineWidth = 1;
-        ctx!.beginPath();
-        ctx!.moveTo(lineStartX, anchor.y);
-        ctx!.lineTo(lineEndX, anchor.y);
-        ctx!.stroke();
+        // Vertical midpoint of the layer
+        const zPos = label.k * (1 + currentGap + zGapExtra) + 0.5;
+        // p1 on the right edge is at (x+1, y)
+        const edgePoint = project(rightCubeX + 1, rightCubeY, zPos, baseSize);
 
         const textWidth = ctx!.measureText(label.text).width;
         const boxWidth = textWidth + 18;
         const boxHeight = 22;
-        const boxX = textX;
+
+        // Position chip to the right of the cube edge, ensuring full visibility inside canvas
+        const minGap = 28;
+        const chipLeftX = Math.min(
+          Math.max(edgePoint.x + minGap, width - boxWidth - 12),
+          width - boxWidth - 8
+        );
+        const textY = edgePoint.y;
+        const boxX = chipLeftX;
         const boxY = textY - boxHeight / 2;
 
+        const isBlue = label.blue;
+        const lineCol = isBlue ? '#2337ff' : '#c8c8cc';
+        const textCol = isBlue ? '#2337ff' : '#0b0b0d';
+        const borderCol = isBlue ? '#2337ff' : '#ececec';
+        const bgCol = isBlue ? '#ffffff' : '#ffffff';
+
+        // Continuous 1px connector line with no gap at either end
+        ctx!.strokeStyle = lineCol;
+        ctx!.lineWidth = 1;
+        ctx!.beginPath();
+        ctx!.moveTo(edgePoint.x, edgePoint.y);
+        ctx!.lineTo(chipLeftX, edgePoint.y);
+        ctx!.stroke();
+
+        // Label Chip
         ctx!.fillStyle = bgCol;
         ctx!.strokeStyle = borderCol;
         ctx!.beginPath();
@@ -270,9 +278,12 @@ export function IsometricCubeField({ className }: { className?: string }) {
       hoverProgress += (targetHover - hoverProgress) * 0.08;
 
       const breathT = 0.5 + 0.5 * Math.sin((time * 2 * Math.PI) / BREATH_PERIOD);
-      const currentGap = GAP_MIN + (GAP_MAX - GAP_MIN) * breathT;
-
-      const baseSize = Math.min(width, height) / (N * 3.75);
+      const restingGap = GAP_MIN + (GAP_MAX - GAP_MIN) * breathT;
+      // Hover expansion: ~12% overall scale growth, layer gap expands ~1.5x
+      const currentGap = restingGap * (1 + hoverProgress * 0.5);
+      const zGapExtra = hoverProgress * 0.32;
+      const baseScale = 1 + hoverProgress * 0.12;
+      const baseSize = (Math.min(width, height) / (N * 3.7)) * baseScale;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -286,13 +297,13 @@ export function IsometricCubeField({ className }: { className?: string }) {
 
         const posX = (cube.i - centerOffset) * (1 + currentGap);
         const posY = (cube.j - centerOffset) * (1 + currentGap);
-        const posZ = cube.k * (1 + currentGap + hoverProgress * EXPLODE_EXTRA) + dropOffset;
+        const posZ = cube.k * (1 + currentGap + zGapExtra) + dropOffset;
 
         const palette = cube.blue ? COLORS.blue : COLORS.white;
         drawCube(posX, posY, posZ, baseSize, palette);
       }
 
-      drawLayerLabels(baseSize, currentGap, hoverProgress);
+      drawLayerLabels(baseSize, currentGap, zGapExtra, hoverProgress);
 
       animId = requestAnimationFrame(render);
     }

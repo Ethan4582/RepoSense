@@ -7,7 +7,9 @@ import type { Prisma } from "@prisma/client";
 
 export const projectRouter = createTRPCRouter({
   getTotalWikiCount: publicProcedure.query(async ({ ctx }) => {
-    return ctx.db.wikiPage.count();
+    return ctx.db.wikiPage.count({
+      where: { project: { isPublicWiki: true, deletedAt: null } },
+    });
   }),
 
   getProjects: protectedProcedure.query(async ({ ctx }) => {

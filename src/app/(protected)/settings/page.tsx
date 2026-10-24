@@ -337,7 +337,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto px-4 py-5 md:px-8">
-      <div>
+      <div className="border-b border-[#ececec] pb-4">
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <KeyRound className="size-5 text-primary" />
           API Keys
@@ -348,8 +348,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Provider API Keys Card */}
-      <Card className="shadow-xs">
-        <CardHeader className="py-3 px-4 border-b bg-muted/20">
+      <Card className="rounded-[12px] border border-[#e5e5e5] transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+        <CardHeader className="py-3 px-4 border-b border-[#ececec] bg-muted/20">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm font-semibold">Provider API Keys</CardTitle>
@@ -487,8 +487,8 @@ export default function SettingsPage() {
       </Card>
 
       {/* Default Model Preferences Card */}
-      <Card className="shadow-xs">
-        <CardHeader className="py-3 px-4 border-b bg-muted/20">
+      <Card className="rounded-[12px] border border-[#e0e0e0] transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+        <CardHeader className="py-3 px-4 border-b border-[#ececec] bg-muted/20">
           <CardTitle className="text-sm font-semibold">Default Model Preferences</CardTitle>
           <CardDescription className="text-xs mt-0.5">
             Choose your preferred chat and embedding models across all new projects.
@@ -506,7 +506,7 @@ export default function SettingsPage() {
                   setDefaultChatModel(getDefaultChatModel(val));
                 }}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-8 text-xs rounded-[12px] border border-[#e0e0e0] transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
                   <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
                 <SelectContent>

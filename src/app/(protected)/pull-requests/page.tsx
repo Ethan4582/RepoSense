@@ -178,7 +178,7 @@ export default function PullRequestsPage() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-5 px-4 py-6 md:px-8">
-      <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 pb-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <GitPullRequest className="size-6 text-primary" />
@@ -198,7 +198,7 @@ export default function PullRequestsPage() {
             value={projectId ?? undefined}
             onValueChange={(value) => setProjectId(value)}
           >
-            <SelectTrigger className="h-8 min-w-[200px] max-w-[280px] gap-2 border-border/80 bg-background text-xs">
+            <SelectTrigger className="h-8 min-w-[200px] max-w-[280px] gap-2 rounded-md border border-[#e0e0e0] bg-background text-xs transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
               <GitPullRequest className="size-3.5 shrink-0 text-primary" />
               <SelectValue placeholder="Select repository" />
             </SelectTrigger>
@@ -213,7 +213,7 @@ export default function PullRequestsPage() {
 
           {project ? (
             <a href={`${project.repoUrl}/pulls`} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="icon" className="size-8" title="View on GitHub">
+              <Button variant="outline" size="icon" className="size-8 rounded-md border-[#e0e0e0] hover:border-[#d4d4d4]" title="View on GitHub">
                 <ExternalLink className="size-3.5" />
               </Button>
             </a>
@@ -222,7 +222,7 @@ export default function PullRequestsPage() {
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className="size-8 rounded-md border-[#e0e0e0] hover:border-[#d4d4d4]"
             onClick={() => setReloadKey((value) => value + 1)}
             disabled={loading || !projectId}
             title="Refresh pull requests"
@@ -233,7 +233,7 @@ export default function PullRequestsPage() {
       </div>
 
       <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="inline-flex rounded-lg border bg-muted/30 p-1 text-xs">
+        <div className="inline-flex rounded-lg border border-[#e0e0e0] bg-muted/30 p-1 text-xs">
           {(['all', 'open', 'merged', 'closed'] as const).map((value) => (
             <button
               key={value}
@@ -242,7 +242,7 @@ export default function PullRequestsPage() {
               className={cn(
                 'rounded-md px-3 py-1 font-medium capitalize transition-colors',
                 filter === value
-                  ? 'bg-background font-semibold text-foreground shadow-2xs'
+                  ? 'bg-background font-semibold text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -257,13 +257,13 @@ export default function PullRequestsPage() {
             placeholder="Search PRs, authors, labels..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="h-8 bg-muted/20 pl-8 text-xs"
+            className="h-8 rounded-md border-[#e0e0e0] bg-muted/20 pl-8 text-xs transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
           />
         </div>
       </div>
 
       {!projectId ? (
-        <div className="rounded-xl border border-dashed p-12 text-center">
+        <div className="rounded-md border border-dashed border-[#e5e5e5] p-12 text-center">
           <GitPullRequest className="mx-auto mb-3 size-8 text-muted-foreground/40" />
           <h2 className="text-sm font-semibold">No repository selected</h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -274,16 +274,16 @@ export default function PullRequestsPage() {
           </Link>
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
           {error}
         </div>
       ) : loading && pullRequests.length === 0 ? (
-        <div className="flex h-56 items-center justify-center gap-2 rounded-xl border text-xs text-muted-foreground">
+        <div className="flex h-56 items-center justify-center gap-2 rounded-md border border-[#e5e5e5] text-xs text-muted-foreground">
           <Loader2 className="size-4 animate-spin text-primary" />
           Fetching pull requests from GitHub...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-12 text-center">
+        <div className="rounded-md border border-dashed border-[#e5e5e5] p-12 text-center">
           <GitPullRequest className="mx-auto mb-3 size-8 text-muted-foreground/40" />
           <h2 className="text-sm font-semibold">No pull requests found</h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -291,7 +291,7 @@ export default function PullRequestsPage() {
           </p>
         </div>
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-[#f0f0f0] overflow-hidden rounded-md border border-[#e5e5e5] bg-card transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
           {filtered.map((pr) => {
             const status = prStatus(pr);
             const isExpanded = expanded.has(pr.id);
@@ -301,7 +301,7 @@ export default function PullRequestsPage() {
                 <button
                   type="button"
                   onClick={() => toggleExpanded(pr.id)}
-                  className="flex w-full items-start gap-3 px-3 py-3 text-left"
+                  className="flex w-full items-start gap-3 px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#2337ff] focus-visible:ring-offset-2"
                 >
                   <span className="mt-1 shrink-0 text-muted-foreground">
                     {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
@@ -361,7 +361,7 @@ export default function PullRequestsPage() {
                 </button>
 
                 {isExpanded ? (
-                  <div className="border-t bg-muted/20 px-4 py-3 pl-10">
+                  <div className="bg-muted/15 px-4 py-3 pl-10 rounded-b-md">
                     {pr.body ? (
                       <div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-foreground/90">
                         {pr.body}
@@ -371,12 +371,12 @@ export default function PullRequestsPage() {
                         No description provided on GitHub.
                       </p>
                     )}
-                    <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2">
+                    <div className="mt-4 flex items-center justify-between gap-2 pt-1">
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 gap-1.5 text-[11px]"
+                          className="h-7 gap-1.5 text-[11px] rounded-md border-[#e0e0e0] hover:border-[#d4d4d4]"
                           onClick={() => void generateDocs(pr)}
                           disabled={generating !== null}
                         >
@@ -392,7 +392,7 @@ export default function PullRequestsPage() {
                         </span>
                       </div>
                       <a href={pr.htmlUrl} target="_blank" rel="noreferrer">
-                        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-[11px]">
+                        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-[11px] rounded-md">
                           View on GitHub <ExternalLink className="size-3" />
                         </Button>
                       </a>

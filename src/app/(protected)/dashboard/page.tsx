@@ -112,12 +112,6 @@ export default function DashboardPage() {
     }
   }, [isLoading, rawProjects, router]);
 
-  const toggleTheme = () => {
-    const isDark = document.documentElement.classList.toggle('dark');
-    try {
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    } catch {}
-  };
 
   const copyShareLink = async (projectId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -216,16 +210,6 @@ export default function DashboardPage() {
       {/* Top Controls */}
       <div className="flex h-14 items-center justify-end px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
-            title="Toggle theme"
-            onClick={toggleTheme}
-          >
-            <Moon className="size-4 hidden dark:block" />
-            <Sun className="size-4 block dark:hidden" />
-          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -252,7 +236,13 @@ export default function DashboardPage() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={async () => { await signOut(); window.location.href = "/"; }}
+                onClick={async () => {
+                  try {
+                    await signOut({ redirectUrl: '/sign-in' });
+                  } catch {
+                    window.location.href = '/sign-in';
+                  }
+                }}
                 className="gap-2 text-destructive focus:text-destructive cursor-pointer"
               >
                 <LogOut className="size-3.5" />
@@ -272,7 +262,7 @@ export default function DashboardPage() {
           </h1>
 
           <form onSubmit={handleSearchSubmit} className="mt-8 relative">
-            <div className="relative flex items-center rounded-xl border border-border/80 bg-card/60 shadow-xs focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+            <div className="relative flex items-center rounded-[12px] border border-[#e0e0e0] bg-card/60 transition-colors duration-200 ease-out hover:border-[#d4d4d4] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
               <Search className="size-4 shrink-0 text-muted-foreground ml-3.5" />
               <input
                 value={searchQuery}
@@ -284,7 +274,7 @@ export default function DashboardPage() {
                 <Button
                   type="submit"
                   size="sm"
-                  className="h-7 text-xs mr-2 gap-1 bg-primary text-primary-foreground"
+                  className="h-7 text-xs mr-2 gap-1 bg-primary text-primary-foreground rounded-[12px]"
                 >
                   <Sparkles className="size-3" />
                   Index
@@ -300,14 +290,14 @@ export default function DashboardPage() {
             {/* Card 1: Dedicated "+ Add repo" card */}
             <Link
               href="/create"
-              className="group relative flex flex-col justify-between rounded-2xl border border-slate-300/40 bg-gradient-to-br from-slate-200/50 via-slate-100/40 to-slate-200/30 p-5 shadow-xs transition-all hover:border-slate-400/50 hover:shadow-md dark:border-slate-800 dark:from-slate-900/80 dark:via-slate-900/40 dark:to-slate-950/60 min-h-[170px]"
+              className="group relative flex flex-col justify-between rounded-[12px] border border-dashed border-[#e0e0e0] bg-primary/[0.03] hover:bg-primary/[0.06] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] min-h-[170px]"
             >
-              <div className="flex items-center gap-2 text-foreground">
+              <div className="flex items-center gap-2 text-primary font-semibold">
                 <Plus className="size-5" />
-                <span className="font-medium text-base">Add repo</span>
+                <span className="font-semibold text-base">Add repo</span>
               </div>
               <div className="flex items-center justify-end mt-8">
-                <div className="flex size-9 items-center justify-center rounded-full bg-slate-300/40 dark:bg-slate-800/80 text-foreground transition-transform group-hover:translate-x-0.5">
+                <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:translate-x-0.5">
                   <ArrowRight className="size-4" />
                 </div>
               </div>
@@ -324,7 +314,7 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/wiki/${project.id}`)}
-                  className="group relative flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-5 shadow-xs transition-all hover:border-foreground/30 hover:shadow-sm cursor-pointer min-h-[170px]"
+                  className="group relative flex flex-col justify-between rounded-[12px] border border-[#e5e5e5] bg-card p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] cursor-pointer min-h-[170px]"
                 >
                   {/* Top: Repo name & Visibility / Share controls */}
                   <div>

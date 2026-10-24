@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { getApiBaseUrl } from '~/lib/api-client';
 
@@ -99,9 +99,15 @@ interface IndexingJob {
 function groupSections(pages: WikiPageMeta[]) {
   const map = new Map<string, WikiPageMeta[]>();
   for (const page of pages) {
-    const list = map.get(page.sectionTitle) ?? [];
-    list.push(page);
-    map.set(page.sectionTitle, list);
+    // If a page in the "Overview" section is also titled "Overview", label it "System Introduction" to avoid repetitive double Overview titles
+    const adjustedPage =
+      page.sectionTitle.trim().toLowerCase() === 'overview' &&
+      page.title.trim().toLowerCase() === 'overview'
+        ? { ...page, title: 'System Introduction' }
+        : page;
+    const list = map.get(adjustedPage.sectionTitle) ?? [];
+    list.push(adjustedPage);
+    map.set(adjustedPage.sectionTitle, list);
   }
   return Array.from(map.entries());
 }
@@ -115,6 +121,7 @@ export function WikiReader() {
   const branchParam = searchParams.get('branch');
   const prParam = searchParams.get('pr');
   const questionIdParam = searchParams.get('questionId');
+  const isEmbed = searchParams.get('embed') === 'true';
   const { isSignedIn } = useUser();
 
   const [project, setProject] = React.useState<WikiProject | null>(null);
@@ -756,11 +763,11 @@ export function WikiReader() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <header
-        className="relative flex h-[64px] shrink-0 items-center justify-between border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-[clamp(20px,5vw,77px)]"
+        className="relative flex h-[64px] shrink-0 items-center justify-center border-b border-dashed border-neutral-300 dark:border-neutral-700/80 px-6 sm:px-[64px]"
       >
-        <div className="flex h-full w-full items-center justify-between border-x border-dashed border-neutral-300 dark:border-neutral-700/80 px-7">
+        <div className="flex h-full w-full max-w-[1440px] items-center justify-between border-x border-dashed border-neutral-300 dark:border-neutral-700/80 px-7">
           {/* Left brand segment */}
           <div className="flex items-center gap-2.5">
             <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -868,31 +875,17 @@ export function WikiReader() {
                 ) : null}
               </PopoverContent>
             </Popover>
-            <button
-              type="button"
-              className="inline-flex size-8 items-center justify-center rounded-[8px] border border-border/60 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-              title="Toggle theme"
-              onClick={() => {
-                const isDark = document.documentElement.classList.toggle('dark');
-                try {
-                  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-                } catch {}
-              }}
-            >
-              <Sun className="size-4 dark:hidden" />
-              <Moon className="hidden size-4 dark:block" />
-            </button>
           </div>
         </div>
       </header>
 
-      {/* ── Indexing progress banner ── */}
+      {/* -- Indexing progress banner -- */}
       {indexing ? (
         <div className="flex shrink-0 items-center gap-3 border-b border-dashed border-border/30 bg-muted/30 px-4 py-2 text-xs text-foreground">
           <Sparkles className="size-3.5 animate-pulse text-muted-foreground" />
           <span className="font-medium">
             {indexing.currentDetail ??
-              `${indexing.currentStep.replaceAll('_', ' ').toLowerCase()} — ${indexing.processedFiles}/${indexing.totalFiles} files`}
+              `${indexing.currentStep.replaceAll('_', ' ').toLowerCase()} � ${indexing.processedFiles}/${indexing.totalFiles} files`}
           </span>
           {indexing.estimatedSecondsRemaining ? (
             <span className="text-muted-foreground">
@@ -902,9 +895,9 @@ export function WikiReader() {
         </div>
       ) : null}
 
-      {/* ── Body: Symmetric Outer Frame with dashed hairlines, separated by spacing ── */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-[clamp(20px,5vw,77px)]">
-        <div className="flex min-h-0 w-full flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
+      {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-6 sm:px-[64px]">
+        <div className="flex min-h-0 w-full max-w-[1440px] flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
 
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
           {!qaOpen ? (
@@ -919,21 +912,21 @@ export function WikiReader() {
                 </div>
               </div>
 
-              <nav className="space-y-6">
+              <nav className="space-y-4">
                 {sections.map(([sectionTitle, pages]) => (
-                  <div key={sectionTitle} className="space-y-2">
-                    <div className="text-[15px] font-semibold text-foreground">
+                  <div key={sectionTitle} className="space-y-1">
+                    <div className="text-[14px] font-semibold text-foreground">
                       {isEditing ? (
                         <input
                           value={sectionTitle}
                           onChange={(event) => {
                             setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.sectionTitle === sectionTitle ? { ...item, sectionTitle: event.target.value } : item) } : current);
                           }}
-                          className="min-w-0 w-full bg-transparent text-[15px] font-semibold outline-none"
+                          className="min-w-0 w-full bg-transparent text-[14px] font-semibold outline-none"
                         />
                       ) : sectionTitle}
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       {pages
                         .slice()
                         .sort((a, b) => a.pageOrder - b.pageOrder)
@@ -949,7 +942,7 @@ export function WikiReader() {
                                 setQaOpen(false);
                               }}
                               className={cn(
-                                'relative flex w-full items-center justify-between rounded-md py-2 pr-3 pl-3 text-left text-[15px] transition-all duration-150',
+                                'relative flex w-full items-center justify-between rounded-md py-1.5 pr-2.5 pl-2.5 text-left text-[14px] transition-all duration-150',
                                 isActive
                                   ? 'bg-neutral-100/80 font-medium text-foreground dark:bg-neutral-800/50'
                                   : 'text-foreground/70 hover:bg-neutral-100/40 hover:text-foreground dark:hover:bg-neutral-800/30'
@@ -963,7 +956,7 @@ export function WikiReader() {
                                   value={page.title}
                                   onClick={(event) => event.stopPropagation()}
                                   onChange={(event) => setProject((current) => current ? { ...current, wikiPages: current.wikiPages.map((item) => item.id === page.id ? { ...item, title: event.target.value } : item) } : current)}
-                                  className="min-w-0 w-full bg-transparent text-[15px] outline-none"
+                                  className="min-w-0 w-full bg-transparent text-[14px] outline-none"
                                 />
                               ) : (
                                 <span className="line-clamp-2 leading-snug">{page.title}</span>
@@ -1021,12 +1014,15 @@ export function WikiReader() {
               />
             ) : (
               <div className="flex min-h-0 flex-1 overflow-hidden">
-                {/* Documentation article — scrollable, centered with 48px to 64px empty gutters on each side */}
+                {/* Documentation article � scrollable, centered with 48px to 64px empty gutters on each side */}
                 <article
                   ref={articleRef}
-                  className="scrollbar-none min-w-0 flex-1 overflow-y-auto px-[clamp(24px,4vw,56px)] pt-10 pb-[136px]"
+                  className={cn(
+                    "scrollbar-none min-w-0 flex-1 overflow-y-auto pb-[136px]",
+                    isEmbed ? "px-6 sm:px-10 pt-6" : "px-[clamp(24px,4vw,56px)] pt-10"
+                  )}
                 >
-                  <div className="mx-auto w-full max-w-[900px]">
+                  <div className={cn("mx-auto w-full", isEmbed ? "max-w-4xl" : "max-w-[900px]")}>
                     {indexing && (!activePage?.content || project.wikiPages.length === 0) ? (
                       <div className="flex min-h-[380px] w-full items-center justify-center py-16">
                         <IndexingLoader step={indexing.currentStep} detail={indexing.currentDetail} />
@@ -1167,9 +1163,9 @@ export function WikiReader() {
                   </div>
                 </article>
 
-                {/* Floating composer — pinned to bottom of content column */}
-                <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-30 flex justify-center px-[clamp(24px,4vw,56px)] min-[1100px]:pr-[clamp(284px,calc(18vw+56px),356px)]">
-                  <div className="pointer-events-auto w-full max-w-[900px]">
+                {/* Floating composer � pinned to bottom of content column */}
+                <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-30 flex justify-center px-4 min-[1100px]:right-[280px]">
+                  <div className={cn("pointer-events-auto w-full", isEmbed ? "max-w-4xl" : "max-w-[900px]")}>
                     <WikiComposer
                       question={question}
                       onQuestionChange={setQuestion}
@@ -1190,10 +1186,10 @@ export function WikiReader() {
                     className="scrollbar-none hidden w-[280px] shrink-0 overflow-y-auto p-6 min-[1100px]:block"
                   >
                     <div className="sticky top-6">
-                      <div className="mb-4 text-[20px] font-bold text-foreground">
+                      <div className="mb-3 text-[17px] font-bold text-foreground">
                         On this page
                       </div>
-                      <div className="space-y-[14px]">
+                      <div className="space-y-[9px]">
                         {displayHeadings.map((heading, idx) =>
                           isEditing ? (
                             <input
@@ -1210,7 +1206,7 @@ export function WikiReader() {
                                 );
                               }}
                               className={cn(
-                                'w-full bg-transparent text-[15px] text-muted-foreground outline-none',
+                                'w-full bg-transparent text-[14px] text-muted-foreground outline-none',
                                 heading.level === 3 ? 'pl-[14px]' : ''
                               )}
                             />
@@ -1220,7 +1216,7 @@ export function WikiReader() {
                               href={`#${heading.id}`}
                               onClick={(event) => { event.preventDefault(); scrollToHeading(heading.id); }}
                               className={cn(
-                                'relative block text-[15px] transition-colors',
+                                'relative block text-[14px] leading-snug transition-colors',
                                 heading.level === 3 ? 'pl-[14px]' : '',
                                 activeHeadingId === heading.id
                                   ? 'font-medium text-foreground'
@@ -1228,7 +1224,7 @@ export function WikiReader() {
                               )}
                             >
                               {activeHeadingId === heading.id ? (
-                                <span className="absolute -left-3 top-1.5 bottom-1.5 w-[2px] rounded-full bg-[#2563eb] dark:bg-[#3b82f6]" />
+                                <span className="absolute -left-3 top-1 bottom-1 w-[2px] rounded-full bg-[#2563eb] dark:bg-[#3b82f6]" />
                               ) : null}
                               {heading.text}
                             </a>

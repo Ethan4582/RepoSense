@@ -73,6 +73,7 @@
     "@trpc/server": "^11.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@uiw/react-md-editor": "^4.0.8",
+    "@web-kits/audio": "^0.2.0",
     "ai": "^4.3.19",
     "assemblyai": "^4.15.0",
     "axios": "^1.10.0",

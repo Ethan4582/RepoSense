@@ -3,462 +3,290 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useUser, SignOutButton } from '@clerk/nextjs';
-import {
-  ArrowRight,
-  BookOpen,
-  Code2,
-  Cpu,
-  ExternalLink,
-  GitBranch,
-  Github,
-  KeyRound,
-  Layers,
-  Lock,
-  Search,
-  Sparkles,
-} from 'lucide-react';
-import { FolderBrickWordmark, FolderBrickIcon } from '~/components/landing/folder-brick-wordmark';
+import Image from 'next/image';
+import { api } from '~/trpc/react';
+import { IsometricCubeField } from '~/components/landing/isometric-cube-field';
+import { ProductShowcase } from '~/components/landing/product-showcase';
+import { FeaturesSection } from '~/components/landing/features-section';
+import { FaqSection } from '~/components/landing/faq-section';
+import { LandingFooterSections } from '~/components/landing/landing-footer-sections';
+import { SectionBoundary } from '~/components/landing/section-boundary';
+import { RepoMarquee } from '~/components/landing/repo-marquee';
 
 export default function LandingPage() {
   const { isSignedIn, isLoaded } = useUser();
+  const wikiCountQuery = api.project.getTotalWikiCount.useQuery();
+  const [tickerOffset, setTickerOffset] = React.useState(0);
+
+  React.useEffect(() => {
+    // Continuously incrementing countdown / stopwatch ticker
+    const interval = setInterval(() => {
+      setTickerOffset((prev) => prev + 1);
+    }, 75);
+    return () => clearInterval(interval);
+  }, []);
+
+  const baseCount = wikiCountQuery.data ?? 1240;
+  const liveCount = (baseCount + tickerOffset).toLocaleString();
+  const formattedCount = liveCount;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] font-sans selection:bg-[#126dfb] selection:text-white">
-      {/* 1. Top Navigation Bar (Sticky, Minimal) */}
-      <header className="sticky top-0 z-50 h-[60px] border-b border-[#e2e8f0] bg-[#f8fafc]/85 backdrop-blur-md">
-        <div className="mx-auto flex h-full max-w-[1180px] items-center justify-between px-4 sm:px-6">
-          {/* Left Brand */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="size-7 transition-transform group-hover:scale-105">
-              <FolderBrickIcon />
+    <div className="min-h-screen bg-white text-[#0b0b0d] font-[family-name:var(--font-inter-tight)] selection:bg-[#2337ff] selection:text-white flex flex-col">
+      {/* 1. Top Navigation Bar */}
+      <header className="sticky top-0 z-50 w-full border-b border-[#ececec] bg-white">
+        <div className="mx-auto flex h-[64px] max-w-[1440px] items-center justify-between px-6 sm:px-[64px]">
+          {/* Left Brand: Logo Image + Wordmark */}
+          <Link href="/" className="inline-flex items-center gap-3 group">
+            <div className="relative size-6 shrink-0 overflow-hidden rounded-md transition-transform group-hover:scale-105">
+              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
             </div>
-            <span className="text-base font-semibold tracking-tight text-[#0f172a]">
+            <span className="font-serif text-[22px] font-medium tracking-tight text-[#0b0b0d]">
               RepoSense
             </span>
           </Link>
 
-          {/* Center Group (3 Navigation Links) */}
+          {/* Center Links */}
           <nav className="hidden md:flex items-center gap-8">
             <Link
               href="/explore"
-              className="text-sm font-medium text-[#64748b] hover:text-[#0f172a] transition-colors"
+              className="text-[15px] font-medium text-[#47474e] hover:text-[#0b0b0d] transition-colors"
             >
-              Example Wikis
+              Wiki
             </Link>
             <a
               href="https://github.com/Ethan4582/RepoSense#readme"
               target="_blank"
               rel="noreferrer"
-              className="text-sm font-medium text-[#64748b] hover:text-[#0f172a] transition-colors inline-flex items-center gap-1"
+              className="text-[15px] font-medium text-[#47474e] hover:text-[#0b0b0d] transition-colors"
             >
               Docs
-              <ExternalLink className="size-3 opacity-60" />
             </a>
             <a
               href="#features"
-              className="text-sm font-medium text-[#64748b] hover:text-[#0f172a] transition-colors"
+              className="text-[15px] font-medium text-[#47474e] hover:text-[#0b0b0d] transition-colors"
             >
               Features
             </a>
+            
           </nav>
 
-          {/* Right Group (Actions) */}
-          <div className="flex items-center gap-3">
-            <a
-              href="https://github.com/Ethan4582/RepoSense"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white px-3.5 py-1.5 text-xs sm:text-sm font-medium text-[#0f172a] hover:bg-[#f1f5f9] transition-colors shadow-2xs"
-            >
-              <Github className="size-4" />
-              <span className="hidden sm:inline">GitHub</span>
-            </a>
-
-            {isLoaded && (
+          {/* Right Action Buttons */}
+          <div className="flex items-center gap-4">
+            {!isLoaded ? (
+              <div className="h-9 w-24 rounded-none bg-neutral-100 animate-pulse" />
+            ) : isSignedIn ? (
               <>
-                {isSignedIn ? (
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href="/dashboard"
-                      className="inline-flex items-center gap-1 rounded-full bg-[#126dfb] px-4 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-[#0e58cc] transition-colors shadow-2xs"
-                    >
-                      Dashboard
-                      <ArrowRight className="size-3.5" />
-                    </Link>
-                    <SignOutButton redirectUrl="/">
-                      <button className="rounded-full border border-[#e2e8f0] bg-white px-3.5 py-1.5 text-xs sm:text-sm font-medium text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] transition-colors shadow-2xs">
-                        Logout
-                      </button>
-                    </SignOutButton>
-                  </div>
-                ) : (
-                  <Link
-                    href="/sign-in"
-                    className="inline-flex items-center rounded-full bg-[#126dfb] px-5 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-[#0e58cc] transition-colors shadow-2xs"
+                {/* 3D Extruded Button for Dashboard matching Start Building style */}
+                <Link
+                  href="/dashboard"
+                  className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] mr-2"
+                >
+                  <span className="relative z-10 flex h-[38px] px-5 items-center justify-center bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
+                    <span>Dashboard</span>
+                  </span>
+                  <span
+                    className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#1423b8] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewY(45deg)', transformOrigin: 'top left' }}
+                  />
+                  <span
+                    className="absolute top-full left-0 w-full h-[5px] group-hover:h-[6px] bg-[#2337ff] border-l border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewX(45deg)', transformOrigin: 'top left' }}
+                  />
+                </Link>
+                <SignOutButton>
+                  <button
+                    type="button"
+                    className="text-[14px] font-medium text-[#47474e] hover:text-[#0b0b0d] transition-colors cursor-pointer"
                   >
-                    Login
-                  </Link>
-                )}
+                    Sign Out
+                  </button>
+                </SignOutButton>
+              </>
+            ) : (
+              <>
+                <a
+                  href="https://github.com/Ethan4582/RepoSense"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#47474e] hover:text-[#0b0b0d] transition-colors p-1"
+                  title="GitHub Repository"
+                >
+                  <svg
+                    className="size-5 fill-current"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                  </svg>
+                </a>
+                {/* 3D Extruded Button matching reference */}
+                <Link
+                  href="/sign-up"
+                  className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] mr-2"
+                >
+                  <span className="relative z-10 flex h-[38px] px-5 items-center justify-center bg-[#0b0b0d] border border-[#0b0b0d] text-[14px] font-medium text-white rounded-none">
+                    <span>Start building</span>
+                  </span>
+                  <span
+                    className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#1423b8] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewY(45deg)', transformOrigin: 'top left' }}
+                  />
+                  <span
+                    className="absolute top-full left-0 w-full h-[5px] group-hover:h-[6px] bg-[#2337ff] border-l border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewX(45deg)', transformOrigin: 'top left' }}
+                  />
+                </Link>
               </>
             )}
           </div>
         </div>
       </header>
 
-      {/* 2. Section 1 — Hero Section */}
-      <section className="relative pt-16 sm:pt-24 pb-16 overflow-hidden">
-        {/* Subtle Background Glow */}
-        <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 h-[420px] w-full max-w-4xl bg-radial from-[#126dfb]/8 to-transparent blur-3xl opacity-70" />
+      {/* 2. Hero Section */}
+      <section className="relative w-full max-w-[1440px] mx-auto px-6 sm:px-[64px] flex flex-col overflow-visible">
+        <div className="relative border-x border-[#d4d4d4] px-6 sm:px-[64px] pt-8 pb-0 flex flex-col justify-between overflow-visible">
+          {/* Main 2-Column Split: Left 44fr, Right 56fr */}
+          <div className="w-full grid grid-cols-1 lg:grid-cols-[44fr_56fr] items-center gap-8 overflow-visible">
+            {/* Left Content Column */}
+            <div className="max-w-[460px] flex flex-col items-start overflow-visible">
+              {/* Top Eyebrow / Tagline in Left Column */}
+              <div className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.04em] text-[#47474e] mb-6">
+                <span className="size-2 rounded-full bg-[#2337ff] animate-pulse" />
+                <span>[ 001 ] REPOSENSE / ARCHITECTURE ENGINE</span>
+              </div>
 
-        <div className="relative mx-auto max-w-[1180px] px-4 sm:px-6">
-          {/* Static Text Block */}
-          <div className="mx-auto max-w-3xl text-center">
-            {/* Top Pill Announcement */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#e2e8f0] bg-white px-3.5 py-1 text-xs font-medium text-[#64748b] shadow-2xs mb-6">
-              <span className="size-2 rounded-full bg-[#126dfb] animate-pulse" />
-              <span>Next-Gen DeepWiki 3.0 Architecture</span>
-            </div>
-
-            {/* Two-Line Headline */}
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-medium tracking-tight text-[#0f172a] leading-[1.1]">
-              Turn any GitHub repository into a living DeepWiki.
-            </h1>
-
-            {/* Supporting Subline */}
-            <p className="mx-auto mt-6 max-w-[44ch] text-base sm:text-lg text-[#64748b] leading-relaxed">
-              100% BYOK architecture diagrams, line-numbered citations, and interactive codebase Q&A.
-            </p>
-
-            {/* CTA Row */}
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
-              <Link
-                href={isSignedIn ? "/dashboard" : "/sign-in"}
-                className="inline-flex items-center justify-center rounded-full bg-[#126dfb] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#0e58cc] transition-all shadow-xs hover:shadow-md hover:scale-[1.01]"
+              {/* Main Heading: Fraunces, weight 360, tight tracking */}
+              <h1
+                className="text-[38px] sm:text-[48px] lg:text-[56px] xl:text-[64px]"
+                style={{
+                  fontFamily: 'Fraunces, Georgia, serif',
+                  fontWeight: 360,
+                  lineHeight: 1.0,
+                  letterSpacing: '-2px',
+                  color: '#0b0b0d',
+                  marginBottom: '24px',
+                  fontStyle: 'normal',
+                }}
               >
-                Get Started
-              </Link>
-              <Link
-                href="/explore"
-                className="inline-flex items-center justify-center rounded-full border border-[#e2e8f0] bg-white px-6 py-2.5 text-sm font-medium text-[#0f172a] hover:bg-[#f1f5f9] transition-all shadow-2xs hover:scale-[1.01]"
+                Understand,<br />
+                Code and Chat <br />
+                <span style={{ color: '#8d8d95' }}>File by File</span>
+              </h1>
+
+              {/* Subheading: Inter Tight 19px, line-height 1.5, max-width 440px */}
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter-tight, inherit)',
+                  fontSize: '19px',
+                  lineHeight: 1.5,
+                  color: '#47474e',
+                  maxWidth: '440px',
+                  marginBottom: '32px',
+                }}
               >
-                Explore Public Wikis
-              </Link>
-            </div>
-          </div>
-
-          {/* Lower Viewport: Product Wiki Showcase Stage */}
-          <div className="mt-14 sm:mt-18 max-w-5xl mx-auto">
-            <div className="relative rounded-2xl border border-[#e2e8f0] bg-white p-2 sm:p-3 shadow-[0_24px_60px_-15px_rgba(18,109,251,0.14)] transition-all">
-              {/* Window Frame Bar */}
-              <div className="flex h-9 items-center justify-between border-b border-[#e2e8f0] bg-[#f8fafc] px-3.5 rounded-t-xl mb-2 sm:mb-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="size-2.5 rounded-full bg-[#ff5f56]" />
-                  <div className="size-2.5 rounded-full bg-[#ffbd2e]" />
-                  <div className="size-2.5 rounded-full bg-[#27c93f]" />
-                </div>
-                <div className="flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-white px-3 py-0.5 text-[11px] text-[#64748b] shadow-2xs">
-                  <Lock className="size-2.5 text-[#126dfb]" />
-                  <span>reposense.dev/wiki/Ethan4582/RepoSense</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#126dfb]">
-                  <GitBranch className="size-3" />
-                  <span className="hidden sm:inline">main · 100% indexed</span>
-                </div>
-              </div>
-
-              {/* Wiki Preview Image */}
-              <div className="relative overflow-hidden rounded-xl border border-[#e2e8f0]/60 bg-white">
-                <img
-                  src="/hero_image.png"
-                  alt="RepoSense DeepWiki Showcase"
-                  className="w-full h-auto block"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Section 2 — Features Section (3 Minimal Bento Cards) */}
-      <section id="features" className="pt-24 sm:pt-28 pb-20 border-t border-[#e2e8f0]/70">
-        <div className="mx-auto max-w-[1180px] px-4 sm:px-6">
-          {/* Header Block (Centered) */}
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal text-[#0f172a] leading-[1.15]">
-              A codebase library that gets clearer every time you index.
-            </h2>
-            <p className="mt-3.5 text-sm sm:text-base text-[#64748b]">
-              100% Bring Your Own Key. Instant architecture diagrams. Built to stay out of your way.
-            </p>
-          </div>
-
-          {/* 3-Column Bento Grid */}
-          <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-5 max-w-[1120px] mx-auto">
-            {/* Card 1: Living Architecture Wikis */}
-            <div className="group flex flex-col justify-between rounded-2xl bg-[#f1f5f9] p-7 min-h-[360px] border border-[#e2e8f0]/60 hover:border-[#126dfb]/30 transition-all hover:shadow-xs">
-              {/* Top Miniature Mockup */}
-              <div className="flex-1 flex flex-col items-center justify-center">
-                <div className="w-full max-w-[250px] rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
-                  <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-2.5 mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <div className="size-2 rounded-full bg-[#126dfb]" />
-                      <span className="text-xs font-semibold text-[#0f172a]">DeepWiki</span>
-                    </div>
-                    <div className="flex items-center gap-1 rounded bg-[#eef4ff] px-1.5 py-0.5 text-[10px] font-medium text-[#126dfb]">
-                      <span>⌘ K</span>
-                    </div>
-                  </div>
-                  {/* Schematic Flow */}
-                  <div className="space-y-2 text-[11px]">
-                    <div className="flex items-center justify-between rounded-md bg-[#f8fafc] border border-[#e2e8f0] px-2 py-1.5">
-                      <span className="text-[#0f172a] font-medium"># Architecture</span>
-                      <span className="text-[#126dfb] text-[10px]">3 chapters</span>
-                    </div>
-                    <div className="flex items-center justify-center py-1">
-                      <div className="h-4 w-px bg-[#126dfb]/30" />
-                    </div>
-                    <div className="rounded-md bg-[#eef4ff] border border-[#126dfb]/20 px-2 py-1 text-center font-mono text-[10px] text-[#126dfb]">
-                      Client → Worker → Dual Vector
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Copy */}
-              <div className="mt-6 pt-4 border-t border-[#e2e8f0]/50">
-                <h3 className="text-[15px] font-semibold text-[#0f172a] leading-snug">
-                  Living Architecture Wikis
-                </h3>
-                <p className="mt-1 text-[13px] text-[#64748b] leading-relaxed">
-                  Convert raw repositories into multi-page documentation with interactive Mermaid diagrams.
-                </p>
-              </div>
-            </div>
-
-            {/* Card 2: Line-Exact Code Inspector */}
-            <div className="group flex flex-col justify-between rounded-2xl bg-[#f1f5f9] p-7 min-h-[360px] border border-[#e2e8f0]/60 hover:border-[#126dfb]/30 transition-all hover:shadow-xs">
-              {/* Top Miniature Mockup */}
-              <div className="flex-1 flex flex-col items-center justify-center">
-                <div className="w-full max-w-[250px] rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="inline-flex items-center rounded-full bg-[#eef4ff] border border-[#126dfb]/20 px-2 py-0.5 text-[10px] font-mono text-[#126dfb]">
-                      src/lib/branch.ts:17-24
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600">
-                      <span className="size-1.5 rounded-full bg-emerald-500 animate-ping" />
-                      Scanning
-                    </span>
-                  </div>
-                  <div className="rounded-md bg-[#0f172a] p-2.5 font-mono text-[10px] text-slate-300 leading-relaxed overflow-hidden">
-                    <p className="text-slate-500">{'// Line-exact citation'}</p>
-                    <p><span className="text-[#60a5fa]">export</span> <span className="text-amber-300">function</span> <span className="text-emerald-400">verify</span>() &#123;</p>
-                    <p className="pl-2 text-slate-400">return <span className="text-cyan-300">vault</span>.decrypt();</p>
-                    <p>&#125;</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Copy */}
-              <div className="mt-6 pt-4 border-t border-[#e2e8f0]/50">
-                <h3 className="text-[15px] font-semibold text-[#0f172a] leading-snug">
-                  Line-Exact Code Inspector
-                </h3>
-                <p className="mt-1 text-[13px] text-[#64748b] leading-relaxed">
-                  Ask deep architectural questions with clickable source citations and split-pane file previews.
-                </p>
-              </div>
-            </div>
-
-            {/* Card 3: Bring Your Own Key */}
-            <div className="group flex flex-col justify-between rounded-2xl bg-[#f1f5f9] p-7 min-h-[360px] border border-[#e2e8f0]/60 hover:border-[#126dfb]/30 transition-all hover:shadow-xs">
-              {/* Top Miniature Mockup */}
-              <div className="flex-1 flex flex-col items-center justify-center">
-                <div className="w-full max-w-[250px] rounded-xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#e2e8f0]">
-                    <span className="text-[11px] font-medium text-[#0f172a]">Supported Providers</span>
-                    <span className="text-[10px] font-medium text-[#126dfb] bg-[#eef4ff] px-1.5 py-0.5 rounded">
-                      0% Markup
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                    <div className="flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1">
-                      <span className="size-1.5 rounded-full bg-[#126dfb]" />
-                      <span className="font-medium text-[#0f172a]">OpenAI</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1">
-                      <span className="size-1.5 rounded-full bg-[#126dfb]" />
-                      <span className="font-medium text-[#0f172a]">Anthropic</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1">
-                      <span className="size-1.5 rounded-full bg-[#126dfb]" />
-                      <span className="font-medium text-[#0f172a]">Gemini</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1">
-                      <span className="size-1.5 rounded-full bg-[#126dfb]" />
-                      <span className="font-medium text-[#0f172a]">DeepSeek</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Copy */}
-              <div className="mt-6 pt-4 border-t border-[#e2e8f0]/50">
-                <h3 className="text-[15px] font-semibold text-[#0f172a] leading-snug">
-                  Bring Your Own Key
-                </h3>
-                <p className="mt-1 text-[13px] text-[#64748b] leading-relaxed">
-                  Plug in OpenAI, Anthropic, Gemini, Meta, DeepSeek, xAI, or Groq with zero server markup.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Section 3 — Footer Section */}
-      <footer className="pt-24 pb-16 bg-[#f8fafc] border-t border-[#e2e8f0]">
-        <div className="mx-auto max-w-[1180px] px-4 sm:px-6">
-          {/* Top 4-Column Link Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pb-16">
-            {/* Column 1: Product */}
-            <div>
-              <h4 className="text-sm font-semibold text-[#0f172a] tracking-tight mb-4">
-                product
-              </h4>
-              <ul className="space-y-2.5 text-sm text-[#64748b]">
-                <li>
-                  <Link href="/explore" className="hover:text-[#126dfb] transition-colors">
-                    example wikis
-                  </Link>
-                </li>
-                <li>
-                  <a href="#features" className="hover:text-[#126dfb] transition-colors">
-                    features
-                  </a>
-                </li>
-                <li>
-                  <Link href="/create" className="hover:text-[#126dfb] transition-colors">
-                    create wiki
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/pulls" className="hover:text-[#126dfb] transition-colors">
-                    pull requests
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            {/* Column 2: Resources */}
-            <div>
-              <h4 className="text-sm font-semibold text-[#0f172a] tracking-tight mb-4">
-                resources
-              </h4>
-              <ul className="space-y-2.5 text-sm text-[#64748b]">
-                <li>
-                  <a
-                    href="https://github.com/Ethan4582/RepoSense#readme"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-[#126dfb] transition-colors"
-                  >
-                    docs
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://github.com/Ethan4582/RepoSense"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-[#126dfb] transition-colors"
-                  >
-                    github repo
-                  </a>
-                </li>
-                <li>
-                  <Link href="/dashboard" className="hover:text-[#126dfb] transition-colors">
-                    models & pricing
-                  </Link>
-                </li>
-                <li>
-                  <span className="hover:text-[#126dfb] cursor-pointer transition-colors">
-                    privacy
-                  </span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Column 3: Connect */}
-            <div>
-              <h4 className="text-sm font-semibold text-[#0f172a] tracking-tight mb-4">
-                connect
-              </h4>
-              <ul className="space-y-2.5 text-sm text-[#64748b]">
-                <li>
-                  <a
-                    href="https://github.com/Ethan4582/RepoSense"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-[#126dfb] transition-colors"
-                  >
-                    github
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://x.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-[#126dfb] transition-colors"
-                  >
-                    x (twitter)
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://linkedin.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-[#126dfb] transition-colors"
-                  >
-                    linkedin
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://youtube.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-[#126dfb] transition-colors"
-                  >
-                    youtube
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Column 4: BYOK Notice */}
-            <div>
-              <h4 className="text-sm font-semibold text-[#0f172a] tracking-tight mb-4">
-                byok notice
-              </h4>
-              <p className="text-xs sm:text-sm text-[#64748b] leading-relaxed">
-                reposense runs 100% on your own encrypted API keys — your keys and private code are never sold or shared.
+               Turn GitHub repos into searchable wikis with line-exact answers and citation traces for developers, teams, and agents.
               </p>
+
+              {/* Primary & Secondary Action CTAs */}
+              <div className="flex flex-wrap items-center gap-4">
+                <Link
+                  href={isSignedIn ? "/dashboard" : "/sign-up"}
+                  className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] cursor-pointer"
+                >
+                  <span className="relative z-10 flex h-[52px] px-7 items-center justify-center bg-[#0b0b0d] border border-[#0b0b0d] text-[18px] font-medium text-white rounded-none">
+                    <span>Start building free</span>
+                  </span>
+                  <span
+                    className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#1423b8] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewY(45deg)', transformOrigin: 'top left' }}
+                  />
+                  <span
+                    className="absolute top-full left-0 w-full h-[5px] group-hover:h-[6px] bg-[#2337ff] border-l border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewX(45deg)', transformOrigin: 'top left' }}
+                  />
+                </Link>
+                <a
+                  href="#how-it-works"
+                  className="group relative inline-block transition-transform duration-150 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] cursor-pointer"
+                >
+                  <span className="relative z-10 flex h-[52px] px-6 items-center justify-center bg-white border border-[#0b0b0d] text-[18px] font-medium text-[#0b0b0d] rounded-none">
+                    <span>See how it stacks</span>
+                  </span>
+                  <span
+                    className="absolute left-full top-0 h-full w-[5px] group-hover:w-[6px] bg-[#c8c8cc] border-t border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewY(45deg)', transformOrigin: 'top left' }}
+                  />
+                  <span
+                    className="absolute top-full left-0 w-full h-[5px] group-hover:h-[6px] bg-[#e5e5ea] border-l border-r border-b border-[#0b0b0d] transition-all duration-150 ease-out"
+                    style={{ transform: 'skewX(45deg)', transformOrigin: 'top left' }}
+                  />
+                </a>
+              </div>
+            </div>
+
+            {/* Right: Embedded Interactive Isometric Cube Canvas Component */}
+            <div
+              className="relative flex items-center justify-center w-full overflow-visible z-1"
+              style={{
+                minWidth: '380px',
+                maxWidth: '740px',
+                width: '100%',
+                height: '540px',
+                marginLeft: 'auto',
+              }}
+            >
+              <IsometricCubeField className="w-full h-full" />
             </div>
           </div>
 
-          {/* Giant Interactive "reposense" Folder-Brick Wordmark */}
-          <div className="pt-8 border-t border-[#e2e8f0]">
-            <FolderBrickWordmark />
+          {/* Bottom Stats / Metrics Bar */}
+          <div className="w-full border-t border-[#ececec] mt-4 py-3 flex flex-wrap items-center justify-between gap-4 font-mono text-[11px] uppercase tracking-[0.04em]">
+            <div className="flex flex-wrap items-center gap-6 sm:gap-8 text-[#47474e]">
+              <div className="inline-flex items-center gap-2">
+                <span className="size-[7px] bg-[#2337ff] inline-block" />
+                <span className="font-semibold text-black">{formattedCount}</span>
+                <span>WIKIS INDEXED</span>
+              </div>
+            </div>
+            <div>
+              <a
+                href="#features"
+                className="inline-flex items-center gap-1 text-[#8d8d95] hover:text-[#0b0b0d] transition-colors"
+              >
+                <span>MOVE CLOSER TO OPEN THE BLOCK</span>
+                <span aria-hidden="true">&#x2197;</span>
+              </a>
+            </div>
           </div>
 
-          {/* Bottom Legal Caption */}
-          <div className="mt-12 text-center text-xs text-[#94a3b8]">
-            © RepoSense 2026. Built with Cloudflare Workers.
-          </div>
+          {/* Section End Divider Line with SectionBoundary */}
+          <SectionBoundary tag="01 CLIENTS" isHeroEnd />
         </div>
-      </footer>
+      </section>
+
+      {/* Marquee Banner: Popular Repositories & Wiki Count */}
+      <RepoMarquee wikiCount={formattedCount} />
+
+      {/* 3. Page 2: Live Product Showcase */}
+      <div className="w-full relative">
+        <SectionBoundary tag="02 STACK" />
+        <ProductShowcase />
+      </div>
+
+      {/* 4. Page 3: Features Section (Replicating Reference Design) */}
+      <div className="w-full relative">
+        <SectionBoundary tag="03 ARCHITECTURE" />
+        <FeaturesSection />
+      </div>
+
+      {/* 5. Section 4: FAQ Section (Replicating Reference Design) */}
+      <FaqSection />
+
+      {/* 6. Section 5 & Footer */}
+      <div className="w-full relative">
+        <SectionBoundary tag="05 FOOTER" />
+        <LandingFooterSections />
+      </div>
     </div>
   );
 }

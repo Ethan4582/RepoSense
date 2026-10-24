@@ -1,9 +1,5 @@
 # How RepoSense Works: Under the Hood
 
-This guide explains in plain English what actually happens when you paste a GitHub repository URL into RepoSense, how documentation is generated, how code search finds answers, and why things were built this way.
-
----
-
 ## 1. What Happens When You Give a GitHub URL?
 
 When you paste a URL like `https://github.com/facebook/react` and click **Index**, the app does not run `git clone`. Cloning an entire repository onto a server takes too much disk space and memory, and downloading gigabytes of commit history is unnecessary.

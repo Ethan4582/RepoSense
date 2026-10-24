@@ -151,6 +151,66 @@ export const publicRoutes = new Hono()
       }
     ).catch(() => c.json({ error: 'Wiki not found' }, 404));
   })
+  .get('/wiki/:id', async (c) => {
+    // Route alias for /api/public/wiki/[id] matching client requests
+    const projectId = c.req.param('id');
+    const requestedBranch = c.req.query('branch')?.trim();
+
+    const visible = await db.project.findFirst({
+      where: { id: projectId, isPublicWiki: true, deletedAt: null },
+      select: { id: true, updatedAt: true },
+    });
+    if (!visible) return c.json({ error: 'Wiki not found' }, 404);
+    const version = visible.updatedAt.getTime();
+    const branchKey = requestedBranch ?? 'default';
+
+    return cachedJson(
+      c,
+      `public-project-${projectId}-${branchKey}-${version}`,
+      async () => {
+        const project = await db.project.findFirst({
+          where: { id: projectId, isPublicWiki: true, deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            repoOwner: true,
+            repoName: true,
+            repoUrl: true,
+            lastIndexedAt: true,
+            lastIndexedCommitSha: true,
+            defaultBranch: true,
+            lastIndexedBranch: true,
+            chatModel: true,
+            chatProvider: true,
+          },
+        });
+
+        if (!project) throw new Error('Wiki not found');
+
+        const branches = await getProjectBranches(db, projectId);
+        const activeBranch = pickActiveBranch(requestedBranch, branches, project);
+        const wikiPages = activeBranch
+          ? await db.wikiPage.findMany({
+              where: { projectId, branch: activeBranch },
+              orderBy: [{ sectionOrder: 'asc' }, { pageOrder: 'asc' }],
+              select: {
+                id: true,
+                slug: true,
+                title: true,
+                sectionTitle: true,
+                sectionOrder: true,
+                pageOrder: true,
+                headings: true,
+              },
+            })
+          : [];
+
+        return {
+          project: { ...project, wikiPages, branches, activeBranch },
+        };
+      }
+    ).catch(() => c.json({ error: 'Wiki not found' }, 404));
+  })
   .get('/projects/:id/pages/:slug', async (c) => {
     const projectId = c.req.param('id');
     const slug = c.req.param('slug');

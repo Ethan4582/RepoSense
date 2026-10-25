@@ -58,11 +58,16 @@ const martianMono = Martian_Mono({
   display: "swap",
 });
 
+const clerkPublishableKey =
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  process.env.CLERK_PUBLISHABLE_KEY ||
+  "pk_test_Y29oZXJlbnQtbWVlcmthdC02My5jbGVyay5hY2NvdW50cy5kZXYk";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider publishableKey={clerkPublishableKey}>
       <html
         lang="en"
         className={`${fraunces.variable} ${interTight.variable} ${martianMono.variable}`}

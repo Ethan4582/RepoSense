@@ -27,7 +27,7 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().default("pk_test_Y29oZXJlbnQtbWVlcmthdC02My5jbGVyay5hY2NvdW50cy5kZXYk"),
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: z.string().default("/sign-in"),
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().default("/sign-up"),
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: z.string().default("/sync-user"),
@@ -52,7 +52,10 @@ export const env = createEnv({
     ASSEMBLYAI_API_KEY: process.env.ASSEMBLYAI_API_KEY,
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ??
+      process.env.CLERK_PUBLISHABLE_KEY ??
+      "pk_test_Y29oZXJlbnQtbWVlcmthdC02My5jbGVyay5hY2NvdW50cy5kZXYk",
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in",
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL ?? "/sign-up",
     NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL ?? "/sync-user",

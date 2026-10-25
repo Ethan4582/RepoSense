@@ -60,8 +60,7 @@ const martianMono = Martian_Mono({
 
 const clerkPublishableKey =
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-  process.env.CLERK_PUBLISHABLE_KEY ||
-  "pk_test_Y29oZXJlbnQtbWVlcmthdC02My5jbGVyay5hY2NvdW50cy5kZXYk";
+  process.env.CLERK_PUBLISHABLE_KEY;
 
 export default function RootLayout({
   children,

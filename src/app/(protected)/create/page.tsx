@@ -173,7 +173,15 @@ function CreateProjectContent() {
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/projects/${indexingSession.projectId}/indexing/status`, { cache: 'no-store' });
+        const response = await fetch(`${getApiBaseUrl()}/api/projects/${indexingSession.projectId}/indexing/status`, {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!contentType.includes('application/json')) {
+          if (!cancelled) timer = setTimeout(poll, 2000);
+          return;
+        }
         const data = (await response.json()) as { job?: IndexingSession | null };
         if (cancelled || !data.job) return;
         setIndexingSession((current) => current ? { ...current, ...data.job } : current);
@@ -241,9 +249,10 @@ function CreateProjectContent() {
 
       // Restore cost estimation & timeline calculation
       setEstimating(true);
-      void fetch('/api/estimate', {
+      void fetch(`${getApiBaseUrl()}/api/estimate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           repoUrl: base,
           githubToken: githubToken || undefined,
@@ -306,20 +315,28 @@ function CreateProjectContent() {
           isPublicWiki: isPrivateRepo ? false : isPublicWiki,
         },
       });
-      const data = (await res.json()) as {
+      const contentType = res.headers.get('content-type') ?? '';
+      let data: {
         project?: { id: string };
         indexingJobId?: string | null;
         error?: string;
         code?: string;
         projectId?: string;
-      };
+      } = {};
+      if (contentType.includes('application/json')) {
+        data = (await res.json().catch(() => ({}))) as typeof data;
+      } else {
+        const text = await res.text().catch(() => '');
+        throw new Error(text.slice(0, 100) || 'Server returned an invalid response.');
+      }
 
       if (!res.ok) {
         const requestedBranch = repoBase ? branchFromRepoUrl(repoBase) : undefined;
         if (data.code === 'DUPLICATE_PROJECT' && data.projectId && requestedBranch) {
-          const branchRes = await fetch(`/api/projects/${data.projectId}/indexing/start`, {
+          const branchRes = await fetch(`${getApiBaseUrl()}/api/projects/${data.projectId}/indexing/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ branch: requestedBranch }),
           });
           const branchData = (await branchRes.json().catch(() => ({}))) as { error?: string; code?: string };

@@ -46,9 +46,11 @@ export default function MeetingsPage() {
   const [selectedProjectFilter, setSelectedProjectFilter] = React.useState<string>(projectId ?? 'all');
   const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false);
 
+  const initialProjectSynced = React.useRef(false);
   React.useEffect(() => {
-    if (projectId && selectedProjectFilter === 'all') {
+    if (projectId && !initialProjectSynced.current) {
       setSelectedProjectFilter(projectId);
+      initialProjectSynced.current = true;
     }
   }, [projectId]);
 

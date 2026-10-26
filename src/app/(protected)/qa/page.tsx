@@ -37,9 +37,11 @@ export default function QaBookmarksPage() {
   const [selectedProjectFilter, setSelectedProjectFilter] = React.useState<string>(projectId ?? 'all');
   const [search, setSearch] = React.useState('');
 
+  const initialProjectSynced = React.useRef(false);
   React.useEffect(() => {
-    if (projectId && selectedProjectFilter === 'all') {
+    if (projectId && !initialProjectSynced.current) {
       setSelectedProjectFilter(projectId);
+      initialProjectSynced.current = true;
     }
   }, [projectId]);
 

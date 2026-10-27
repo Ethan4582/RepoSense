@@ -257,6 +257,8 @@ export const questionsRoutes = new Hono<AuthContext>()
           answer: result.answer,
           fileReferences: result.chunks.map((chunk) => ({
             fileName: chunk.filePath,
+            startLine: chunk.startLine,
+            endLine: chunk.endLine,
             sourceCode: chunk.chunkContent,
             summary: `Lines ${chunk.startLine}-${chunk.endLine}`,
           })),

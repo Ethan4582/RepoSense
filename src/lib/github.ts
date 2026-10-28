@@ -141,6 +141,7 @@ export async function getRepoMetadata(
   owner: string;
   repo: string;
   repoUrl: string;
+  repositoryId: string;
   defaultBranch: string;
   commitSha: string;
   isPrivate: boolean;
@@ -169,6 +170,7 @@ export async function getRepoMetadata(
       owner,
       repo,
       repoUrl: normalized,
+      repositoryId: String(data.id),
       defaultBranch: data.default_branch,
       commitSha: ref.data.object.sha,
       isPrivate: data.private,
@@ -192,6 +194,7 @@ export async function getRepoMetadata(
             owner,
             repo,
             repoUrl: normalized,
+            repositoryId: String(data.id),
             defaultBranch: data.default_branch,
             commitSha: ref.data.object.sha,
             isPrivate: false,

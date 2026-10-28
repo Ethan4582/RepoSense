@@ -181,20 +181,28 @@ export const projectsRoutes = new Hono<AuthContext>()
 
       const existing = await db.project.findFirst({
         where: {
-          repoOwner: { equals: coordinates.owner, mode: "insensitive" },
-          repoName: { equals: coordinates.repo, mode: "insensitive" },
-          userToProjects: { some: { userId } },
+          OR: [
+            { githubRepositoryId: meta.repositoryId },
+            {
+              repoOwner: { equals: coordinates.owner, mode: "insensitive" },
+              repoName: { equals: coordinates.repo, mode: "insensitive" },
+            },
+          ],
           deletedAt: null,
         },
-        select: { id: true },
+        select: { id: true, isPublicWiki: true, ownerId: true },
       });
 
       if (existing) {
         return c.json(
           {
-            error: "You have already added this repository.",
+            error: existing.isPublicWiki
+              ? "A wiki already exists for this repository."
+              : "This repository is unavailable.",
             code: "DUPLICATE_PROJECT",
-            projectId: existing.id,
+            ...(existing.isPublicWiki || existing.ownerId === userId
+              ? { projectId: existing.id }
+              : {}),
           },
           409,
         );
@@ -259,9 +267,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         input.embeddingProvider === "OPENAI" ? 1536 : 768;
       const chatModel = alignChatModel(input.chatProvider, input.chatModel);
       const canonicalRepoKey =
-        !meta.isPrivate && input.isPublicWiki
-          ? `${coordinates.owner}/${coordinates.repo}`.toLowerCase()
-          : null;
+        `${coordinates.owner}/${coordinates.repo}`.toLowerCase();
 
       try {
         await resolveProjectKeys(userId, {
@@ -324,6 +330,8 @@ export const projectsRoutes = new Hono<AuthContext>()
         project = await db.project.create({
           data: {
             canonicalRepoKey,
+            githubRepositoryId: meta.repositoryId,
+            ownerId: userId,
             name: `${coordinates.owner}/${coordinates.repo}`,
             repoOwner: coordinates.owner,
             repoName: coordinates.repo,
@@ -341,7 +349,7 @@ export const projectsRoutes = new Hono<AuthContext>()
             embeddingProvider: input.embeddingProvider,
             embeddingModel,
             embeddingDimensions,
-            userToProjects: { create: { userId } },
+            userToProjects: { create: { userId, role: "OWNER" } },
           },
         });
       } catch (err) {

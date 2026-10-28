@@ -12,6 +12,7 @@ import {
   checkIndexingCapacity,
   SERVER_BUSY_MESSAGE,
 } from "~/lib/indexing-capacity";
+import { getProjectRole, hasProjectRole } from "~/lib/project-access";
 
 export const indexingRoutes = new Hono<AuthContext>()
   .get("/:id/indexing/status", async (c) => {
@@ -20,11 +21,10 @@ export const indexingRoutes = new Hono<AuthContext>()
     const projectId = c.req.param("id");
     const branch = c.req.query("branch")?.trim();
 
-    const member = await db.userToProject.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { id: true },
-    });
-    if (!member) return c.json({ error: "Project not found" }, 404);
+    const role = await getProjectRole(db, projectId, userId);
+    if (!hasProjectRole(role, "VIEWER")) {
+      return c.json({ error: "Project not found" }, 404);
+    }
 
     const job = await db.indexingJob.findFirst({
       where: { projectId, ...(branch ? { branch } : {}) },
@@ -53,7 +53,7 @@ export const indexingRoutes = new Hono<AuthContext>()
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        userToProjects: { some: { userId } },
+        ownerId: userId,
         deletedAt: null,
       },
     });

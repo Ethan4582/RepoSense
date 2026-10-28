@@ -25,6 +25,13 @@ import { indexingRoutes } from "./indexing";
 import { pullsRoutes } from "./pulls";
 import { estimateRoutes } from "./estimate";
 import { questionsRoutes } from "./questions";
+import { governanceRoutes } from "./governance";
+import {
+  diffLineCounts,
+  getProjectRole,
+  hasProjectRole,
+  recordProjectAudit,
+} from "~/lib/project-access";
 import {
   checkIndexingCapacity,
   SERVER_BUSY_MESSAGE,
@@ -571,7 +578,9 @@ export const projectsRoutes = new Hono<AuthContext>()
         branches,
         activeBranch,
       }),
-      isOwner: project.userToProjects.length > 0,
+      isOwner:
+        project.userToProjects.length > 0 &&
+        (await getProjectRole(db, projectId, userId)) === "OWNER",
     });
   })
   .patch("/:id", async (c) => {
@@ -583,11 +592,10 @@ export const projectsRoutes = new Hono<AuthContext>()
       unknown
     >;
 
-    const member = await db.userToProject.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { id: true },
-    });
-    if (!member) return c.json({ error: "Project not found" }, 404);
+    const role = await getProjectRole(db, projectId, userId);
+    if (!hasProjectRole(role, "OWNER")) {
+      return c.json({ error: "Project not found" }, 404);
+    }
 
     const project = await db.project.findUnique({ where: { id: projectId } });
     if (!project) return c.json({ error: "Project not found" }, 404);
@@ -654,11 +662,10 @@ export const projectsRoutes = new Hono<AuthContext>()
     const userId = c.get("userId");
     const db = c.get("db");
 
-    const member = await db.userToProject.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { id: true },
-    });
-    if (!member) return c.json({ error: "Project not found" }, 404);
+    const role = await getProjectRole(db, projectId, userId);
+    if (!hasProjectRole(role, "OWNER")) {
+      return c.json({ error: "Project not found" }, 404);
+    }
 
     await purgeProjectWiki(db, projectId);
 
@@ -719,11 +726,10 @@ export const projectsRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const body = c.req.valid("json");
 
-      const member = await db.userToProject.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-        select: { id: true },
-      });
-      if (!member) return c.json({ error: "Page not found" }, 404);
+      const role = await getProjectRole(db, projectId, userId);
+      if (!hasProjectRole(role, "EDITOR")) {
+        return c.json({ error: "Page not found" }, 404);
+      }
 
       const project = await db.project.findFirst({
         where: { id: projectId, deletedAt: null },
@@ -798,6 +804,27 @@ export const projectsRoutes = new Hono<AuthContext>()
         },
       });
 
+      await db.wikiPageRevision.create({
+        data: {
+          pageId: newPage.id,
+          actorId: userId,
+          status: "PUBLISHED",
+          title: newPage.title,
+          sectionTitle: newPage.sectionTitle,
+          content: newPage.content,
+          relevantFiles: newPage.relevantFiles,
+          headings: newPage.headings ?? Prisma.JsonNull,
+          additions: newPage.content.split("\n").length,
+        },
+      });
+      await recordProjectAudit(db, {
+        projectId,
+        actorId: userId,
+        action: "WIKI_PAGE_CREATED",
+        targetType: "WikiPage",
+        targetId: newPage.id,
+      });
+
       await purgeWikiCache(projectId, [slug], [targetBranch]);
       return c.json({ page: newPage }, 201);
     },
@@ -823,11 +850,18 @@ export const projectsRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const body = c.req.valid("json");
 
-      const member = await db.userToProject.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-        select: { id: true },
+      const role = await getProjectRole(db, projectId, userId);
+      if (!hasProjectRole(role, "EDITOR")) {
+        return c.json({ error: "Page not found" }, 404);
+      }
+
+      const pageIds = body.pages.map((item) => item.id);
+      const ownedPageCount = await db.wikiPage.count({
+        where: { id: { in: pageIds }, projectId },
       });
-      if (!member) return c.json({ error: "Page not found" }, 404);
+      if (ownedPageCount !== new Set(pageIds).size) {
+        return c.json({ error: "Page not found" }, 404);
+      }
 
       await db.$transaction(
         body.pages.map((item) =>
@@ -865,11 +899,10 @@ export const projectsRoutes = new Hono<AuthContext>()
       const db = c.get("db");
       const body = c.req.valid("json");
 
-      const member = await db.userToProject.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-        select: { id: true },
-      });
-      if (!member) return c.json({ error: "Page not found" }, 404);
+      const role = await getProjectRole(db, projectId, userId);
+      if (!hasProjectRole(role, "CONTRIBUTOR")) {
+        return c.json({ error: "Page not found" }, 404);
+      }
 
       const page = await db.wikiPage.findFirst({
         where: { id: pageId, projectId },
@@ -898,10 +931,98 @@ export const projectsRoutes = new Hono<AuthContext>()
         updateData.relevantFiles = extractCitationPaths(body.content);
       }
 
+      const proposedTitle = updateData.title ?? page.title;
+      const proposedSectionTitle = updateData.sectionTitle ?? page.sectionTitle;
+      const proposedContent = updateData.content ?? page.content;
+      const diff = diffLineCounts(page.content, proposedContent);
+
+      if (role === "CONTRIBUTOR") {
+        const revision = await db.wikiPageRevision.create({
+          data: {
+            pageId: page.id,
+            actorId: userId,
+            status: "PENDING",
+            title: proposedTitle,
+            sectionTitle: proposedSectionTitle,
+            content: proposedContent,
+            relevantFiles: updateData.relevantFiles ?? page.relevantFiles,
+            headings: updateData.headings ?? page.headings ?? Prisma.JsonNull,
+            additions: diff.additions,
+            deletions: diff.deletions,
+          },
+        });
+        const project = await db.project.findUnique({
+          where: { id: projectId },
+          select: { ownerId: true },
+        });
+        if (project) {
+          await db.notification.create({
+            data: {
+              userId: project.ownerId,
+              projectId,
+              type: "REVIEW_REQUIRED",
+              title: "Wiki edit needs review",
+              message: `A contributor proposed changes to “${page.title}”.`,
+              href: `/settings/projects/${projectId}/history`,
+            },
+          });
+        }
+        await recordProjectAudit(db, {
+          projectId,
+          actorId: userId,
+          action: "WIKI_REVISION_PROPOSED",
+          targetType: "WikiPageRevision",
+          targetId: revision.id,
+        });
+        return c.json({ revision, pendingApproval: true }, 202);
+      }
+
       const updated = await db.wikiPage.update({
         where: { id: pageId },
         data: updateData,
       });
+
+      await db.wikiPageRevision.create({
+        data: {
+          pageId: page.id,
+          actorId: userId,
+          status: "PUBLISHED",
+          title: updated.title,
+          sectionTitle: updated.sectionTitle,
+          content: updated.content,
+          relevantFiles: updated.relevantFiles,
+          headings: updated.headings ?? Prisma.JsonNull,
+          additions: diff.additions,
+          deletions: diff.deletions,
+        },
+      });
+      await recordProjectAudit(db, {
+        projectId,
+        actorId: userId,
+        action: "WIKI_PAGE_UPDATED",
+        targetType: "WikiPage",
+        targetId: page.id,
+        metadata: diff,
+      });
+      const projectSettings = await db.project.findUnique({
+        where: { id: projectId },
+        select: { ownerId: true, directEditNotifications: true },
+      });
+      if (
+        projectSettings?.directEditNotifications &&
+        projectSettings.ownerId !== userId
+      ) {
+        await db.notification.create({
+          data: {
+            userId: projectSettings.ownerId,
+            projectId,
+            type: "WIKI_UPDATED",
+            title: "Wiki page edited",
+            message: `"${updated.title}" was edited by a project member.`,
+            href: `/settings/projects/${projectId}/history`,
+          },
+        });
+      }
 
       await purgeWikiCache(projectId, [page.slug], [page.branch]);
       return c.json({ page: updated });
@@ -913,11 +1034,10 @@ export const projectsRoutes = new Hono<AuthContext>()
     const userId = c.get("userId");
     const db = c.get("db");
 
-    const member = await db.userToProject.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { id: true },
-    });
-    if (!member) return c.json({ error: "Page not found" }, 404);
+    const role = await getProjectRole(db, projectId, userId);
+    if (!hasProjectRole(role, "EDITOR")) {
+      return c.json({ error: "Page not found" }, 404);
+    }
 
     const page = await db.wikiPage.findFirst({
       where: { id: pageId, projectId },
@@ -990,6 +1110,7 @@ export const projectsRoutes = new Hono<AuthContext>()
 
     return c.json({ members });
   })
+  .route("/", governanceRoutes)
   .route("/estimate", estimateRoutes)
   .route("/", indexingRoutes)
   .route("/", pullsRoutes)

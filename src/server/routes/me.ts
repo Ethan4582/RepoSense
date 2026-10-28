@@ -31,6 +31,29 @@ export const meRoutes = new Hono<AuthContext>()
     if (!user) return c.json({ error: "User not found" }, 404);
     return c.json({ user });
   })
+  .get("/notifications", async (c) => {
+    const notifications = await c.get("db").notification.findMany({
+      where: { userId: c.get("userId") },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return c.json({ notifications });
+  })
+  .patch("/notifications/:id/read", async (c) => {
+    const result = await c.get("db").notification.updateMany({
+      where: { id: c.req.param("id"), userId: c.get("userId") },
+      data: { readAt: new Date() },
+    });
+    if (result.count === 0) return c.json({ error: "Notification not found" }, 404);
+    return c.json({ success: true });
+  })
+  .post("/notifications/read-all", async (c) => {
+    await c.get("db").notification.updateMany({
+      where: { userId: c.get("userId"), readAt: null },
+      data: { readAt: new Date() },
+    });
+    return c.json({ success: true });
+  })
   .patch(
     "/defaults",
     zValidator(

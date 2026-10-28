@@ -374,7 +374,7 @@ export default function DashboardPage() {
           </h1>
 
           <form onSubmit={handleSearchSubmit} className="relative mt-8">
-            <div className="bg-card/60 focus-within:border-primary/50 focus-within:ring-primary/10 relative flex items-center rounded-[12px] border border-[#e0e0e0] transition-colors duration-200 ease-out focus-within:ring-2 hover:border-[#d4d4d4]">
+            <div className="bg-card/60 focus-within:border-primary/50 focus-within:ring-primary/10 relative flex items-center rounded-xl border transition-colors focus-within:ring-2">
               <Search className="text-muted-foreground ml-3.5 size-4 shrink-0" />
               <input
                 value={searchQuery}
@@ -402,7 +402,7 @@ export default function DashboardPage() {
             {/* Card 1: Dedicated "+ Add repo" card */}
             <Link
               href="/create"
-              className="group bg-primary/[0.03] hover:bg-primary/[0.06] relative flex min-h-[170px] flex-col justify-between rounded-[12px] border border-dashed border-[#e0e0e0] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
+              className="group bg-primary/[0.03] hover:bg-primary/[0.06] relative flex min-h-[170px] flex-col justify-between rounded-xl border border-dashed p-5 transition-colors"
             >
               <div className="text-primary flex items-center gap-2 font-semibold">
                 <Plus className="size-5" />
@@ -427,7 +427,7 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/wiki/${project.id}`)}
-                  className="group bg-card relative flex min-h-[170px] cursor-pointer flex-col justify-between rounded-xl border border-[#e5e5e5] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
+                  className="group bg-card relative flex min-h-[170px] cursor-pointer flex-col justify-between rounded-xl border border-border/70 p-5 shadow-xs transition-colors hover:border-border"
                 >
                   {/* Top: Repo name & Visibility / Actions */}
                   <div>

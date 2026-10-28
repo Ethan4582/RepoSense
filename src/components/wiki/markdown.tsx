@@ -81,12 +81,12 @@ function CodeBlock({
   const badgeText = (language || 'text').toUpperCase();
 
   return (
-    <div className="my-4 overflow-hidden rounded-[10px] border border-[#ececec] bg-[#fbfbfb] dark:border-[#27272a] dark:bg-[#0d1117]">
+    <div className="bg-muted/20 my-4 overflow-hidden rounded-lg border border-border/70">
       <div
         onClick={() => isLong && setCollapsed(!collapsed)}
         className={cn(
-          'flex select-none items-center justify-between border-b border-[#ececec] bg-[#f4f4f5]/50 px-3 py-1.5 text-xs text-muted-foreground dark:border-[#27272a] dark:bg-neutral-900/60',
-          isLong && 'cursor-pointer hover:bg-[#f4f4f5] dark:hover:bg-neutral-900'
+          'flex select-none items-center justify-between border-b border-border/70 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground',
+          isLong && 'cursor-pointer hover:bg-muted/70'
         )}
       >
         <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ function CodeBlock({
               <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
             )
           ) : null}
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground dark:bg-neutral-800">
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground">
             {badgeText}
           </span>
         </div>
@@ -214,21 +214,21 @@ export function WikiMarkdown({
           ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-6">{children}</ol>,
           li: ({ children }) => <li className="text-foreground/90">{children}</li>,
           table: ({ children }) => (
-            <div className="my-5 overflow-x-auto rounded-[10px] border border-[#ececec]">
+            <div className="my-5 overflow-x-auto rounded-lg border border-border/70">
               <table className="w-full border-collapse text-xs">{children}</table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-[#f8f8f9]">{children}</thead>,
+          thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
           th: ({ children }) => (
-            <th className="border-b border-[#ececec] px-3 py-2 text-left font-semibold text-foreground">{children}</th>
+            <th className="border-b border-border/70 px-3 py-2 text-left font-semibold text-foreground">{children}</th>
           ),
-          td: ({ children }) => <td className="border-b border-[#ececec] px-3 py-2 align-top">{children}</td>,
+          td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 align-top">{children}</td>,
           blockquote: ({ children }) => (
-            <blockquote className="my-4 border-l-2 border-[#2337ff]/60 pl-4 text-muted-foreground">
+            <blockquote className="border-primary/60 my-4 border-l-2 pl-4 text-muted-foreground">
               {children}
             </blockquote>
           ),
-          hr: () => <hr className="my-8 border-t border-[#ececec]" />,
+          hr: () => <hr className="my-8 border-t border-border/70" />,
           a: ({ href, children }) => {
             if (href?.startsWith('citation:')) {
               const raw = href.slice('citation:'.length);
@@ -293,7 +293,7 @@ export function WikiMarkdown({
             }
 
             return (
-              <code className="rounded-[4px] border border-[#ececec] bg-[#f4f4f5]/60 px-1.5 py-0.5 font-mono text-[12px] dark:border-[#27272a] dark:bg-neutral-800" {...props}>
+              <code className="bg-muted/60 rounded border border-border/70 px-1.5 py-0.5 font-mono text-[12px]" {...props}>
                 {children}
               </code>
             );

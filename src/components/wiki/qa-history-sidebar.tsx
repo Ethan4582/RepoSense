@@ -83,9 +83,9 @@ export function QaHistorySidebar({
   );
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[#ececec] bg-background shadow-2xl dark:border-[#27272a] animate-in slide-in-from-left duration-200">
+    <aside className="animate-in slide-in-from-left fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border/70 bg-background shadow-xl duration-200">
       {/* Top Header matching AppSideBar */}
-      <div className="border-b border-[#ececec] p-3 space-y-3 dark:border-[#27272a]">
+      <div className="flex flex-col gap-3 border-b border-border/70 p-3">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
@@ -111,7 +111,7 @@ export function QaHistorySidebar({
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
-          className="flex h-9 w-full items-center justify-between rounded-[12px] border border-[#e0e0e0] bg-background px-3 text-xs text-muted-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted hover:text-foreground dark:border-neutral-700"
+          className="flex h-9 w-full items-center justify-between rounded-lg border bg-background px-3 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="Search anything (Ctrl+K)"
         >
           <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ export function QaHistorySidebar({
         <Link href="/create" className="block">
           <Button
             variant="outline"
-            className="h-9 w-full justify-start gap-2 rounded-[12px] border border-[#e0e0e0] bg-background text-xs font-semibold text-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted dark:border-neutral-700"
+            className="h-9 w-full justify-start gap-2 rounded-lg text-xs font-semibold"
             title="New Repository Wiki"
           >
             <Plus className="size-4 shrink-0 text-primary" />
@@ -137,7 +137,7 @@ export function QaHistorySidebar({
       </div>
 
       {/* History Threads List Header & Local Filter */}
-      <div className="p-3 border-b border-[#ececec] dark:border-[#27272a] space-y-2">
+      <div className="flex flex-col gap-2 border-b border-border/70 p-3">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Question History
@@ -158,7 +158,7 @@ export function QaHistorySidebar({
       </div>
 
       {/* Threads Scroll List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
+      <div className="scrollbar-none flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin text-primary" />

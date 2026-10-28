@@ -78,9 +78,9 @@ export default function QaBookmarksPage() {
   });
 
   return (
-    <div className="flex flex-col h-full w-full px-6 py-8 md:px-12 lg:px-16 space-y-6">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       {/* Header Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#ececec] pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
             <Bookmark className="size-6 text-primary fill-primary/20" />
@@ -111,7 +111,7 @@ export default function QaBookmarksPage() {
               }
             }}
           >
-            <SelectTrigger className="h-9 min-w-[200px] text-xs gap-2 rounded-[12px] border border-[#e0e0e0] bg-background transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+            <SelectTrigger className="h-9 min-w-[200px] gap-2 rounded-lg text-xs">
               <FolderGit2 className="size-3.5 text-primary shrink-0" />
               <SelectValue placeholder="All Repositories" />
             </SelectTrigger>
@@ -136,7 +136,7 @@ export default function QaBookmarksPage() {
           placeholder="Search saved answers, code citations, and questions..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-10 h-11 text-sm bg-muted/20 border border-[#e0e0e0] rounded-[12px] transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
+          className="bg-muted/20 h-11 rounded-lg pl-10 text-sm"
         />
       </div>
 

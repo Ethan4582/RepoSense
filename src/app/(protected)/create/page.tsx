@@ -717,7 +717,7 @@ function CreateProjectContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="bg-muted/20 flex items-start justify-between gap-4 rounded-lg border border-[#ececec] p-3">
+              <div className="bg-muted/20 flex items-start justify-between gap-4 rounded-lg border border-border/70 p-3">
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-xs font-semibold">
                     {isPrivateRepo ? (
@@ -861,7 +861,7 @@ function CreateProjectContent() {
                 </div>
               ) : null}
 
-              <div className="flex items-center justify-between border-t border-[#ececec] pt-4">
+              <div className="flex items-center justify-between border-t border-border/70 pt-4">
                 <p className="text-muted-foreground text-[11px]">
                   Indexing runs in the background. You can close this tab.
                 </p>

@@ -130,6 +130,7 @@ export const publicRoutes = new Hono()
             lastIndexedBranch: true,
             chatModel: true,
             chatProvider: true,
+            embeddingProvider: true,
           },
         });
 
@@ -192,6 +193,7 @@ export const publicRoutes = new Hono()
             lastIndexedBranch: true,
             chatModel: true,
             chatProvider: true,
+            embeddingProvider: true,
           },
         });
 

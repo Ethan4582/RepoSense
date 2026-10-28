@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { cn } from '~/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '~/components/ui/toggle-group';
 
 interface PullRequest {
   id: number;
@@ -167,7 +168,7 @@ export default function PullRequestsPage() {
             value={projectId ?? undefined}
             onValueChange={(value) => setProjectId(value)}
           >
-            <SelectTrigger className="h-8 min-w-[200px] max-w-[280px] gap-2 rounded-md border border-[#e0e0e0] bg-background text-xs transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+            <SelectTrigger className="h-8 min-w-[200px] max-w-[280px] gap-2 text-xs">
               <GitPullRequest className="size-3.5 shrink-0 text-primary" />
               <SelectValue placeholder="Select repository" />
             </SelectTrigger>
@@ -182,7 +183,7 @@ export default function PullRequestsPage() {
 
           {project ? (
             <a href={`${project.repoUrl}/pulls`} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="icon" className="size-8 rounded-md border-[#e0e0e0] hover:border-[#d4d4d4]" title="View on GitHub">
+              <Button variant="outline" size="icon" className="size-8" title="View on GitHub">
                 <ExternalLink className="size-3.5" />
               </Button>
             </a>
@@ -191,7 +192,7 @@ export default function PullRequestsPage() {
           <Button
             variant="outline"
             size="icon"
-            className="size-8 rounded-md border-[#e0e0e0] hover:border-[#d4d4d4]"
+            className="size-8"
             onClick={() => setReloadKey((value) => value + 1)}
             disabled={loading || !projectId}
             title="Refresh pull requests"
@@ -202,23 +203,24 @@ export default function PullRequestsPage() {
       </div>
 
       <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="inline-flex rounded-lg border border-[#e0e0e0] bg-muted/30 p-1 text-xs">
+        <ToggleGroup
+          type="single"
+          value={filter}
+          onValueChange={(value) => value && setFilter(value as Filter)}
+          variant="outline"
+          size="sm"
+        >
           {(['all', 'open', 'merged', 'closed'] as const).map((value) => (
-            <button
+            <ToggleGroupItem
               key={value}
-              type="button"
-              onClick={() => setFilter(value)}
-              className={cn(
-                'rounded-md px-3 py-1 font-medium capitalize transition-colors',
-                filter === value
-                  ? 'bg-background font-semibold text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
+              value={value}
+              aria-label={`Show ${value} pull requests`}
+              className="capitalize"
             >
               {value} ({counts[value]})
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
 
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
@@ -226,13 +228,13 @@ export default function PullRequestsPage() {
             placeholder="Search PRs, authors, labels..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="h-8 rounded-md border-[#e0e0e0] bg-muted/20 pl-8 text-xs transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
+            className="h-8 bg-muted/20 pl-8 text-xs"
           />
         </div>
       </div>
 
       {!projectId ? (
-        <div className="rounded-md border border-dashed border-[#e5e5e5] p-12 text-center">
+        <div className="rounded-lg border border-dashed p-12 text-center">
           <GitPullRequest className="mx-auto mb-3 size-8 text-muted-foreground/40" />
           <h2 className="text-sm font-semibold">No repository selected</h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -247,12 +249,12 @@ export default function PullRequestsPage() {
           {error}
         </div>
       ) : loading && pullRequests.length === 0 ? (
-        <div className="flex h-56 items-center justify-center gap-2 rounded-md border border-[#e5e5e5] text-xs text-muted-foreground">
+        <div className="flex h-56 items-center justify-center gap-2 rounded-lg border text-xs text-muted-foreground">
           <Loader2 className="size-4 animate-spin text-primary" />
           Fetching pull requests from GitHub...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-md border border-dashed border-[#e5e5e5] p-12 text-center">
+        <div className="rounded-lg border border-dashed p-12 text-center">
           <GitPullRequest className="mx-auto mb-3 size-8 text-muted-foreground/40" />
           <h2 className="text-sm font-semibold">No pull requests found</h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -260,7 +262,7 @@ export default function PullRequestsPage() {
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-[#f0f0f0] overflow-hidden rounded-md border border-[#e5e5e5] bg-card transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+        <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card shadow-xs">
           {filtered.map((pr) => {
             const status = prStatus(pr);
             const isExpanded = expanded.has(pr.id);
@@ -270,7 +272,7 @@ export default function PullRequestsPage() {
                 <button
                   type="button"
                   onClick={() => toggleExpanded(pr.id)}
-                  className="flex w-full items-start gap-3 px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#2337ff] focus-visible:ring-offset-2"
+                  className="focus-visible:ring-ring flex w-full items-start gap-3 px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                 >
                   <span className="mt-1 shrink-0 text-muted-foreground">
                     {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
@@ -346,7 +348,7 @@ export default function PullRequestsPage() {
                           asChild
                           variant="outline"
                           size="sm"
-                          className="h-7 gap-1.5 rounded-md border-[#e0e0e0] text-[11px] hover:border-[#d4d4d4]"
+                          className="h-7 gap-1.5 text-[11px]"
                         >
                           <Link href={`/wiki/${projectId}`}>
                             <ExternalLink className="size-3" />

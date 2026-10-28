@@ -43,6 +43,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
   useSidebar,
 } from "~/components/ui/sidebar";
 import {
@@ -120,7 +121,11 @@ function statusFor(project: ProjectSummary) {
   return { color: "bg-muted-foreground/40", label: status.toLowerCase() };
 }
 
-export function AppSideBar() {
+interface AppSideBarProps {
+  onClose?: () => void;
+}
+
+export function AppSideBar({ onClose }: AppSideBarProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const { open, setOpen } = useSidebar();
@@ -223,10 +228,10 @@ export function AppSideBar() {
 
   return (
     <Sidebar
-      collapsible="icon"
-      className="bg-sidebar border-r border-[#ececec] select-none"
+      collapsible="offcanvas"
+      className="border-sidebar-border bg-sidebar select-none"
     >
-      <SidebarHeader className="space-y-3 border-b border-[#ececec] p-3">
+      <SidebarHeader className="border-sidebar-border gap-2 border-b p-3">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
@@ -248,7 +253,10 @@ export function AppSideBar() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setOpen(!open)}
+            onClick={() => {
+              if (onClose) onClose();
+              else setOpen(!open);
+            }}
             className="text-muted-foreground hover:text-foreground size-7"
             aria-label="Toggle sidebar"
           >
@@ -266,7 +274,7 @@ export function AppSideBar() {
             window.dispatchEvent(new Event("open-command-palette"))
           }
           className={cn(
-            "bg-background text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 items-center rounded-[12px] border border-[#e0e0e0] text-xs transition-colors duration-200 ease-out hover:border-[#d4d4d4]",
+            "bg-background text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 items-center rounded-lg border text-xs transition-colors",
             open
               ? "w-full justify-between px-3"
               : "mx-auto size-8 justify-center p-0",
@@ -288,7 +296,7 @@ export function AppSideBar() {
           <Button
             variant="outline"
             className={cn(
-              "bg-background text-foreground hover:bg-muted h-9 rounded-[12px] border border-[#e0e0e0] text-xs font-semibold transition-colors duration-200 ease-out hover:border-[#d4d4d4]",
+              "bg-background text-foreground hover:bg-muted h-9 rounded-lg text-xs font-semibold",
               open ? "w-full justify-start gap-2" : "mx-auto size-8 p-0",
             )}
             title="New Repository Wiki"
@@ -379,7 +387,7 @@ export function AppSideBar() {
                   </Button>
                 </div>
               ) : visibleProjects.length === 0 ? (
-                <div className="mx-1 rounded-[12px] border border-dashed border-[#e0e0e0] px-3 py-4 text-center">
+                <div className="mx-1 rounded-lg border border-dashed px-3 py-4 text-center">
                   <BookOpen className="text-muted-foreground/40 mx-auto mb-1.5 size-4" />
                   <p className="text-muted-foreground text-[10px] leading-4">
                     No wikis yet. Link a GitHub repository to generate one.
@@ -398,8 +406,8 @@ export function AppSideBar() {
                           className={cn(
                             "group relative flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs transition-colors duration-200 ease-out",
                             isCurrent
-                              ? "text-foreground border-[#2c64e3]/30 bg-[#2c64e3]/18 font-medium dark:border-[#2c64e3]/40 dark:bg-[#2c64e3]/25"
-                              : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent hover:border-[#ececec]",
+                              ? "border-primary/20 bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent",
                           )}
                         >
                           <Link
@@ -408,6 +416,13 @@ export function AppSideBar() {
                             onClick={() => setProjectId(project.id)}
                             className="flex min-w-0 flex-1 items-center pr-1"
                           >
+                            <span
+                              className={cn(
+                                "mr-2 size-1.5 shrink-0 rounded-full",
+                                status.color,
+                              )}
+                              title={status.label}
+                            />
                             <span className="text-foreground truncate text-xs font-medium">
                               {project.name}
                             </span>
@@ -493,15 +508,15 @@ export function AppSideBar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#ececec] p-2">
+      <SidebarFooter className="border-sidebar-border border-t p-2">
         <Popover open={profileOpen} onOpenChange={setProfileOpen}>
           <div className="flex w-full items-center justify-between">
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="hover:bg-muted/60 flex flex-1 items-center gap-2.5 overflow-hidden rounded-[12px] p-1 text-left transition-colors"
+                className="hover:bg-muted/60 flex flex-1 items-center gap-2.5 overflow-hidden rounded-lg p-1 text-left transition-colors"
               >
-                <Avatar className="size-7 shrink-0 border border-[#e0e0e0]">
+                <Avatar className="size-7 shrink-0 border">
                   <AvatarImage
                     src={user?.imageUrl}
                     alt={user?.fullName ?? "User"}
@@ -610,6 +625,7 @@ export function AppSideBar() {
           </PopoverContent>
         </Popover>
       </SidebarFooter>
+      <SidebarRail />
 
       {/* Shadcn Rename Wiki Dialog */}
       <Dialog

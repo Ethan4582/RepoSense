@@ -336,8 +336,8 @@ export default function SettingsPage() {
   const availableModelsForProvider = getModelsByProvider(defaultChatProvider);
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto px-4 py-5 md:px-8">
-      <div className="border-b border-[#ececec] pb-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+      <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <KeyRound className="size-5 text-primary" />
           API Keys
@@ -348,8 +348,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Provider API Keys Card */}
-      <Card className="rounded-[12px] border border-[#e5e5e5] transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
-        <CardHeader className="py-3 px-4 border-b border-[#ececec] bg-muted/20">
+      <Card>
+        <CardHeader className="border-b border-border/70 bg-muted/20 px-5 py-4">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm font-semibold">Provider API Keys</CardTitle>
@@ -487,8 +487,8 @@ export default function SettingsPage() {
       </Card>
 
       {/* Default Model Preferences Card */}
-      <Card className="rounded-[12px] border border-[#e0e0e0] transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
-        <CardHeader className="py-3 px-4 border-b border-[#ececec] bg-muted/20">
+      <Card>
+        <CardHeader className="border-b border-border/70 bg-muted/20 px-5 py-4">
           <CardTitle className="text-sm font-semibold">Default Model Preferences</CardTitle>
           <CardDescription className="text-xs mt-0.5">
             Choose your preferred chat and embedding models across all new projects.
@@ -506,7 +506,7 @@ export default function SettingsPage() {
                   setDefaultChatModel(getDefaultChatModel(val));
                 }}
               >
-                <SelectTrigger className="h-8 text-xs rounded-[12px] border border-[#e0e0e0] transition-colors duration-200 ease-out hover:border-[#d4d4d4]">
+                <SelectTrigger className="h-8 rounded-lg text-xs">
                   <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
                 <SelectContent>

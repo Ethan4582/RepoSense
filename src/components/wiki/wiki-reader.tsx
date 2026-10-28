@@ -18,6 +18,7 @@ import {
   FileCode2,
   FolderTree,
   GitBranch,
+  GitCompareArrows,
   GitPullRequest,
   Globe2,
   Loader2,
@@ -53,6 +54,11 @@ import { IndexingLoader } from "~/components/indexing-loader";
 import { restoreCitationRanges } from "~/lib/citations";
 import { ServerBusyNotice } from "~/components/server-busy-notice";
 import { NotificationCenter } from "~/components/notification-center";
+import { Input } from "~/components/ui/input";
+import { Progress } from "~/components/ui/progress";
+import { Separator } from "~/components/ui/separator";
+import { RevisionDiff } from "./revision-diff";
+import { ApiKeyRequiredCard } from "./api-key-required-card";
 
 interface WikiPageMeta {
   id: string;
@@ -89,7 +95,8 @@ interface WikiProject {
   activeBranch?: string | null;
   branches?: BranchSummary[];
   chatModel?: string | null;
-  chatProvider?: string | null;
+  chatProvider?: ProviderId | null;
+  embeddingProvider?: ProviderId | null;
   isPrivateRepo?: boolean;
   isOwner?: boolean;
   canEdit?: boolean;
@@ -191,6 +198,7 @@ export function WikiReader() {
   const [selectedModel, setSelectedModel] =
     React.useState<string>("gpt-4o-mini");
   const [availableKeys, setAvailableKeys] = React.useState<string[]>([]);
+  const [keysLoaded, setKeysLoaded] = React.useState(false);
   const smoothStream = useSmoothStream();
 
   React.useEffect(() => {
@@ -300,14 +308,38 @@ export function WikiReader() {
       .then(async (res) => {
         if (!res.ok) return;
         const data = (await res.json()) as {
-          keys?: Array<{ provider: string }>;
+          keys?: Array<{ provider: string; status: string }>;
         };
         if (data.keys) {
-          setAvailableKeys(data.keys.map((k) => k.provider));
+          setAvailableKeys(
+            data.keys
+              .filter((key) => key.status === "VALID")
+              .map((key) => key.provider),
+          );
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setKeysLoaded(true));
   }, [isSignedIn]);
+
+  const selectedProvider = getModelInfo(selectedModel)?.provider;
+  const missingKeyProviders = React.useMemo(() => {
+    if (!isSignedIn || !keysLoaded) return [];
+    const required = [
+      selectedProvider ?? project?.chatProvider,
+      project?.embeddingProvider,
+    ].filter((provider): provider is ProviderId => Boolean(provider));
+    return Array.from(new Set(required)).filter(
+      (provider) => !availableKeys.includes(provider),
+    );
+  }, [
+    availableKeys,
+    isSignedIn,
+    keysLoaded,
+    project?.chatProvider,
+    project?.embeddingProvider,
+    selectedProvider,
+  ]);
 
   const answerEndRef = React.useRef<HTMLDivElement | null>(null);
   const scanningRef = React.useRef<
@@ -327,12 +359,14 @@ export function WikiReader() {
     Array<{ id: string; text: string; level: number }>
   >([]);
   const [isSavingPage, setIsSavingPage] = React.useState(false);
+  const [showEditDiff, setShowEditDiff] = React.useState(false);
 
   React.useEffect(() => {
     if (activePage?.content !== undefined) {
       setEditContent(activePage.content ?? "");
       setEditTitle(activePage.title ?? "");
       setEditHeadings(activePage.headings ? [...activePage.headings] : []);
+      setShowEditDiff(false);
     }
   }, [activePage?.id, activePage?.content, activePage?.title]);
 
@@ -779,6 +813,7 @@ export function WikiReader() {
         };
       });
       setIsEditing(false);
+      setShowEditDiff(false);
       toast.success("Page and section changes saved");
     } catch (err) {
       toast.error(
@@ -800,6 +835,13 @@ export function WikiReader() {
       setQaError(
         "Sign in and configure your API key to ask interactive questions on this repository.",
       );
+      return;
+    }
+
+    if (missingKeyProviders.length > 0) {
+      setQaOpen(true);
+      setQaQuestion(text);
+      setQaError(null);
       return;
     }
 
@@ -1008,13 +1050,43 @@ export function WikiReader() {
     ? editHeadings
     : (activePage?.headings ?? []);
 
+  const indexingProgress = indexing?.totalFiles
+    ? Math.round((indexing.processedFiles / indexing.totalFiles) * 100)
+    : 0;
+
   return (
-    <div className="bg-background flex h-screen flex-col overflow-hidden">
+    <div className="internal-app bg-background flex h-screen flex-col overflow-hidden">
       {/* -- Header -- */}
-      <header className="relative flex h-[64px] shrink-0 items-center justify-center border-b border-dashed border-neutral-300 px-6 sm:px-[64px] dark:border-neutral-700/80">
-        <div className="flex h-full w-full max-w-[1440px] items-center justify-between border-x border-dashed border-neutral-300 px-7 dark:border-neutral-700/80">
+      <header className="border-border/60 relative flex h-14 shrink-0 items-center justify-center border-b px-3 sm:px-5">
+        <div className="flex h-full w-full max-w-[1500px] items-center justify-between gap-3">
           {/* Left brand segment */}
           <div className="flex items-center gap-2.5">
+            {isSignedIn ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setAppNavOpen(true)}
+                aria-label="Open workspace navigation"
+                title="Open workspace"
+              >
+                <PanelLeft />
+              </Button>
+            ) : null}
+            {!qaOpen ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen((current) => !current)}
+                aria-label={
+                  sidebarOpen ? "Close wiki navigation" : "Open wiki navigation"
+                }
+                title={
+                  sidebarOpen ? "Close wiki navigation" : "Open wiki navigation"
+                }
+              >
+                <FolderTree />
+              </Button>
+            ) : null}
             <Link href="/" className="flex shrink-0 items-center gap-2">
               <img
                 src="/logo.png"
@@ -1062,15 +1134,15 @@ export function WikiReader() {
             </Link>
             <Popover open={shareOpen} onOpenChange={setShareOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  size="sm"
-                  className="h-8 rounded-[8px] border-none bg-[#2563eb] px-3.5 text-xs font-medium text-white opacity-90 shadow-xs transition-all duration-200 hover:scale-[1.03] hover:bg-[#1d4ed8] hover:opacity-100 active:scale-[0.98] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb]"
-                >
-                  <Share2 className="mr-1.5 size-3.5" />
+                <Button size="sm">
+                  <Share2 data-icon="inline-start" />
                   <span>Share</span>
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 space-y-3 p-3">
+              <PopoverContent
+                align="end"
+                className="flex w-80 flex-col gap-3 p-3"
+              >
                 <div>
                   <p className="text-foreground text-xs font-semibold">
                     Share this wiki
@@ -1082,12 +1154,12 @@ export function WikiReader() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <input
+                  <Input
                     readOnly
                     value={
                       typeof window === "undefined" ? "" : window.location.href
                     }
-                    className="bg-muted/30 text-muted-foreground min-w-0 flex-1 rounded-md border px-2 py-1.5 font-mono text-[10px] outline-none"
+                    className="text-muted-foreground min-w-0 flex-1 font-mono text-xs"
                   />
                   <Button
                     size="sm"
@@ -1108,30 +1180,33 @@ export function WikiReader() {
                   </Button>
                 </div>
                 {project.isOwner && !project.isPrivateRepo ? (
-                  <div className="border-border/50 flex items-center justify-between gap-3 border-t pt-3">
-                    <div>
-                      <p className="text-foreground text-xs font-medium">
-                        {isPublic ? "Public wiki" : "Private wiki"}
-                      </p>
-                      <p className="text-muted-foreground text-[10px]">
-                        {isPublic
-                          ? "Listed in Explore"
-                          : "Hidden from public view"}
-                      </p>
+                  <>
+                    <Separator />
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-foreground text-xs font-medium">
+                          {isPublic ? "Public wiki" : "Private wiki"}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          {isPublic
+                            ? "Listed in Explore"
+                            : "Hidden from public view"}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        disabled={visibilityBusy}
+                        onClick={() => void updateVisibility(!isPublic)}
+                      >
+                        {visibilityBusy ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : null}
+                        {isPublic ? "Make private" : "Make public"}
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-[11px]"
-                      disabled={visibilityBusy}
-                      onClick={() => void updateVisibility(!isPublic)}
-                    >
-                      {visibilityBusy ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : null}
-                      {isPublic ? "Make private" : "Make public"}
-                    </Button>
-                  </div>
+                  </>
                 ) : null}
                 {project.isOwner ? (
                   <Button variant="outline" className="w-full" asChild>
@@ -1149,18 +1224,23 @@ export function WikiReader() {
 
       {/* -- Indexing progress banner -- */}
       {indexing ? (
-        <div className="border-border/30 bg-muted/30 text-foreground flex shrink-0 items-center gap-3 border-b border-dashed px-4 py-2 text-xs">
-          <Sparkles className="text-muted-foreground size-3.5 animate-pulse" />
-          <span className="font-medium">
-            {indexing.currentDetail ??
-              `${indexing.currentStep.replaceAll("_", " ").toLowerCase()} � ${indexing.processedFiles}/${indexing.totalFiles} files`}
-          </span>
-          {indexing.estimatedSecondsRemaining ? (
-            <span className="text-muted-foreground">
-              ~{Math.ceil(indexing.estimatedSecondsRemaining / 60)} min
-              remaining
+        <div className="bg-muted/30 border-border/60 flex shrink-0 items-center gap-3 border-b px-4 py-2 text-xs">
+          <Sparkles className="text-primary size-3.5 animate-pulse" />
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="truncate font-medium">
+              {indexing.currentDetail ??
+                `${indexing.currentStep.replaceAll("_", " ").toLowerCase()} · ${indexing.processedFiles}/${indexing.totalFiles} files`}
             </span>
-          ) : null}
+            <Progress
+              value={indexingProgress}
+              className="hidden h-1.5 max-w-40 flex-1 sm:block"
+            />
+          </div>
+          <span className="text-muted-foreground shrink-0">
+            {indexing.estimatedSecondsRemaining
+              ? `~${Math.ceil(indexing.estimatedSecondsRemaining / 60)} min`
+              : `${indexingProgress}%`}
+          </span>
         </div>
       ) : null}
 
@@ -1175,11 +1255,11 @@ export function WikiReader() {
       ) : null}
 
       {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-6 sm:px-[64px]">
-        <div className="flex min-h-0 w-full max-w-[1440px] flex-1 overflow-hidden border-x border-dashed border-neutral-300 dark:border-neutral-700/80">
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden">
+        <div className="relative flex min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden">
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
-          {!qaOpen ? (
-            <aside className="z-10 hidden w-[300px] shrink-0 scrollbar-none overflow-y-auto border-r border-dashed border-neutral-300 px-7 py-7 md:block dark:border-neutral-700/80">
+          {!qaOpen && sidebarOpen ? (
+            <aside className="bg-sidebar border-sidebar-border absolute inset-y-0 left-0 z-20 flex w-[260px] shrink-0 flex-col overflow-y-auto border-r px-4 py-5 shadow-lg md:relative md:z-10 md:shadow-none">
               <div className="mb-5">
                 <div className="text-muted-foreground text-[12px] font-normal">
                   {activePage?.updatedAt
@@ -1190,9 +1270,9 @@ export function WikiReader() {
                 </div>
               </div>
 
-              <nav className="space-y-4">
+              <nav className="flex flex-col gap-4">
                 {sections.map(([sectionTitle, pages]) => (
-                  <div key={sectionTitle} className="space-y-1">
+                  <div key={sectionTitle} className="flex flex-col gap-1">
                     <div className="text-foreground text-[14px] font-semibold">
                       {isEditing ? (
                         <input
@@ -1220,7 +1300,7 @@ export function WikiReader() {
                         sectionTitle
                       )}
                     </div>
-                    <div className="space-y-0.5">
+                    <div className="flex flex-col gap-0.5">
                       {pages
                         .slice()
                         .sort((a, b) => a.pageOrder - b.pageOrder)
@@ -1238,12 +1318,12 @@ export function WikiReader() {
                               className={cn(
                                 "relative flex w-full items-center justify-between rounded-md py-1.5 pr-2.5 pl-2.5 text-left text-[14px] transition-all duration-150",
                                 isActive
-                                  ? "text-foreground bg-neutral-100/80 font-medium dark:bg-neutral-800/50"
-                                  : "text-foreground/70 hover:text-foreground hover:bg-neutral-100/40 dark:hover:bg-neutral-800/30",
+                                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                               )}
                             >
                               {isActive ? (
-                                <span className="absolute top-1 bottom-1 left-0 w-[2px] rounded-full bg-[#2563eb] dark:bg-[#3b82f6]" />
+                                <span className="bg-primary absolute top-1 bottom-1 left-0 w-0.5 rounded-full" />
                               ) : null}
                               {isEditing ? (
                                 <input
@@ -1326,6 +1406,7 @@ export function WikiReader() {
                   onModelSelect: setSelectedModel,
                   availableKeys,
                 }}
+                missingKeyProviders={missingKeyProviders}
               />
             ) : (
               <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -1432,10 +1513,22 @@ export function WikiReader() {
                               <div className="flex shrink-0 items-center gap-2">
                                 <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setShowEditDiff((current) => !current)
+                                  }
+                                >
+                                  <GitCompareArrows data-icon="inline-start" />
+                                  {showEditDiff ? "Hide diff" : "Preview diff"}
+                                </Button>
+                                <Button
+                                  type="button"
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
                                     setIsEditing(false);
+                                    setShowEditDiff(false);
                                     setEditContent(activePage.content ?? "");
                                     setEditTitle(activePage.title ?? "");
                                     setEditHeadings(
@@ -1444,7 +1537,6 @@ export function WikiReader() {
                                         : [],
                                     );
                                   }}
-                                  className="h-9 rounded-[8px] text-xs"
                                 >
                                   Cancel
                                 </Button>
@@ -1453,7 +1545,6 @@ export function WikiReader() {
                                   size="sm"
                                   disabled={isSavingPage}
                                   onClick={() => void saveEditedPage()}
-                                  className="h-9 gap-1.5 rounded-[8px] bg-[#2563eb] text-xs text-white hover:bg-[#1d4ed8] dark:bg-[#3b82f6]"
                                 >
                                   {isSavingPage ? (
                                     <Loader2 className="size-3.5 animate-spin" />
@@ -1471,6 +1562,12 @@ export function WikiReader() {
                               rows={28}
                               className="border-border/50 bg-muted/10 text-foreground focus:border-border w-full resize-y rounded-lg border p-4 font-mono text-sm leading-relaxed outline-none"
                             />
+                            {showEditDiff ? (
+                              <RevisionDiff
+                                previous={activePage.content ?? ""}
+                                current={editContent}
+                              />
+                            ) : null}
                           </div>
                         ) : (
                           <WikiMarkdown
@@ -1497,7 +1594,7 @@ export function WikiReader() {
                         </p>
                         {project.isOwner && isSignedIn ? (
                           <Button
-                            className="mt-4 gap-2 bg-[#2563eb] text-white hover:bg-[#1d4ed8] dark:bg-[#3b82f6]"
+                            className="mt-4 gap-2"
                             size="sm"
                             onClick={startReindex}
                             disabled={Boolean(indexing) || branchBusy}
@@ -1519,19 +1616,28 @@ export function WikiReader() {
                       isEmbed ? "max-w-4xl" : "max-w-[760px]",
                     )}
                   >
-                    <WikiComposer
-                      question={question}
-                      onQuestionChange={setQuestion}
-                      onSubmit={() => void askQuestion()}
-                      streaming={streaming}
-                      repoName={`${project.repoOwner}/${project.repoName}`}
-                      selectedModel={selectedModel}
-                      onModelSelect={setSelectedModel}
-                      availableKeys={availableKeys}
-                      placeholder={
-                        qaOpen ? "Ask a follow-up question..." : undefined
-                      }
-                    />
+                    {isSignedIn &&
+                    keysLoaded &&
+                    missingKeyProviders.length > 0 ? (
+                      <ApiKeyRequiredCard
+                        providers={missingKeyProviders}
+                        compact
+                      />
+                    ) : (
+                      <WikiComposer
+                        question={question}
+                        onQuestionChange={setQuestion}
+                        onSubmit={() => void askQuestion()}
+                        streaming={streaming}
+                        repoName={`${project.repoOwner}/${project.repoName}`}
+                        selectedModel={selectedModel}
+                        onModelSelect={setSelectedModel}
+                        availableKeys={availableKeys}
+                        placeholder={
+                          qaOpen ? "Ask a follow-up question..." : undefined
+                        }
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -1587,7 +1693,7 @@ export function WikiReader() {
                               )}
                             >
                               {activeHeadingId === heading.id ? (
-                                <span className="absolute top-1 bottom-1 -left-3 w-[2px] rounded-full bg-[#2563eb] dark:bg-[#3b82f6]" />
+                                <span className="bg-primary absolute top-1 bottom-1 -left-3 w-0.5 rounded-full" />
                               ) : null}
                               {heading.text}
                             </a>
@@ -1631,26 +1737,20 @@ export function WikiReader() {
         />
       </div>
 
-      {/* App nav hover zone */}
-      {isSignedIn ? (
+      {/* Explicit workspace navigation overlay */}
+      {isSignedIn && appNavOpen ? (
         <>
           <button
             type="button"
-            aria-label="Open app navigation"
-            className="fixed inset-y-0 left-0 z-40 hidden w-2 md:block"
-            onMouseEnter={() => setAppNavOpen(true)}
+            aria-label="Close workspace navigation"
+            className="bg-foreground/15 fixed inset-0 z-40 backdrop-blur-[1px]"
+            onClick={() => setAppNavOpen(false)}
           />
-          {appNavOpen ? (
-            <div
-              className="fixed inset-y-0 left-0 z-50 hidden w-64 shadow-2xl md:block"
-              onMouseLeave={() => setAppNavOpen(false)}
-              onClick={() => setAppNavOpen(false)}
-            >
-              <SidebarProvider defaultOpen className="h-full min-h-0">
-                <AppSideBar />
-              </SidebarProvider>
-            </div>
-          ) : null}
+          <div className="fixed inset-y-0 left-0 z-50 w-64 shadow-xl">
+            <SidebarProvider defaultOpen className="h-full min-h-0">
+              <AppSideBar onClose={() => setAppNavOpen(false)} />
+            </SidebarProvider>
+          </div>
         </>
       ) : null}
     </div>

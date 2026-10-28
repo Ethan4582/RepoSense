@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   FileClock,
+  GitCompareArrows,
   RotateCcw,
   ShieldCheck,
   UserPlus,
@@ -49,6 +50,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { RevisionDiff } from "~/components/wiki/revision-diff";
 
 type ProjectRole = "OWNER" | "EDITOR" | "CONTRIBUTOR" | "VIEWER";
 
@@ -78,6 +80,7 @@ interface Revision {
   deletions: number;
   createdAt: string;
   sourceCommitSha: string | null;
+  content: string;
   page: { id: string; slug: string; title: string };
   actor: {
     id: string;
@@ -120,6 +123,9 @@ export default function ProjectSettingsPage() {
   const [members, setMembers] = React.useState<Member[]>([]);
   const [revisions, setRevisions] = React.useState<Revision[]>([]);
   const [audit, setAudit] = React.useState<AuditEvent[]>([]);
+  const [expandedRevision, setExpandedRevision] = React.useState<string | null>(
+    null,
+  );
   const [inviteRole, setInviteRole] =
     React.useState<Exclude<ProjectRole, "OWNER">>("VIEWER");
   const [inviteUrl, setInviteUrl] = React.useState<string | null>(null);
@@ -538,65 +544,104 @@ export default function ProjectSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : null}
-                  {revisions.map((revision) => (
-                    <TableRow key={revision.id}>
-                      <TableCell>
-                        <p className="text-sm font-medium">
-                          {revision.page.title}
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                          {new Date(revision.createdAt).toLocaleString()}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {revision.actor
-                          ? [revision.actor.firstName, revision.actor.lastName]
-                              .filter(Boolean)
-                              .join(" ") || "Member"
-                          : "Automatic update"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        +{revision.additions} / -{revision.deletions}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            revision.status === "PENDING"
-                              ? "outline"
-                              : "secondary"
-                          }
-                        >
-                          {revision.status === "PENDING"
-                            ? "Needs review"
-                            : "Published"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {revision.status === "PENDING" && canPublish ? (
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              void revisionAction(revision.id, "approve")
-                            }
-                          >
-                            <Check data-icon="inline-start" />
-                            Approve
-                          </Button>
-                        ) : revision.status === "PUBLISHED" && canPublish ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              void revisionAction(revision.id, "rollback")
-                            }
-                          >
-                            <RotateCcw data-icon="inline-start" />
-                            Restore
-                          </Button>
+                  {revisions.map((revision, revisionIndex) => {
+                    const previousRevision = revisions
+                      .slice(revisionIndex + 1)
+                      .find(
+                        (candidate) => candidate.page.id === revision.page.id,
+                      );
+                    const expanded = expandedRevision === revision.id;
+
+                    return (
+                      <React.Fragment key={revision.id}>
+                        <TableRow>
+                          <TableCell>
+                            <p className="text-sm font-medium">
+                              {revision.page.title}
+                            </p>
+                            <p className="text-muted-foreground text-xs">
+                              {new Date(revision.createdAt).toLocaleString()}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {revision.actor
+                              ? [
+                                  revision.actor.firstName,
+                                  revision.actor.lastName,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ") || "Member"
+                              : "Automatic update"}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            +{revision.additions} / -{revision.deletions}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                revision.status === "PENDING"
+                                  ? "outline"
+                                  : "secondary"
+                              }
+                            >
+                              {revision.status === "PENDING"
+                                ? "Needs review"
+                                : "Published"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setExpandedRevision(
+                                    expanded ? null : revision.id,
+                                  )
+                                }
+                              >
+                                <GitCompareArrows data-icon="inline-start" />
+                                {expanded ? "Hide diff" : "View diff"}
+                              </Button>
+                              {revision.status === "PENDING" && canPublish ? (
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    void revisionAction(revision.id, "approve")
+                                  }
+                                >
+                                  <Check data-icon="inline-start" />
+                                  Approve
+                                </Button>
+                              ) : revision.status === "PUBLISHED" &&
+                                canPublish ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    void revisionAction(revision.id, "rollback")
+                                  }
+                                >
+                                  <RotateCcw data-icon="inline-start" />
+                                  Restore
+                                </Button>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {expanded ? (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={5} className="p-4">
+                              <RevisionDiff
+                                previous={previousRevision?.content ?? ""}
+                                current={revision.content}
+                              />
+                            </TableCell>
+                          </TableRow>
                         ) : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

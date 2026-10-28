@@ -19,6 +19,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build:worker": "prisma generate",
     "pages:build": "npx --legacy-peer-deps @cloudflare/next-on-pages"
   },
@@ -82,6 +83,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "diff": "^9.0.0",
     "dotenv": "^16.6.1",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^12.1.0",
@@ -132,6 +134,7 @@
     "tw-animate-css": "^1.3.4",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0",
+    "vitest": "^5.0.5",
     "wrangler": "^4.151.2"
   },
   "ct3aMetadata": {

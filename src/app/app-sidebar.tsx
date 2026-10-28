@@ -1,41 +1,32 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useUser, useClerk } from '@clerk/nextjs';
+import * as React from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bookmark,
   BookOpen,
-  Check,
   Compass,
   FolderGit2,
   Globe2,
   History,
   KeyRound,
   Lock,
-  LogOut,
   MoreHorizontal,
-  Moon,
-  PanelLeft,
-  PanelLeftClose,
   Pencil,
   Plus,
   Search,
   Settings,
-  Sun,
   Trash2,
-  User as UserIcon,
   Video,
   GitPullRequest,
   Loader2,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -43,18 +34,19 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
   useSidebar,
-} from '~/components/ui/sidebar';
+} from "~/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
+} from "~/components/ui/dropdown-menu";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +54,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '~/components/ui/dialog';
+} from "~/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,20 +64,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '~/components/ui/alert-dialog';
-import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
-import useProject from '~/hooks/use-project';
-import { cn } from '~/lib/utils';
-import { toast } from 'sonner';
+} from "~/components/ui/alert-dialog";
+import { Card, CardContent } from "~/components/ui/card";
+import useProject from "~/hooks/use-project";
+import { cn } from "~/lib/utils";
+import { toast } from "sonner";
 
 const NAV_ITEMS = [
-  { title: 'Dashboard', icon: Compass, url: '/dashboard' },
-  { title: 'Public Wikis', icon: Globe2, url: '/explore' },
-  { title: 'QA', icon: Bookmark, url: '/qa' },
-  { title: 'History', icon: History, url: '/history' },
-  { title: 'Pull Requests', icon: GitPullRequest, url: '/pulls' },
-  { title: 'Meetings', icon: Video, url: '/meetings' },
-  { title: 'API Keys', icon: KeyRound, url: '/settings' },
+  { title: "Dashboard", icon: Compass, url: "/dashboard" },
+  { title: "Public Wikis", icon: Globe2, url: "/explore" },
+  { title: "QA", icon: Bookmark, url: "/qa" },
+  { title: "History", icon: History, url: "/history" },
+  { title: "Pull Requests", icon: GitPullRequest, url: "/pulls" },
+  { title: "Meetings", icon: Video, url: "/meetings" },
+  { title: "API Keys", icon: KeyRound, url: "/settings" },
 ];
 
 type ProjectSummary = {
@@ -96,55 +88,60 @@ type ProjectSummary = {
   isPublicWiki: boolean;
   isPrivateRepo: boolean;
   deletedAt: string | Date | null;
+  role?: "OWNER" | "EDITOR" | "CONTRIBUTOR" | "VIEWER";
   indexingJobs?: Array<{ status: string }>;
   _count?: { wikiPages: number };
 };
 
-function statusFor(project: ProjectSummary) {
-  const status = project.indexingJobs?.[0]?.status;
-  if (!status) return { color: 'bg-muted-foreground/40', label: 'Not indexed' };
-  if (status === 'FAILED') return { color: 'bg-red-500', label: 'Indexing failed' };
-  if (status === 'COMPLETED') return { color: 'bg-emerald-500', label: 'Ready' };
-  if (status === 'RUNNING') return { color: 'bg-amber-500 animate-pulse', label: 'Indexing' };
-  if (status === 'QUEUED') return { color: 'bg-amber-400', label: 'Queued' };
-  return { color: 'bg-muted-foreground/40', label: status.toLowerCase() };
+interface AppSideBarProps {
+  onClose?: () => void;
 }
 
-export function AppSideBar() {
+export function AppSideBar({ onClose }: AppSideBarProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
-  const { open, setOpen } = useSidebar();
-  const { user } = useUser();
-  const { signOut, openUserProfile } = useClerk();
-  const { projects, projectId, setProjectId, refetchProjects } = useProject();
+  const { open } = useSidebar();
+  const {
+    projects,
+    project,
+    projectId,
+    setProjectId,
+    refetchProjects,
+    isError: projectsFailed,
+  } = useProject();
 
-  const [profileOpen, setProfileOpen] = React.useState(false);
   const [busyProject, setBusyProject] = React.useState<string | null>(null);
 
   // Rename Dialog State
-  const [projectToRename, setProjectToRename] = React.useState<ProjectSummary | null>(null);
-  const [renameValue, setRenameValue] = React.useState('');
+  const [projectToRename, setProjectToRename] =
+    React.useState<ProjectSummary | null>(null);
+  const [renameValue, setRenameValue] = React.useState("");
 
   // Delete Dialog State
-  const [projectToDelete, setProjectToDelete] = React.useState<ProjectSummary | null>(null);
-
+  const [projectToDelete, setProjectToDelete] =
+    React.useState<ProjectSummary | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = React.useState("");
 
   const updateProject = async (id: string, data: Record<string, unknown>) => {
     setBusyProject(id);
     try {
       const res = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const payload = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error ?? 'Could not update wiki.');
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(payload.error ?? "Could not update wiki.");
       }
       await refetchProjects();
-      toast.success('Wiki updated');
+      toast.success("Wiki updated");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update wiki.');
+      toast.error(
+        err instanceof Error ? err.message : "Could not update wiki.",
+      );
     } finally {
       setBusyProject(null);
     }
@@ -168,6 +165,7 @@ export function AppSideBar() {
   };
 
   const openDeleteDialog = (project: ProjectSummary) => {
+    setDeleteConfirmation("");
     setProjectToDelete(project);
   };
 
@@ -177,85 +175,98 @@ export function AppSideBar() {
     setProjectToDelete(null);
     setBusyProject(targetProject.id);
     try {
-      const res = await fetch(`/api/projects/${targetProject.id}/archive`, { method: 'PATCH' });
-      if (!res.ok) throw new Error('Could not delete wiki.');
+      const res = await fetch(`/api/projects/${targetProject.id}/archive`, {
+        method: "PATCH",
+      });
+      if (!res.ok) throw new Error("Could not delete wiki.");
       await refetchProjects();
-      toast.success('Wiki deleted');
-      if (projectId === targetProject.id) router.push('/');
+      toast.success("Wiki deleted");
+      if (projectId === targetProject.id) router.push("/");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not delete wiki.');
+      toast.error(
+        err instanceof Error ? err.message : "Could not delete wiki.",
+      );
     } finally {
       setBusyProject(null);
     }
   };
 
-  const visibleProjects = (projects ?? []).filter((project) => !project.deletedAt);
+  const visibleProjects = (projects ?? []).filter(
+    (project) => !project.deletedAt,
+  );
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-[#ececec] bg-sidebar select-none">
-      <SidebarHeader className="border-b border-[#ececec] p-3 space-y-3">
-        <div className="flex items-center justify-between">
+    <Sidebar
+      collapsible="offcanvas"
+      className="bg-sidebar select-none group-data-[side=left]:border-r-0 group-data-[side=right]:border-l-0"
+    >
+      <SidebarHeader className="gap-2 p-3 pb-2">
+        <div className="flex h-8 items-center">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
-              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
+              <Image
+                src="/logo.png"
+                alt="RepoSense"
+                fill
+                className="object-cover"
+                priority
+              />
             </div>
             {open && (
-              <span className="text-base font-bold tracking-tight text-foreground">
+              <span className="text-foreground text-base font-bold tracking-tight">
                 Repo<span className="text-primary">Sense</span>
               </span>
             )}
           </Link>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setOpen(!open)}
-            className="size-7 text-muted-foreground hover:text-foreground"
-            aria-label="Toggle sidebar"
-          >
-            {open ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
-          </Button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
-          className={cn(
-            'flex h-9 items-center rounded-[12px] border border-[#e0e0e0] bg-background text-xs text-muted-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted hover:text-foreground',
-            open ? 'w-full justify-between px-3' : 'mx-auto size-8 justify-center p-0'
-          )}
-          title="Search anything (Ctrl+K)"
-        >
-          <div className="flex items-center gap-2">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            {open && <span>Search...</span>}
-          </div>
-          {open && (
-            <kbd className="pointer-events-none rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-              Ctrl K
-            </kbd>
-          )}
-        </button>
+        <Card className="border-border/40 gap-0 py-0 shadow-none">
+          <CardContent className="p-0">
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(new Event("open-command-palette"))
+              }
+              className={cn(
+                "text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 items-center rounded-lg text-xs transition-colors",
+                open
+                  ? "w-full justify-between px-3"
+                  : "mx-auto size-8 justify-center p-0",
+              )}
+              title="Search anything (Ctrl+K)"
+            >
+              <span className="flex items-center gap-2">
+                <Search className="size-4 shrink-0" />
+                {open && <span>Search...</span>}
+              </span>
+              {open && (
+                <kbd className="bg-muted text-muted-foreground pointer-events-none rounded px-1.5 py-0.5 font-mono text-[10px]">
+                  Ctrl K
+                </kbd>
+              )}
+            </button>
+          </CardContent>
+        </Card>
 
         <Link href="/create" className="block">
           <Button
             variant="outline"
             className={cn(
-              'h-9 rounded-[12px] border border-[#e0e0e0] bg-background text-xs font-semibold text-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted',
-              open ? 'w-full justify-start gap-2' : 'mx-auto size-8 p-0'
+              "bg-background text-foreground hover:bg-muted h-9 rounded-lg text-xs font-semibold",
+              open ? "w-full justify-start gap-2" : "mx-auto size-8 p-0",
             )}
-            title="New Repository Wiki"
+            title="New Wiki"
           >
-            <Plus className="size-4 shrink-0 text-primary" />
-            {open && <span>New Repository Wiki</span>}
+            <Plus className="text-primary size-4 shrink-0" />
+            {open && <span>New Wiki</span>}
           </Button>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="gap-3 overflow-y-auto p-2">
+      <SidebarContent className="scrollbar-none gap-2 overflow-y-auto px-2 py-1">
         <SidebarGroup className="p-0">
           {open && (
-            <SidebarGroupLabel className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <SidebarGroupLabel className="text-muted-foreground px-2 py-1 text-[11px] font-semibold tracking-wider uppercase">
               Workspace
             </SidebarGroupLabel>
           )}
@@ -263,7 +274,8 @@ export function AppSideBar() {
             <SidebarMenu className="gap-0.5">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.url || pathname.startsWith(`${item.url}/`);
+                const isActive =
+                  pathname === item.url || pathname.startsWith(`${item.url}/`);
 
                 return (
                   <SidebarMenuItem key={item.url}>
@@ -272,13 +284,13 @@ export function AppSideBar() {
                       isActive={isActive}
                       tooltip={item.title}
                       className={cn(
-                        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
+                        "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
                         isActive
-                          ? 'bg-primary font-semibold text-primary-foreground shadow-xs hover:bg-primary hover:text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground font-semibold shadow-xs"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
-                      <Link href={item.url} prefetch>
+                      <Link href={item.url} prefetch onClick={onClose}>
                         <Icon className="size-4 shrink-0" />
                         {open && <span className="truncate">{item.title}</span>}
                       </Link>
@@ -286,30 +298,64 @@ export function AppSideBar() {
                   </SidebarMenuItem>
                 );
               })}
+              {projectId && project ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith(
+                      `/settings/projects/${projectId}`,
+                    )}
+                    tooltip="Updates & access"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
+                  >
+                    <Link
+                      href={`/settings/projects/${projectId}`}
+                      prefetch
+                      onClick={onClose}
+                    >
+                      <Settings className="size-4 shrink-0" />
+                      {open && <span>Updates &amp; access</span>}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
         {open && (
           <SidebarGroup className="p-0">
-            <SidebarGroupLabel className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <SidebarGroupLabel className="text-muted-foreground flex items-center justify-between px-2 py-1 text-[11px] font-semibold tracking-wider uppercase">
               <span>Repositories</span>
-              <span className="text-[10px] font-normal normal-case text-muted-foreground/70">
+              <span className="text-muted-foreground/70 text-[10px] font-normal normal-case">
                 {visibleProjects.length}
               </span>
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              {visibleProjects.length === 0 ? (
-                <div className="mx-1 rounded-[12px] border border-dashed border-[#e0e0e0] px-3 py-4 text-center">
-                  <BookOpen className="mx-auto mb-1.5 size-4 text-muted-foreground/40" />
-                  <p className="text-[10px] leading-4 text-muted-foreground">
+              {projectsFailed ? (
+                <div className="border-destructive/30 bg-destructive/5 mx-1 flex flex-col gap-2 rounded-xl border p-3 text-center">
+                  <p className="text-destructive text-[10px] leading-4">
+                    Repositories could not be loaded.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px]"
+                    onClick={() => void refetchProjects()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : visibleProjects.length === 0 ? (
+                <div className="mx-1 rounded-lg border border-dashed px-3 py-4 text-center">
+                  <BookOpen className="text-muted-foreground/40 mx-auto mb-1.5 size-4" />
+                  <p className="text-muted-foreground text-[10px] leading-4">
                     No wikis yet. Link a GitHub repository to generate one.
                   </p>
                 </div>
               ) : (
                 <SidebarMenu className="gap-0.5">
                   {visibleProjects.map((project) => {
-                    const status = statusFor(project);
                     const isCurrent = project.id === projectId;
                     const isBusy = busyProject === project.id;
 
@@ -317,19 +363,22 @@ export function AppSideBar() {
                       <SidebarMenuItem key={project.id}>
                         <div
                           className={cn(
-                            'group relative flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs transition-colors duration-200 ease-out',
+                            "group relative flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors duration-200 ease-out",
                             isCurrent
-                              ? 'border-[#2c64e3]/30 bg-[#2c64e3]/18 font-medium text-foreground dark:bg-[#2c64e3]/25 dark:border-[#2c64e3]/40'
-                              : 'border-transparent text-muted-foreground hover:border-[#ececec] hover:bg-muted hover:text-foreground'
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <Link
                             href={`/wiki/${project.id}`}
                             prefetch
-                            onClick={() => setProjectId(project.id)}
+                            onClick={() => {
+                              setProjectId(project.id);
+                              onClose?.();
+                            }}
                             className="flex min-w-0 flex-1 items-center pr-1"
                           >
-                            <span className="truncate text-xs font-medium text-foreground">
+                            <span className="text-foreground truncate text-xs font-medium">
                               {project.name}
                             </span>
                           </Link>
@@ -338,7 +387,7 @@ export function AppSideBar() {
                             <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
-                                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background/80 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                                className="text-muted-foreground hover:bg-background/80 hover:text-foreground shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 {isBusy ? (
@@ -348,39 +397,59 @@ export function AppSideBar() {
                                 )}
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 text-xs">
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-48 text-xs"
+                            >
                               <DropdownMenuItem asChild className="gap-2">
                                 <Link href={`/wiki/${project.id}`}>
-                                  <ArrowRight className="size-3.5 text-muted-foreground" />
+                                  <ArrowRight className="text-muted-foreground size-3.5" />
                                   Open wiki
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openRenameDialog(project)} className="gap-2">
-                                <Pencil className="size-3.5 text-muted-foreground" />
-                                Rename
+                              <DropdownMenuItem asChild className="gap-2">
+                                <Link href={`/settings/projects/${project.id}`}>
+                                  <Settings className="text-muted-foreground size-3.5" />
+                                  Project settings
+                                </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={project.isPrivateRepo || isBusy}
-                                onClick={() =>
-                                  void updateProject(project.id, { isPublicWiki: !project.isPublicWiki })
-                                }
-                                className="gap-2"
-                              >
-                                {project.isPublicWiki ? (
-                                  <Lock className="size-3.5 text-muted-foreground" />
-                                ) : (
-                                  <Globe2 className="size-3.5 text-muted-foreground" />
-                                )}
-                                {project.isPublicWiki ? 'Make private' : 'Make public'}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => openDeleteDialog(project)}
-                                className="gap-2 text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="size-3.5" />
-                                Delete wiki
-                              </DropdownMenuItem>
+                              {project.role === "OWNER" && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => openRenameDialog(project)}
+                                    className="gap-2"
+                                  >
+                                    <Pencil className="text-muted-foreground size-3.5" />
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={project.isPrivateRepo || isBusy}
+                                    onClick={() =>
+                                      void updateProject(project.id, {
+                                        isPublicWiki: !project.isPublicWiki,
+                                      })
+                                    }
+                                    className="gap-2"
+                                  >
+                                    {project.isPublicWiki ? (
+                                      <Lock className="text-muted-foreground size-3.5" />
+                                    ) : (
+                                      <Globe2 className="text-muted-foreground size-3.5" />
+                                    )}
+                                    {project.isPublicWiki
+                                      ? "Make private"
+                                      : "Make public"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => openDeleteDialog(project)}
+                                    className="text-destructive focus:text-destructive gap-2"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                    Delete wiki
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -394,131 +463,19 @@ export function AppSideBar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#ececec] p-2">
-        <Popover open={profileOpen} onOpenChange={setProfileOpen}>
-          <div className="flex w-full items-center justify-between">
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex flex-1 items-center gap-2.5 overflow-hidden rounded-[12px] p-1 text-left transition-colors hover:bg-muted/60"
-              >
-                <Avatar className="size-7 shrink-0 border border-[#e0e0e0]">
-                  <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
-                  <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
-                    {user?.firstName?.[0] ??
-                      user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ??
-                      'U'}
-                  </AvatarFallback>
-                </Avatar>
-                {open && (
-                  <div className="flex min-w-0 flex-col truncate">
-                    <span className="truncate text-xs font-semibold text-foreground">
-                      {user?.fullName ??
-                        user?.primaryEmailAddress?.emailAddress?.split('@')[0] ??
-                        'Developer'}
-                    </span>
-                    <span className="truncate text-[10px] text-muted-foreground">
-                      {user?.primaryEmailAddress?.emailAddress}
-                    </span>
-                  </div>
-                )}
-              </button>
-            </PopoverTrigger>
-
-            {open && (
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-1 size-7 shrink-0 text-muted-foreground hover:text-foreground"
-                  title="Settings"
-                >
-                  <Settings className="size-4" />
-                </Button>
-              </PopoverTrigger>
-            )}
-          </div>
-
-          <PopoverContent
-            side="top"
-            align="start"
-            sideOffset={10}
-            className="w-64 space-y-1.5 rounded-xl border bg-popover p-2 text-foreground shadow-2xl"
-          >
-            <div className="flex items-center gap-2.5 border-b border-border/40 px-2 py-1.5 pb-2">
-              <Avatar className="size-8 shrink-0">
-                <AvatarImage src={user?.imageUrl} />
-                <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                  {user?.firstName?.[0] ?? 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-xs font-semibold text-foreground">
-                  {user?.fullName ?? 'Developer'}
-                </span>
-                <span className="truncate text-[10px] text-muted-foreground">
-                  {user?.primaryEmailAddress?.emailAddress}
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-1">
-              <div className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Account
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileOpen(false);
-                  openUserProfile();
-                }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
-              >
-                <UserIcon className="size-3.5 text-muted-foreground" />
-                <span>Account settings</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileOpen(false);
-                  router.push('/settings');
-                }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
-              >
-                <KeyRound className="size-3.5 text-muted-foreground" />
-                <span>API keys</span>
-              </button>
-            </div>
-
-            <div className="space-y-0.5 border-t border-border/40 pt-1">
-
-              <button
-                type="button"
-                onClick={async () => {
-                  setProfileOpen(false);
-                  try {
-                    await signOut({ redirectUrl: '/sign-in' });
-                  } catch {
-                    window.location.href = '/sign-in';
-                  }
-                }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
-              >
-                <LogOut className="size-3.5" />
-                <span>Sign out</span>
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </SidebarFooter>
+      <SidebarRail />
 
       {/* Shadcn Rename Wiki Dialog */}
-      <Dialog open={!!projectToRename} onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}>
+      <Dialog
+        open={!!projectToRename}
+        onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename Wiki</DialogTitle>
             <DialogDescription>
-              Enter a new display name for the &ldquo;{projectToRename?.name}&rdquo; repository wiki.
+              Enter a new display name for the &ldquo;{projectToRename?.name}
+              &rdquo; repository wiki.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -535,10 +492,20 @@ export function AppSideBar() {
               autoFocus
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setProjectToRename(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setProjectToRename(null)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!renameValue.trim() || renameValue.trim() === projectToRename?.name}>
+              <Button
+                type="submit"
+                disabled={
+                  !renameValue.trim() ||
+                  renameValue.trim() === projectToRename?.name
+                }
+              >
                 Save changes
               </Button>
             </DialogFooter>
@@ -547,18 +514,45 @@ export function AppSideBar() {
       </Dialog>
 
       {/* Shadcn Delete Wiki AlertDialog */}
-      <AlertDialog open={!!projectToDelete} onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}>
+      <AlertDialog
+        open={!!projectToDelete}
+        onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the &ldquo;{projectToDelete?.name}&rdquo; repository and all associated data, including chat questions, conversation history, indexing jobs, indexed files, and generated wiki content. This action cannot be undone.
+              This will permanently delete the &ldquo;{projectToDelete?.name}
+              &rdquo; repository and all associated data, including chat
+              questions, conversation history, indexing jobs, indexed files, and
+              generated wiki content. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="delete-wiki-confirmation" className="text-xs">
+              Type{" "}
+              <strong>
+                {projectToDelete?.repoOwner}/{projectToDelete?.repoName}
+              </strong>{" "}
+              to confirm.
+            </Label>
+            <Input
+              id="delete-wiki-confirmation"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+            />
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleConfirmDelete()}
+              disabled={
+                deleteConfirmation !==
+                `${projectToDelete?.repoOwner}/${projectToDelete?.repoName}`
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete wiki

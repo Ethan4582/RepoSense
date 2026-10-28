@@ -2,8 +2,17 @@ import { Hono } from "hono";
 import type { AuthContext } from "../auth";
 import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { resolveProjectKeys } from "~/lib/providers/guard";
-import { GitHubAccessError, decryptProjectToken, parseRepoUrlRef, resolveRepoRef } from "~/lib/github";
+import {
+  GitHubAccessError,
+  decryptProjectToken,
+  resolveRepoRef,
+} from "~/lib/github";
 import { writesPaused } from "~/lib/emergency";
+import {
+  checkIndexingCapacity,
+  SERVER_BUSY_MESSAGE,
+} from "~/lib/indexing-capacity";
+import { getProjectRole, hasProjectRole } from "~/lib/project-access";
 
 export const indexingRoutes = new Hono<AuthContext>()
   .get("/:id/indexing/status", async (c) => {
@@ -12,37 +21,72 @@ export const indexingRoutes = new Hono<AuthContext>()
     const projectId = c.req.param("id");
     const branch = c.req.query("branch")?.trim();
 
-    const member = await db.userToProject.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { id: true },
-    });
-    if (!member) return c.json({ error: "Project not found" }, 404);
+    const role = await getProjectRole(db, projectId, userId);
+    if (!hasProjectRole(role, "VIEWER")) {
+      return c.json({ error: "Project not found" }, 404);
+    }
 
     const job = await db.indexingJob.findFirst({
       where: { projectId, ...(branch ? { branch } : {}) },
       orderBy: { startedAt: "desc" },
     });
 
-    return c.json({ job }, 200, { "Cache-Control": "no-store" });
+    if (!job || job.status !== "QUEUED") {
+      return c.json({ job }, 200, { "Cache-Control": "no-store" });
+    }
+    const jobsAhead = await db.indexingJob.count({
+      where: {
+        status: "QUEUED",
+        OR: [
+          { priority: { lt: job.priority } },
+          { priority: job.priority, availableAt: { lt: job.availableAt } },
+        ],
+      },
+    });
+    const recent = await db.indexingJob.findMany({
+      where: { status: "COMPLETED", finishedAt: { not: null } },
+      orderBy: { finishedAt: "desc" },
+      take: 20,
+      select: { startedAt: true, finishedAt: true },
+    });
+    const averageSeconds =
+      recent.length > 0
+        ? Math.max(
+            60,
+            Math.round(
+              recent.reduce(
+                (sum, item) =>
+                  sum +
+                  ((item.finishedAt?.getTime() ?? item.startedAt.getTime()) -
+                    item.startedAt.getTime()) /
+                    1000,
+                0,
+              ) / recent.length,
+            ),
+          )
+        : 5 * 60;
+    const delaySeconds = Math.max(
+      0,
+      Math.ceil((job.availableAt.getTime() - Date.now()) / 1000),
+    );
+    return c.json(
+      {
+        job: {
+          ...job,
+          queuePosition: jobsAhead + 1,
+          estimatedSecondsRemaining:
+            delaySeconds + (jobsAhead + 1) * averageSeconds,
+        },
+      },
+      200,
+      { "Cache-Control": "no-store" },
+    );
   })
   .post("/:id/indexing/start", async (c) => {
     const db = c.get("db");
     const userId = c.get("userId");
     const projectId = c.req.param("id");
-    const body = (await c.req.json().catch(() => ({}))) as {
-      branch?: unknown;
-      pullRequestNumber?: unknown;
-    };
-    let requestedBranch =
-      typeof body.branch === "string" && body.branch.trim()
-        ? body.branch.trim()
-        : undefined;
-    const pullRequestNumber =
-      typeof body.pullRequestNumber === "number" &&
-      Number.isSafeInteger(body.pullRequestNumber) &&
-      body.pullRequestNumber > 0
-        ? body.pullRequestNumber
-        : undefined;
+    await c.req.json().catch(() => ({}));
 
     if (writesPaused()) {
       return c.json(
@@ -51,36 +95,20 @@ export const indexingRoutes = new Hono<AuthContext>()
             "Indexing is temporarily paused while the service is in emergency mode. Please try again later.",
           code: "EMERGENCY_MODE",
         },
-        503
+        503,
       );
     }
 
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        userToProjects: { some: { userId } },
+        ownerId: userId,
         deletedAt: null,
       },
     });
 
     if (!project) {
       return c.json({ error: "Project not found" }, 404);
-    }
-
-    if (requestedBranch?.includes("github.com/")) {
-      try {
-        const parsed = parseRepoUrlRef(requestedBranch);
-        if (
-          parsed.owner.toLowerCase() !== project.repoOwner.toLowerCase() ||
-          parsed.repo.toLowerCase() !== project.repoName.toLowerCase() ||
-          !parsed.branch
-        ) {
-          return c.json({ error: "Use a branch from this repository.", code: "INVALID_BRANCH" }, 400);
-        }
-        requestedBranch = parsed.branch;
-      } catch (err) {
-        return c.json({ error: err instanceof Error ? err.message : "Invalid GitHub branch URL.", code: "INVALID_BRANCH" }, 400);
-      }
     }
 
     const activeJobs = await db.indexingJob.count({
@@ -91,27 +119,30 @@ export const indexingRoutes = new Hono<AuthContext>()
     });
 
     if (activeJobs >= 1) {
+      const retryAfterSeconds = 300;
       return c.json(
         {
-          error:
-            "You already have a repository being indexed. Please wait for it to finish.",
-          code: "INDEXING_IN_PROGRESS",
+          error: SERVER_BUSY_MESSAGE,
+          code: "SERVER_BUSY",
+          retryAfterSeconds,
+          retryAt: new Date(Date.now() + retryAfterSeconds * 1000).toISOString(),
         },
-        429
+        503,
+        { "Retry-After": String(retryAfterSeconds) },
       );
     }
 
-    const maxGlobalJobs = Number(process.env.MAX_GLOBAL_INDEXING_JOBS ?? 25);
-    const runningJobs = await db.indexingJob.count({ where: { status: "RUNNING" } });
-
-    if (Number.isFinite(maxGlobalJobs) && runningJobs >= maxGlobalJobs) {
+    const capacity = await checkIndexingCapacity(db);
+    if (!capacity.allowed) {
       return c.json(
         {
-          error:
-            "The indexing queue is at capacity right now. Please try again in a few minutes.",
-          code: "INDEXING_CAPACITY",
+          error: SERVER_BUSY_MESSAGE,
+          code: "SERVER_BUSY",
+          retryAfterSeconds: capacity.retryAfterSeconds,
+          retryAt: capacity.retryAt,
         },
-        429
+        503,
+        { "Retry-After": String(capacity.retryAfterSeconds) },
       );
     }
 
@@ -121,17 +152,20 @@ export const indexingRoutes = new Hono<AuthContext>()
       const token = await decryptProjectToken(project);
       target = await resolveRepoRef(
         project.repoUrl,
-        { branch: requestedBranch, pullRequestNumber },
-        token
+        { branch: project.defaultBranch ?? undefined },
+        token,
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Missing API keys or GitHub token.";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Missing API keys or GitHub token.";
       return c.json(
         {
           error: message,
           code: err instanceof GitHubAccessError ? err.code : "KEY_MISSING",
         },
-        400
+        400,
       );
     }
 
@@ -140,6 +174,9 @@ export const indexingRoutes = new Hono<AuthContext>()
         projectId,
         branch: target.branch,
         commitSha: target.commitSha,
+        baseCommitSha: project.lastIndexedCommitSha,
+        trigger: "MANUAL",
+        requestedByUserId: userId,
         status: "COMPLETED",
       },
       select: { id: true },
@@ -151,7 +188,7 @@ export const indexingRoutes = new Hono<AuthContext>()
           code: "BRANCH_ALREADY_INDEXED",
           branch: target.branch,
         },
-        409
+        409,
       );
     }
 
@@ -168,8 +205,15 @@ export const indexingRoutes = new Hono<AuthContext>()
       },
     });
 
-    const workflow = (c.env as { INDEXING_WORKFLOW?: { create: (opts: { params: unknown }) => Promise<unknown> } } | undefined)
-      ?.INDEXING_WORKFLOW;
+    const workflow = (
+      c.env as
+        | {
+            INDEXING_WORKFLOW?: {
+              create: (opts: { params: unknown }) => Promise<unknown>;
+            };
+          }
+        | undefined
+    )?.INDEXING_WORKFLOW;
 
     if (workflow) {
       const run = async () => {
@@ -178,7 +222,10 @@ export const indexingRoutes = new Hono<AuthContext>()
             params: { projectId, jobId: job.id, userId },
           });
         } catch (err) {
-          const message = err instanceof Error ? err.message : "Failed to start indexing workflow.";
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to start indexing workflow.";
           await db.indexingJob.update({
             where: { id: job.id },
             data: {

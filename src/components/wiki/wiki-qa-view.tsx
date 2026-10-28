@@ -1,14 +1,28 @@
-import * as React from 'react';
-import { ArrowLeft, Bookmark, Check, ChevronRight, Copy, ExternalLink, FileCode2, History as HistoryIcon, Loader2, Sparkles, Zap } from 'lucide-react';
-import { Button } from '~/components/ui/button';
-import { toast } from 'sonner';
-import { WikiMarkdown, type CitationTarget } from './markdown';
-import { CodeViewer, type ActiveFile } from './code-viewer';
-import { getModelInfo } from '~/lib/providers/catalog';
-import Link from 'next/link';
-import { IndexingLoader } from '~/components/indexing-loader';
-import { WikiComposer } from './wiki-composer';
-import { extractCitationRanges } from '~/lib/citations';
+import * as React from "react";
+import {
+  ArrowLeft,
+  Bookmark,
+  Check,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  FileCode2,
+  History as HistoryIcon,
+  Loader2,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { toast } from "sonner";
+import { WikiMarkdown, type CitationTarget } from "./markdown";
+import { CodeViewer, type ActiveFile } from "./code-viewer";
+import { getModelInfo } from "~/lib/providers/catalog";
+import Link from "next/link";
+import { IndexingLoader } from "~/components/indexing-loader";
+import { WikiComposer } from "./wiki-composer";
+import { ApiKeyRequiredCard } from "./api-key-required-card";
+import type { ProviderId } from "~/lib/providers/types";
+import { extractCitationRanges } from "~/lib/citations";
 
 export interface QaConversationTurn {
   id: string;
@@ -51,6 +65,7 @@ interface WikiQaViewProps {
     onModelSelect: (modelId: string) => void;
     availableKeys?: string[];
   };
+  missingKeyProviders?: ProviderId[];
 }
 
 export function WikiQaView({
@@ -75,22 +90,27 @@ export function WikiQaView({
   onSelectFile,
   answerEndRef,
   composerProps,
+  missingKeyProviders = [],
 }: WikiQaViewProps) {
   const modelInfo = getModelInfo(selectedModel);
-  const [savedTurns, setSavedTurns] = React.useState<Record<string, boolean>>({});
+  const [savedTurns, setSavedTurns] = React.useState<Record<string, boolean>>(
+    {},
+  );
   const [savingTurnId, setSavingTurnId] = React.useState<string | null>(null);
   const [copiedTurnId, setCopiedTurnId] = React.useState<string | null>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const latestTurnRef = React.useRef<HTMLDivElement | null>(null);
   const rightPaneRef = React.useRef<HTMLElement | null>(null);
-  const sourcePanelRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const sourcePanelRefs = React.useRef<Record<string, HTMLDivElement | null>>(
+    {},
+  );
 
   // Synchronize right pane scrolling when active citation changes
   React.useEffect(() => {
     if (activeFile?.filePath) {
       const targetEl = sourcePanelRefs.current[activeFile.filePath];
       if (targetEl) {
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        targetEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     }
   }, [activeFile]);
@@ -101,7 +121,7 @@ export function WikiQaView({
     if (question || answer || streaming || qaError) {
       return [
         {
-          id: 'turn-current',
+          id: "turn-current",
           question,
           answer,
           model: selectedModel,
@@ -119,7 +139,10 @@ export function WikiQaView({
   React.useEffect(() => {
     if (displayTurns.length > prevTurnsLengthRef.current) {
       setTimeout(() => {
-        latestTurnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        latestTurnRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
       }, 50);
     }
     prevTurnsLengthRef.current = displayTurns.length;
@@ -127,11 +150,15 @@ export function WikiQaView({
 
   // Extract cited files from all answers, live turn scanning events, or active file
   const citedFiles = React.useMemo(() => {
-    const list: Array<{ filePath: string; startLine?: number; endLine?: number }> = [];
+    const list: Array<{
+      filePath: string;
+      startLine?: number;
+      endLine?: number;
+    }> = [];
     const seen = new Set<string>();
 
     // 1. Exact citations shown in the answer take priority over retrieval ranges.
-    const allAnswerText = displayTurns.map((t) => t.answer).join('\n\n');
+    const allAnswerText = displayTurns.map((t) => t.answer).join("\n\n");
     for (const citation of extractCitationRanges(allAnswerText)) {
       seen.add(citation.filePath);
       list.push(citation);
@@ -170,8 +197,8 @@ export function WikiQaView({
     setSavingTurnId(turn.id);
     try {
       const res = await fetch(`/api/projects/${projectId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: turn.question,
           answers: turn.answer,
@@ -181,20 +208,20 @@ export function WikiQaView({
             fileName: f.filePath,
             startLine: f.startLine,
             endLine: f.endLine,
-            sourceCode: '',
-            summary: `Citations from ${f.filePath}${f.startLine ? `:${f.startLine}-${f.endLine}` : ''}`,
+            sourceCode: "",
+            summary: `Citations from ${f.filePath}${f.startLine ? `:${f.startLine}-${f.endLine}` : ""}`,
           })),
         }),
       });
 
       if (!res.ok) {
-        throw new Error('Failed to save answer');
+        throw new Error("Failed to save answer");
       }
 
       setSavedTurns((prev) => ({ ...prev, [turn.id]: true }));
-      toast.success('Answer saved to QA Bookmarks');
+      toast.success("Answer saved to QA Bookmarks");
     } catch {
-      toast.error('Could not save answer. Please try again.');
+      toast.error("Could not save answer. Please try again.");
     } finally {
       setSavingTurnId(null);
     }
@@ -203,31 +230,33 @@ export function WikiQaView({
   const copyTurnAnswer = async (turn: QaConversationTurn) => {
     await navigator.clipboard.writeText(turn.answer);
     setCopiedTurnId(turn.id);
-    toast.success('Answer copied to clipboard');
+    toast.success("Answer copied to clipboard");
     setTimeout(() => setCopiedTurnId(null), 2000);
   };
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
       {/* Left Pane: Pinned Chat Input Above Conversation Blocks */}
-      <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-r border-[#ececec] dark:border-[#27272a]">
+      <section className="border-border/50 relative flex min-h-0 flex-1 flex-col overflow-hidden border-r">
         {/* Top Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[#ececec] bg-background/95 px-6 py-3 backdrop-blur-md dark:border-[#27272a]">
+        <div className="border-border/50 bg-background/95 flex shrink-0 items-center justify-between border-b px-6 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onOpenHistory}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-card px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent dark:border-[#27272a]"
+              className="bg-card text-foreground hover:bg-accent inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium shadow-xs transition-colors"
             >
-              <HistoryIcon className="size-3.5 text-primary" />
+              <HistoryIcon className="text-primary size-3.5" />
               <span>History</span>
             </button>
-            <span className="text-xs text-muted-foreground">• Question thread</span>
+            <span className="text-muted-foreground text-xs">
+              • Question thread
+            </span>
           </div>
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs transition-colors"
           >
             <ArrowLeft className="size-3" />
             <span>Return to Wiki</span>
@@ -237,7 +266,7 @@ export function WikiQaView({
         {/* Scrollable Conversation Blocks - Manual scrolling preserved, ample bottom space for fixed chat bar */}
         <div
           ref={scrollContainerRef}
-          className="scrollbar-none min-h-0 flex-1 overflow-y-auto p-6 md:p-8 pb-48 space-y-6"
+          className="min-h-0 flex-1 scrollbar-none space-y-6 overflow-y-auto p-6 pb-48 md:p-8"
         >
           {displayTurns.map((turn, index) => {
             const isLatest = index === displayTurns.length - 1;
@@ -249,22 +278,22 @@ export function WikiQaView({
               <div
                 key={turn.id}
                 ref={isLatest ? latestTurnRef : undefined}
-                className="rounded-xl border border-[#ececec] bg-card p-6 shadow-xs transition-colors dark:border-[#27272a] dark:bg-card/50"
+                className="border-border/50 bg-card rounded-xl border p-6 shadow-xs"
               >
                 {/* Question Header */}
-                <div className="flex items-start justify-between gap-4 border-b border-[#ececec] pb-4 dark:border-[#27272a]">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                <div className="border-border/50 flex items-start justify-between gap-4 border-b pb-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                       Q{index + 1}
                     </span>
                     <div className="space-y-1">
-                      <h2 className="text-lg font-bold tracking-tight text-foreground break-words">
+                      <h2 className="text-foreground text-lg font-bold tracking-tight break-words">
                         {turn.question}
                       </h2>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                          <Zap className="size-3 text-primary" />
-                          {modelInfo?.name ?? 'Fast'}
+                        <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
+                          <Zap className="text-primary size-3" />
+                          {modelInfo?.name ?? "Fast"}
                         </span>
                       </div>
                     </div>
@@ -277,10 +306,18 @@ export function WikiQaView({
                         size="sm"
                         onClick={() => void handleSaveTurn(turn)}
                         disabled={isTurnSaving || isTurnSaved}
-                        className="h-7 gap-1.5 rounded-lg border-border/60 text-xs text-muted-foreground hover:text-foreground"
+                        className="border-border/60 text-muted-foreground hover:text-foreground h-7 gap-1.5 rounded-lg text-xs"
                       >
-                        <Bookmark className={`size-3.5 ${isTurnSaved ? 'fill-primary text-primary' : ''}`} />
-                        <span>{isTurnSaved ? 'Saved' : isTurnSaving ? 'Saving...' : 'Bookmark'}</span>
+                        <Bookmark
+                          className={`size-3.5 ${isTurnSaved ? "fill-primary text-primary" : ""}`}
+                        />
+                        <span>
+                          {isTurnSaved
+                            ? "Saved"
+                            : isTurnSaving
+                              ? "Saving..."
+                              : "Bookmark"}
+                        </span>
                       </Button>
                     ) : null}
 
@@ -289,10 +326,14 @@ export function WikiQaView({
                         variant="ghost"
                         size="icon"
                         onClick={() => void copyTurnAnswer(turn)}
-                        className="size-7 text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground size-7"
                         title="Copy answer"
                       >
-                        {isTurnCopied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                        {isTurnCopied ? (
+                          <Check className="size-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
                       </Button>
                     ) : null}
                   </div>
@@ -301,7 +342,7 @@ export function WikiQaView({
                 {/* Answer Content */}
                 <div className="mt-4">
                   {turn.qaError ? (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                    <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-4 text-sm">
                       {turn.qaError}
                       {!isSignedIn ? (
                         <div className="mt-3">
@@ -338,19 +379,23 @@ export function WikiQaView({
 
         {/* Floating Composer: Centered and stuck lower to the bottom */}
         {composerProps ? (
-          <div className="pointer-events-none absolute bottom-3 left-0 right-0 z-30 flex justify-center px-4">
+          <div className="pointer-events-none absolute right-0 bottom-3 left-0 z-30 flex justify-center px-4">
             <div className="pointer-events-auto w-full max-w-[680px]">
-              <WikiComposer
-                question={composerProps.question}
-                onQuestionChange={composerProps.onQuestionChange}
-                onSubmit={composerProps.onSubmit}
-                streaming={composerProps.streaming}
-                repoName={composerProps.repoName}
-                selectedModel={composerProps.selectedModel}
-                onModelSelect={composerProps.onModelSelect}
-                availableKeys={composerProps.availableKeys}
-                placeholder="Ask a question or follow-up..."
-              />
+              {isSignedIn && missingKeyProviders.length > 0 ? (
+                <ApiKeyRequiredCard providers={missingKeyProviders} compact />
+              ) : (
+                <WikiComposer
+                  question={composerProps.question}
+                  onQuestionChange={composerProps.onQuestionChange}
+                  onSubmit={composerProps.onSubmit}
+                  streaming={composerProps.streaming}
+                  repoName={composerProps.repoName}
+                  selectedModel={composerProps.selectedModel}
+                  onModelSelect={composerProps.onModelSelect}
+                  availableKeys={composerProps.availableKeys}
+                  placeholder="Ask a question or follow-up..."
+                />
+              )}
             </div>
           </div>
         ) : null}
@@ -359,19 +404,21 @@ export function WikiQaView({
       {/* Right Pane: Multi-file Context & Vertically Stacked Excerpt Panels */}
       <section
         ref={rightPaneRef}
-        className="scrollbar-none flex min-h-0 flex-col overflow-y-auto bg-muted/5 p-4 pb-36 md:p-6"
+        className="bg-muted/5 flex min-h-0 scrollbar-none flex-col overflow-y-auto p-4 pb-36 md:p-6"
       >
         {citedFiles.length > 0 ? (
           <div className="flex flex-col space-y-4">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[13px] font-semibold text-foreground">
+              <span className="text-foreground text-[13px] font-semibold">
                 Referenced Sources ({citedFiles.length})
               </span>
             </div>
 
             {/* Vertically stacked full-width panels */}
             {citedFiles.map((f, idx) => {
-              const isSelected = activeFile ? activeFile.filePath === f.filePath : idx === 0;
+              const isSelected = activeFile
+                ? activeFile.filePath === f.filePath
+                : idx === 0;
               return (
                 <div
                   key={f.filePath}
@@ -384,8 +431,12 @@ export function WikiQaView({
                     branch={activeBranch}
                     file={{
                       filePath: f.filePath,
-                      startLine: isSelected ? (activeFile?.startLine ?? f.startLine) : f.startLine,
-                      endLine: isSelected ? (activeFile?.endLine ?? f.endLine) : f.endLine,
+                      startLine: isSelected
+                        ? (activeFile?.startLine ?? f.startLine)
+                        : f.startLine,
+                      endLine: isSelected
+                        ? (activeFile?.endLine ?? f.endLine)
+                        : f.endLine,
                     }}
                     collapsible
                     defaultExpanded={isSelected}
@@ -397,15 +448,15 @@ export function WikiQaView({
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-xl border border-border/50 bg-background/60 p-6 text-center shadow-xs">
-              <FileCode2 className="mx-auto mb-2.5 size-7 text-muted-foreground/50" />
-              <div className="text-[13px] font-semibold text-foreground">
+            <div className="border-border/50 bg-background/60 w-full max-w-md rounded-xl border p-6 text-center shadow-xs">
+              <FileCode2 className="text-muted-foreground/50 mx-auto mb-2.5 size-7" />
+              <div className="text-foreground text-[13px] font-semibold">
                 No Referenced Source Files
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-muted-foreground mt-1 text-xs">
                 {streaming
-                  ? 'Scanning codebase for citations...'
-                  : 'No specific source lines were cited for this answer.'}
+                  ? "Scanning codebase for citations..."
+                  : "No specific source lines were cited for this answer."}
               </p>
             </div>
           </div>

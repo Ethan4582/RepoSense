@@ -214,6 +214,7 @@ export type RepoBranchKind = 'MAIN' | 'BRANCH' | 'PULL_REQUEST';
 export interface RepoRefRequest {
   branch?: string | null;
   pullRequestNumber?: number | null;
+  commitSha?: string | null;
 }
 
 export interface ResolvedRepoRef {
@@ -295,6 +296,26 @@ export async function resolveRepoRef(
       };
     }
 
+    if (input.commitSha) {
+      if (!/^[a-f0-9]{40}$/i.test(input.commitSha)) {
+        throw new GitHubAccessError("NOT_FOUND", "The requested commit is not valid.");
+      }
+      return {
+        owner: meta.owner,
+        repo: meta.repo,
+        repoUrl: meta.repoUrl,
+        fetchOwner: meta.owner,
+        fetchRepo: meta.repo,
+        branch: meta.defaultBranch,
+        branchKind: "MAIN" as const,
+        pullRequestNumber: null,
+        commitSha: input.commitSha,
+        defaultBranch: meta.defaultBranch,
+        isPrivate: meta.isPrivate,
+        sizeKb: meta.sizeKb,
+      };
+    }
+
     const branch = input.branch?.trim()
       ? normalizeBranchName(input.branch)
       : meta.defaultBranch;
@@ -359,6 +380,53 @@ export interface RepoTreeEntry {
   type: 'blob' | 'tree' | 'commit';
   size?: number;
   sha?: string;
+}
+
+export interface ChangedRepoFile {
+  path: string;
+  previousPath?: string;
+  status: "added" | "modified" | "removed" | "renamed";
+}
+
+export async function compareRepoCommits(
+  owner: string,
+  repo: string,
+  baseCommitSha: string,
+  targetCommitSha: string,
+  token?: string | null,
+): Promise<ChangedRepoFile[] | null> {
+  const client = getOctokit(token);
+  try {
+    const response = await client.rest.repos.compareCommitsWithBasehead({
+      owner,
+      repo,
+      basehead: `${baseCommitSha}...${targetCommitSha}`,
+      per_page: 100,
+    });
+    const files = response.data.files;
+    if (!files || files.length >= 300) return null;
+    return files.flatMap((file) => {
+      if (
+        file.status !== "added" &&
+        file.status !== "modified" &&
+        file.status !== "removed" &&
+        file.status !== "renamed"
+      ) {
+        return [];
+      }
+      return [
+        {
+          path: file.filename,
+          ...(file.previous_filename
+            ? { previousPath: file.previous_filename }
+            : {}),
+          status: file.status,
+        } satisfies ChangedRepoFile,
+      ];
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function getRepoTree(

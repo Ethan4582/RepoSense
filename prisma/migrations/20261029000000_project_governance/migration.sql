@@ -105,6 +105,7 @@ CREATE TABLE "WikiPageRevision" (
 );
 CREATE INDEX "WikiPageRevision_pageId_createdAt_idx" ON "WikiPageRevision"("pageId", "createdAt");
 CREATE INDEX "WikiPageRevision_pageId_status_idx" ON "WikiPageRevision"("pageId", "status");
+CREATE UNIQUE INDEX "WikiPageRevision_pageId_sourceCommitSha_status_key" ON "WikiPageRevision"("pageId", "sourceCommitSha", "status");
 
 CREATE TABLE "ProjectAuditEvent" (
   "id" TEXT NOT NULL,
@@ -125,6 +126,7 @@ CREATE TABLE "Notification" (
   "id" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
   "projectId" TEXT,
+  "dedupeKey" TEXT,
   "type" "NotificationType" NOT NULL,
   "title" TEXT NOT NULL,
   "message" TEXT NOT NULL,
@@ -135,6 +137,7 @@ CREATE TABLE "Notification" (
   CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX "Notification_userId_readAt_createdAt_idx" ON "Notification"("userId", "readAt", "createdAt");
+CREATE UNIQUE INDEX "Notification_dedupeKey_key" ON "Notification"("dedupeKey");
 
 CREATE TABLE "GithubWebhookDelivery" (
   "id" TEXT NOT NULL,

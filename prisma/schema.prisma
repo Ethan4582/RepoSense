@@ -319,6 +319,7 @@ model WikiPageRevision {
   sourceCommitSha String?
   createdAt       DateTime       @default(now())
 
+  @@unique([pageId, sourceCommitSha, status])
   @@index([pageId, createdAt])
   @@index([pageId, status])
 }
@@ -343,6 +344,7 @@ model Notification {
   userId    String
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId String?
+  dedupeKey String?          @unique
   type      NotificationType
   title     String
   message   String

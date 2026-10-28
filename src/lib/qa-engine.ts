@@ -301,6 +301,8 @@ export async function streamQuestion(
             answers: fullText,
             fileReference: prepared.scannedFiles.map((f) => ({
               fileName: f.filePath,
+              startLine: f.startLine,
+              endLine: f.endLine,
               sourceCode: '',
               summary: `Cited from ${f.filePath}:${f.startLine}-${f.endLine}`,
             })) as unknown as Prisma.InputJsonValue,

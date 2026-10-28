@@ -41,6 +41,7 @@ import { QaHistorySidebar } from './qa-history-sidebar';
 import { WikiQaView } from './wiki-qa-view';
 import { useSmoothStream } from '~/hooks/use-smooth-stream';
 import { IndexingLoader } from '~/components/indexing-loader';
+import { restoreCitationRanges } from '~/lib/citations';
 
 interface WikiPageMeta {
   id: string;
@@ -217,19 +218,10 @@ export function WikiReader() {
           setStreaming(false);
           setThreadId(data.question.id);
 
-          const rawRef = data.question.fileReference;
-          let parsedScans: Array<{ filePath: string; startLine: number; endLine: number }> = [];
-          if (Array.isArray(rawRef)) {
-            parsedScans = rawRef.map((f: { fileName?: string; sourceCode?: string }) => ({
-              filePath: f.fileName ?? '',
-              startLine: 1,
-              endLine: 1,
-            })).filter((f) => Boolean(f.filePath));
-          } else if (rawRef && typeof rawRef === 'object' && Array.isArray((rawRef as { citations?: Array<{ fileName?: string }> }).citations)) {
-            parsedScans = (rawRef as { citations: Array<{ fileName?: string }> }).citations
-              .map((f) => ({ filePath: f.fileName ?? '', startLine: 1, endLine: 1 }))
-              .filter((f) => Boolean(f.filePath));
-          }
+          const parsedScans = restoreCitationRanges(
+            data.question.fileReference,
+            data.question.answers
+          );
           if (parsedScans.length > 0) {
             setScanning(parsedScans);
             setActiveFile({ filePath: parsedScans[0]!.filePath, startLine: parsedScans[0]!.startLine, endLine: parsedScans[0]!.endLine });

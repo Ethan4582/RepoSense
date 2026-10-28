@@ -8,6 +8,7 @@ import { getModelInfo } from '~/lib/providers/catalog';
 import Link from 'next/link';
 import { IndexingLoader } from '~/components/indexing-loader';
 import { WikiComposer } from './wiki-composer';
+import { extractCitationRanges } from '~/lib/citations';
 
 export interface QaConversationTurn {
   id: string;
@@ -129,7 +130,14 @@ export function WikiQaView({
     const list: Array<{ filePath: string; startLine?: number; endLine?: number }> = [];
     const seen = new Set<string>();
 
-    // 1. Live scanning files from any turn
+    // 1. Exact citations shown in the answer take priority over retrieval ranges.
+    const allAnswerText = displayTurns.map((t) => t.answer).join('\n\n');
+    for (const citation of extractCitationRanges(allAnswerText)) {
+      seen.add(citation.filePath);
+      list.push(citation);
+    }
+
+    // 2. Include retrieved files that were not explicitly cited.
     for (const turn of displayTurns) {
       if (turn.scanning && turn.scanning.length > 0) {
         for (const scan of turn.scanning) {
@@ -142,22 +150,6 @@ export function WikiQaView({
             });
           }
         }
-      }
-    }
-
-    // 2. Parsed markdown citations from turn answers
-    const allAnswerText = displayTurns.map((t) => t.answer).join('\n\n');
-    const regex = /\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g;
-    let match;
-    while ((match = regex.exec(allAnswerText)) !== null) {
-      const filePath = match[1];
-      if (filePath && !seen.has(filePath)) {
-        seen.add(filePath);
-        list.push({
-          filePath,
-          startLine: Number(match[2]),
-          endLine: match[3] ? Number(match[3]) : Number(match[2]),
-        });
       }
     }
 
@@ -392,8 +384,8 @@ export function WikiQaView({
                     branch={activeBranch}
                     file={{
                       filePath: f.filePath,
-                      startLine: f.startLine ?? (activeFile?.filePath === f.filePath ? activeFile.startLine : undefined),
-                      endLine: f.endLine ?? (activeFile?.filePath === f.filePath ? activeFile.endLine : undefined),
+                      startLine: isSelected ? (activeFile?.startLine ?? f.startLine) : f.startLine,
+                      endLine: isSelected ? (activeFile?.endLine ?? f.endLine) : f.endLine,
                     }}
                     collapsible
                     defaultExpanded={isSelected}

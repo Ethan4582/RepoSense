@@ -36,14 +36,27 @@ export const projectRouter = createTRPCRouter({
 
     const enriched = await Promise.all(
       projects.map(async (p) => {
-        const token = await decryptProjectToken(p).catch(() => null);
-        const meta = await getRepoGithubDetails(p.repoOwner, p.repoName, token);
-        return {
-          ...withoutProjectSecrets(p),
-          description: meta.description,
-          stars: meta.stars,
-          language: meta.language,
-        };
+        try {
+          const token = await decryptProjectToken(p).catch(() => null);
+          const meta = await getRepoGithubDetails(p.repoOwner, p.repoName, token).catch(() => ({
+            description: null,
+            stars: 0,
+            language: null,
+          }));
+          return {
+            ...withoutProjectSecrets(p),
+            description: meta.description,
+            stars: meta.stars,
+            language: meta.language,
+          };
+        } catch {
+          return {
+            ...withoutProjectSecrets(p),
+            description: null,
+            stars: 0,
+            language: null,
+          };
+        }
       })
     );
 

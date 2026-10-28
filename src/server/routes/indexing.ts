@@ -31,7 +31,56 @@ export const indexingRoutes = new Hono<AuthContext>()
       orderBy: { startedAt: "desc" },
     });
 
-    return c.json({ job }, 200, { "Cache-Control": "no-store" });
+    if (!job || job.status !== "QUEUED") {
+      return c.json({ job }, 200, { "Cache-Control": "no-store" });
+    }
+    const jobsAhead = await db.indexingJob.count({
+      where: {
+        status: "QUEUED",
+        OR: [
+          { priority: { lt: job.priority } },
+          { priority: job.priority, availableAt: { lt: job.availableAt } },
+        ],
+      },
+    });
+    const recent = await db.indexingJob.findMany({
+      where: { status: "COMPLETED", finishedAt: { not: null } },
+      orderBy: { finishedAt: "desc" },
+      take: 20,
+      select: { startedAt: true, finishedAt: true },
+    });
+    const averageSeconds =
+      recent.length > 0
+        ? Math.max(
+            60,
+            Math.round(
+              recent.reduce(
+                (sum, item) =>
+                  sum +
+                  ((item.finishedAt?.getTime() ?? item.startedAt.getTime()) -
+                    item.startedAt.getTime()) /
+                    1000,
+                0,
+              ) / recent.length,
+            ),
+          )
+        : 5 * 60;
+    const delaySeconds = Math.max(
+      0,
+      Math.ceil((job.availableAt.getTime() - Date.now()) / 1000),
+    );
+    return c.json(
+      {
+        job: {
+          ...job,
+          queuePosition: jobsAhead + 1,
+          estimatedSecondsRemaining:
+            delaySeconds + (jobsAhead + 1) * averageSeconds,
+        },
+      },
+      200,
+      { "Cache-Control": "no-store" },
+    );
   })
   .post("/:id/indexing/start", async (c) => {
     const db = c.get("db");

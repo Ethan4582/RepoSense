@@ -151,6 +151,27 @@ export async function runIndexingWorkflow(opts: {
       currentDetail: null,
       finishedAt: new Date(),
     }).catch(() => undefined);
+    const failedJob = await db.indexingJob
+      .findUnique({ where: { id: jobId }, select: { trigger: true } })
+      .catch(() => null);
+    if (failedJob?.trigger === 'MERGE' || failedJob?.trigger === 'PUSH') {
+      const dedupeKey = `wiki-update-failed:${projectId}:${jobId}`;
+      await db.notification
+        .upsert({
+          where: { dedupeKey },
+          create: {
+            userId,
+            projectId,
+            dedupeKey,
+            type: 'INDEXING',
+            title: 'Automatic wiki update failed',
+            message: info.message,
+            href: `/settings/projects/${projectId}`,
+          },
+          update: { message: info.message },
+        })
+        .catch(() => undefined);
+    }
     throw err;
   }
 }

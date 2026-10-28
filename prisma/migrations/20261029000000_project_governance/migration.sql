@@ -10,14 +10,13 @@ ALTER TABLE "Project" ADD COLUMN "directEditNotifications" BOOLEAN NOT NULL DEFA
 ALTER TABLE "UserToProject" ADD COLUMN "role" "ProjectRole" NOT NULL DEFAULT 'VIEWER';
 
 UPDATE "Project" p
-SET "ownerId" = membership."userId"
-FROM LATERAL (
+SET "ownerId" = (
   SELECT up."userId"
   FROM "UserToProject" up
   WHERE up."projectId" = p."id"
   ORDER BY up."createdAt" ASC, up."id" ASC
   LIMIT 1
-) membership;
+);
 
 DO $$
 BEGIN
@@ -64,6 +63,17 @@ ALTER TABLE "IndexingJob" ADD COLUMN "githubRequestCount" INTEGER NOT NULL DEFAU
 ALTER TABLE "IndexingJob" ADD COLUMN "processedChunks" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "IndexingJob" ADD COLUMN "estimatedProviderTokens" INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX "IndexingJob_status_availableAt_priority_idx" ON "IndexingJob"("status", "availableAt", "priority");
+
+WITH ranked_embeddings AS (
+  SELECT "id", row_number() OVER (
+    PARTITION BY "projectId", "branch", "filePath", "chunkIndex"
+    ORDER BY "id"
+  ) AS duplicate_rank
+  FROM "SourceCodeEmbedding"
+)
+DELETE FROM "SourceCodeEmbedding" embedding
+USING ranked_embeddings ranked
+WHERE embedding."id" = ranked."id" AND ranked.duplicate_rank > 1;
 
 CREATE UNIQUE INDEX "SourceCodeEmbedding_projectId_branch_filePath_chunkIndex_key"
 ON "SourceCodeEmbedding"("projectId", "branch", "filePath", "chunkIndex");
@@ -136,8 +146,8 @@ CREATE TABLE "Notification" (
   CONSTRAINT "Notification_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-CREATE INDEX "Notification_userId_readAt_createdAt_idx" ON "Notification"("userId", "readAt", "createdAt");
 CREATE UNIQUE INDEX "Notification_dedupeKey_key" ON "Notification"("dedupeKey");
+CREATE INDEX "Notification_userId_readAt_createdAt_idx" ON "Notification"("userId", "readAt", "createdAt");
 
 CREATE TABLE "GithubWebhookDelivery" (
   "id" TEXT NOT NULL,
@@ -147,3 +157,36 @@ CREATE TABLE "GithubWebhookDelivery" (
   CONSTRAINT "GithubWebhookDelivery_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX "GithubWebhookDelivery_receivedAt_idx" ON "GithubWebhookDelivery"("receivedAt");
+
+DELETE FROM "QaMessage"
+WHERE "threadId" IN (
+  SELECT thread."id"
+  FROM "QaThread" thread
+  JOIN "Project" project ON project."id" = thread."projectId"
+  WHERE thread."branch" <> COALESCE(project."defaultBranch", 'main')
+);
+DELETE FROM "QaThread" thread
+USING "Project" project
+WHERE thread."projectId" = project."id"
+  AND thread."branch" <> COALESCE(project."defaultBranch", 'main');
+DELETE FROM "Question" question
+USING "Project" project
+WHERE question."projectId" = project."id"
+  AND question."branch" <> COALESCE(project."defaultBranch", 'main');
+DELETE FROM "SourceCodeEmbedding" embedding
+USING "Project" project
+WHERE embedding."projectId" = project."id"
+  AND embedding."branch" <> COALESCE(project."defaultBranch", 'main');
+DELETE FROM "WikiPage" page
+USING "Project" project
+WHERE page."projectId" = project."id"
+  AND page."branch" <> COALESCE(project."defaultBranch", 'main');
+DELETE FROM "IndexingJob" job
+USING "Project" project
+WHERE job."projectId" = project."id"
+  AND job."branch" <> COALESCE(project."defaultBranch", 'main');
+UPDATE "Project"
+SET "lastIndexedBranch" = "defaultBranch",
+    "lastIndexedBranchKind" = 'MAIN',
+    "lastIndexedPullRequest" = NULL
+WHERE "defaultBranch" IS NOT NULL;

@@ -24,6 +24,11 @@ import { ProviderAccessError, resolveProjectKeys } from './providers/guard';
 import { purgeWikiCache } from './cache';
 import { diffLineCounts } from './project-access';
 import {
+  classifyChangedPaths,
+  isStructuralChange,
+  selectAffectedPages,
+} from './incremental-indexing';
+import {
   ensureBlueprint,
   fallbackPlan,
   generateWikiPage,
@@ -244,20 +249,9 @@ async function executePipeline(opts: {
         )
       : null;
   const incremental = Array.isArray(changes) && project.lastIndexedAt !== null;
-  const changedNewPaths = new Set(
-    changes
-      ?.filter((file) => file.status !== 'removed')
-      .map((file) => file.path) ?? [],
-  );
-  const removedPaths = new Set(
-    changes?.flatMap((file) =>
-      file.status === 'removed'
-        ? [file.path]
-        : file.status === 'renamed' && file.previousPath
-          ? [file.previousPath]
-          : [],
-    ) ?? [],
-  );
+  const classifiedChanges = classifyChangedPaths(changes ?? []);
+  const changedNewPaths = classifiedChanges.loadPaths;
+  const removedPaths = classifiedChanges.deletePaths;
   const selectedFiles = selectFilesForLoading(source.files);
   const filesToLoad = incremental
     ? selectedFiles.filter((file) => changedNewPaths.has(file.path))
@@ -420,15 +414,9 @@ async function executePipeline(opts: {
         orderBy: [{ sectionOrder: 'asc' }, { pageOrder: 'asc' }],
       })
     : [];
-  const changedPaths = new Set([...changedNewPaths, ...removedPaths]);
-  const structuralChange = [...changedPaths].some((path) =>
-    /(^|\/)(package\.json|.*\.lock|.*\.prisma|migrations?|src\/app|src\/pages|routes?)(\/|$)/i.test(
-      path,
-    ),
-  );
-  const affectedPages = existingPages.filter((page) =>
-    page.relevantFiles.some((path) => changedPaths.has(path)),
-  );
+  const changedPaths = classifiedChanges.changedPaths;
+  const structuralChange = isStructuralChange(changedPaths);
+  const affectedPages = selectAffectedPages(existingPages, changedPaths);
   const requiresFullPlan =
     !incremental ||
     structuralChange ||

@@ -10,7 +10,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { ScrollArea } from "~/components/ui/scroll-area";
 import {
   Empty,
   EmptyDescription,
@@ -18,6 +17,11 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+import {
+  ListPagination,
+  usePaginatedItems,
+} from "~/components/list-pagination";
+import { cn } from "~/lib/utils";
 
 interface NotificationItem {
   id: string;
@@ -57,6 +61,7 @@ export function NotificationCenter() {
   }, [load]);
 
   const unread = items.filter((item) => !item.readAt).length;
+  const notificationPagination = usePaginatedItems(items, 5);
 
   const markAllRead = async () => {
     await fetch("/api/me/notifications/read-all", { method: "POST" });
@@ -98,12 +103,12 @@ export function NotificationCenter() {
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[min(22rem,calc(100vw-2rem))] rounded-xl p-2"
+        className="w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl p-0"
       >
-        <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+        <div className="border-border/50 flex items-start justify-between gap-3 border-b px-4 py-3">
           <div>
             <p className="text-sm font-semibold">Notifications</p>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground mt-0.5 text-xs">
               Indexing, access, and review updates
             </p>
           </div>
@@ -158,18 +163,23 @@ export function NotificationCenter() {
             </EmptyHeader>
           </Empty>
         ) : (
-          <ScrollArea className="h-96">
-            <div className="flex flex-col">
-              {items.map((item) => {
+          <div className="max-h-[22rem] scrollbar-none overflow-y-auto">
+            <div className="divide-border/40 flex flex-col divide-y">
+              {notificationPagination.paginatedItems.map((item) => {
                 const content = (
-                  <div className="hover:bg-muted/50 flex flex-col gap-1 rounded-lg px-3 py-2.5 transition-colors">
+                  <div
+                    className={cn(
+                      "hover:bg-muted/50 flex flex-col gap-1.5 px-4 py-3 transition-colors",
+                      !item.readAt && "bg-primary/[0.035]",
+                    )}
+                  >
                     <div className="flex items-center gap-2">
                       {!item.readAt && (
-                        <span className="bg-primary size-2 rounded-full" />
+                        <span className="bg-primary size-1.5 shrink-0 rounded-full" />
                       )}
-                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-sm font-semibold">{item.title}</p>
                     </div>
-                    <p className="text-muted-foreground text-xs leading-5">
+                    <p className="text-muted-foreground text-xs leading-4.5">
                       {item.message}
                     </p>
                     <p className="text-muted-foreground text-[11px]">
@@ -197,8 +207,18 @@ export function NotificationCenter() {
                 );
               })}
             </div>
-          </ScrollArea>
+          </div>
         )}
+        {items.length > notificationPagination.pageSize ? (
+          <div className="border-border/50 border-t px-2 py-2">
+            <ListPagination
+              page={notificationPagination.page}
+              pageSize={notificationPagination.pageSize}
+              totalItems={items.length}
+              onPageChange={notificationPagination.setPage}
+            />
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

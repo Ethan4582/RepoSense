@@ -40,6 +40,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import {
+  ListPagination,
+  usePaginatedItems,
+} from "~/components/list-pagination";
 
 export default function MeetingsPage() {
   const { projectId, project, projects, setProjectId } = useProject();
@@ -62,11 +66,12 @@ export default function MeetingsPage() {
     { projectId: queryProjectId },
     { refetchInterval: 5000 },
   );
+  const meetingPagination = usePaginatedItems(meetings ?? [], 10);
   const deleteMeeting = api.project.deleteMeeting.useMutation();
   const refetch = useRefetch();
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
       {/* Header Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -165,7 +170,7 @@ export default function MeetingsPage() {
           </div>
         ) : (
           <ul className="divide-y divide-[#f0f0f0]">
-            {meetings.map((meeting) => {
+            {meetingPagination.paginatedItems.map((meeting) => {
               const isProcessing = meeting.status === "PROCESSING";
               const issuesCount = meeting.issues?.length ?? 0;
 
@@ -296,6 +301,16 @@ export default function MeetingsPage() {
             })}
           </ul>
         )}
+        {meetings && meetings.length > meetingPagination.pageSize ? (
+          <div className="border-border/50 border-t px-4 py-3">
+            <ListPagination
+              page={meetingPagination.page}
+              pageSize={meetingPagination.pageSize}
+              totalItems={meetings.length}
+              onPageChange={meetingPagination.setPage}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* Upload Audio Dialog Modal */}

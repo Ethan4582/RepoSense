@@ -26,6 +26,10 @@ import {
 } from "~/components/ui/select";
 import { cn } from "~/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import {
+  ListPagination,
+  usePaginatedItems,
+} from "~/components/list-pagination";
 
 interface PullRequest {
   id: number;
@@ -149,6 +153,7 @@ export default function PullRequestsPage() {
       );
     });
   }, [pullRequests, filter, search]);
+  const pullRequestPagination = usePaginatedItems(filtered, 10);
 
   const toggleExpanded = (id: number) => {
     setExpanded((prev) => {
@@ -290,139 +295,150 @@ export default function PullRequestsPage() {
           </p>
         </div>
       ) : (
-        <div className="divide-border/50 border-border/50 bg-card divide-y overflow-hidden rounded-xl border shadow-xs">
-          {filtered.map((pr) => {
-            const status = prStatus(pr);
-            const isExpanded = expanded.has(pr.id);
+        <div className="flex flex-col gap-3">
+          <div className="divide-border/50 border-border/50 bg-card divide-y overflow-hidden rounded-xl border shadow-xs">
+            {pullRequestPagination.paginatedItems.map((pr) => {
+              const status = prStatus(pr);
+              const isExpanded = expanded.has(pr.id);
 
-            return (
-              <div key={pr.id} className="hover:bg-muted/20 transition-colors">
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(pr.id)}
-                  className="focus-visible:ring-ring flex w-full items-start gap-3 px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              return (
+                <div
+                  key={pr.id}
+                  className="hover:bg-muted/20 transition-colors"
                 >
-                  <span className="text-muted-foreground mt-1 shrink-0">
-                    {isExpanded ? (
-                      <ChevronDown className="size-4" />
-                    ) : (
-                      <ChevronRight className="size-4" />
-                    )}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(pr.id)}
+                    className="focus-visible:ring-ring flex w-full items-start gap-3 px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  >
+                    <span className="text-muted-foreground mt-1 shrink-0">
+                      {isExpanded ? (
+                        <ChevronDown className="size-4" />
+                      ) : (
+                        <ChevronRight className="size-4" />
+                      )}
+                    </span>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-muted-foreground font-mono text-xs font-semibold">
-                        #{pr.number}
-                      </span>
-                      <span className="text-foreground line-clamp-1 text-sm font-medium">
-                        {pr.title}
-                      </span>
-                      {pr.isDraft ? (
-                        <Badge
-                          variant="outline"
-                          className="text-muted-foreground text-[9px]"
-                        >
-                          Draft
-                        </Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-muted-foreground font-mono text-xs font-semibold">
+                          #{pr.number}
+                        </span>
+                        <span className="text-foreground line-clamp-1 text-sm font-medium">
+                          {pr.title}
+                        </span>
+                        {pr.isDraft ? (
+                          <Badge
+                            variant="outline"
+                            className="text-muted-foreground text-[9px]"
+                          >
+                            Draft
+                          </Badge>
+                        ) : null}
+                      </div>
+
+                      <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                        <span className="flex items-center gap-1">
+                          {status === "merged" ? (
+                            <GitMerge className="size-3 text-violet-500" />
+                          ) : (
+                            <GitPullRequest className="size-3" />
+                          )}
+                          <span className="capitalize">{status}</span>
+                        </span>
+                        <span className="font-mono">
+                          {pr.branchName} → {pr.baseBranch}
+                        </span>
+                        <span>{formatDate(pr.createdAt)}</span>
+                      </div>
+
+                      {pr.labels.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {pr.labels.map((label) => (
+                            <Badge
+                              key={label}
+                              variant="secondary"
+                              className="text-[9px] font-normal"
+                            >
+                              {label}
+                            </Badge>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
 
-                    <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-                      <span className="flex items-center gap-1">
-                        {status === "merged" ? (
-                          <GitMerge className="size-3 text-violet-500" />
-                        ) : (
-                          <GitPullRequest className="size-3" />
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-semibold capitalize",
+                          statusStyles(status),
                         )}
-                        <span className="capitalize">{status}</span>
+                      >
+                        {status}
+                      </Badge>
+                      <span className="text-muted-foreground flex items-center gap-1 text-[10px]">
+                        <Avatar className="size-4">
+                          <AvatarImage src={pr.authorAvatar} />
+                          <AvatarFallback className="bg-primary/10 text-primary text-[8px]">
+                            {pr.authorName[0]?.toUpperCase() ?? "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        {pr.authorName}
                       </span>
-                      <span className="font-mono">
-                        {pr.branchName} → {pr.baseBranch}
-                      </span>
-                      <span>{formatDate(pr.createdAt)}</span>
                     </div>
+                  </button>
 
-                    {pr.labels.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {pr.labels.map((label) => (
-                          <Badge
-                            key={label}
-                            variant="secondary"
-                            className="text-[9px] font-normal"
-                          >
-                            {label}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] font-semibold capitalize",
-                        statusStyles(status),
+                  {isExpanded ? (
+                    <div className="bg-muted/15 rounded-b-md px-4 py-3 pl-10">
+                      {pr.body ? (
+                        <div className="text-foreground/90 max-h-72 overflow-y-auto text-xs leading-6 whitespace-pre-wrap">
+                          {pr.body}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-xs italic">
+                          No description provided on GitHub.
+                        </p>
                       )}
-                    >
-                      {status}
-                    </Badge>
-                    <span className="text-muted-foreground flex items-center gap-1 text-[10px]">
-                      <Avatar className="size-4">
-                        <AvatarImage src={pr.authorAvatar} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-[8px]">
-                          {pr.authorName[0]?.toUpperCase() ?? "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      {pr.authorName}
-                    </span>
-                  </div>
-                </button>
-
-                {isExpanded ? (
-                  <div className="bg-muted/15 rounded-b-md px-4 py-3 pl-10">
-                    {pr.body ? (
-                      <div className="text-foreground/90 max-h-72 overflow-y-auto text-xs leading-6 whitespace-pre-wrap">
-                        {pr.body}
+                      <div className="mt-4 flex items-center justify-between gap-2 pt-1">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 text-[11px]"
+                          >
+                            <Link href={`/wiki/${projectId}`}>
+                              <ExternalLink className="size-3" />
+                              View wiki
+                            </Link>
+                          </Button>
+                          <span className="text-muted-foreground text-[10px]">
+                            Updated {formatDate(pr.updatedAt)}
+                          </span>
+                        </div>
+                        <a href={pr.htmlUrl} target="_blank" rel="noreferrer">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 rounded-md text-[11px]"
+                          >
+                            View on GitHub <ExternalLink className="size-3" />
+                          </Button>
+                        </a>
                       </div>
-                    ) : (
-                      <p className="text-muted-foreground text-xs italic">
-                        No description provided on GitHub.
-                      </p>
-                    )}
-                    <div className="mt-4 flex items-center justify-between gap-2 pt-1">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          asChild
-                          variant="outline"
-                          size="sm"
-                          className="h-7 gap-1.5 text-[11px]"
-                        >
-                          <Link href={`/wiki/${projectId}`}>
-                            <ExternalLink className="size-3" />
-                            View wiki
-                          </Link>
-                        </Button>
-                        <span className="text-muted-foreground text-[10px]">
-                          Updated {formatDate(pr.updatedAt)}
-                        </span>
-                      </div>
-                      <a href={pr.htmlUrl} target="_blank" rel="noreferrer">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1.5 rounded-md text-[11px]"
-                        >
-                          View on GitHub <ExternalLink className="size-3" />
-                        </Button>
-                      </a>
                     </div>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          <ListPagination
+            page={pullRequestPagination.page}
+            pageSize={pullRequestPagination.pageSize}
+            totalItems={filtered.length}
+            onPageChange={pullRequestPagination.setPage}
+          />
         </div>
       )}
     </div>

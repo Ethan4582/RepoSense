@@ -56,6 +56,10 @@ import {
 import useProject from "~/hooks/use-project";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
+import {
+  ListPagination,
+  usePaginatedItems,
+} from "~/components/list-pagination";
 
 interface EnrichedProject {
   id: string;
@@ -258,6 +262,7 @@ export default function DashboardPage() {
       );
     });
   }, [projects, searchQuery, isLink]);
+  const projectPagination = usePaginatedItems(filteredProjects, 8);
 
   if (isError) {
     return (
@@ -292,7 +297,7 @@ export default function DashboardPage() {
   return (
     <div className="bg-background text-foreground flex min-h-full flex-col">
       {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 md:py-12">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 md:py-8">
         {/* Header & Quick Search Matching Reference Screen */}
         <section className="mx-auto max-w-2xl text-center">
           <h1 className="text-foreground text-3xl font-normal tracking-tight sm:text-4xl">
@@ -343,7 +348,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* Repository Cards */}
-            {filteredProjects.map((project) => {
+            {projectPagination.paginatedItems.map((project) => {
               const isPublic =
                 localVisibility[project.id] ?? project.isPublicWiki;
               const isBusy = togglingId === project.id;
@@ -499,6 +504,15 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </div>
+
+          <div className="mt-4">
+            <ListPagination
+              page={projectPagination.page}
+              pageSize={projectPagination.pageSize}
+              totalItems={filteredProjects.length}
+              onPageChange={projectPagination.setPage}
+            />
           </div>
 
           {filteredProjects.length === 0 && (

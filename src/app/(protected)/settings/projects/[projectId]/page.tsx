@@ -45,6 +45,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import useProject from "~/hooks/use-project";
 import {
+  ListPagination,
+  usePaginatedItems,
+} from "~/components/list-pagination";
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -127,6 +131,9 @@ export default function ProjectSettingsPage() {
   const [inviteRole, setInviteRole] =
     React.useState<Exclude<ProjectRole, "OWNER">>("VIEWER");
   const [inviteUrl, setInviteUrl] = React.useState<string | null>(null);
+  const memberPagination = usePaginatedItems(members, 10);
+  const revisionPagination = usePaginatedItems(revisions, 12);
+  const auditPagination = usePaginatedItems(audit, 10);
 
   const load = React.useCallback(async () => {
     const governanceResponse = await fetch(
@@ -446,7 +453,7 @@ export default function ProjectSettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {members.map((member) => (
+                  {memberPagination.paginatedItems.map((member) => (
                     <TableRow key={member.userId}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -527,6 +534,16 @@ export default function ProjectSettingsPage() {
                   ))}
                 </TableBody>
               </Table>
+              {members.length > memberPagination.pageSize ? (
+                <div className="border-border/50 border-t px-4 py-3">
+                  <ListPagination
+                    page={memberPagination.page}
+                    pageSize={memberPagination.pageSize}
+                    totalItems={members.length}
+                    onPageChange={memberPagination.setPage}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>
@@ -572,7 +589,7 @@ export default function ProjectSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : null}
-                  {revisions.map((revision) => {
+                  {revisionPagination.paginatedItems.map((revision) => {
                     return (
                       <TableRow key={revision.id}>
                         <TableCell>
@@ -649,6 +666,16 @@ export default function ProjectSettingsPage() {
                   })}
                 </TableBody>
               </Table>
+              {revisions.length > revisionPagination.pageSize ? (
+                <div className="border-border/50 border-t px-4 py-3">
+                  <ListPagination
+                    page={revisionPagination.page}
+                    pageSize={revisionPagination.pageSize}
+                    totalItems={revisions.length}
+                    onPageChange={revisionPagination.setPage}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>
@@ -679,7 +706,7 @@ export default function ProjectSettingsPage() {
                     </EmptyHeader>
                   </Empty>
                 ) : null}
-                {audit.map((event) => (
+                {auditPagination.paginatedItems.map((event) => (
                   <Alert
                     key={event.id}
                     className="border-border/40 bg-muted/20"
@@ -697,6 +724,12 @@ export default function ProjectSettingsPage() {
                     </AlertDescription>
                   </Alert>
                 ))}
+                <ListPagination
+                  page={auditPagination.page}
+                  pageSize={auditPagination.pageSize}
+                  totalItems={audit.length}
+                  onPageChange={auditPagination.setPage}
+                />
               </CardContent>
             </Card>
           </TabsContent>

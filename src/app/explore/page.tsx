@@ -19,6 +19,10 @@ import { AccountMenu } from "~/components/account-menu";
 import { NotificationCenter } from "~/components/notification-center";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
+import {
+  ListPagination,
+  usePaginatedItems,
+} from "~/components/list-pagination";
 
 interface ExploreProject {
   id: string;
@@ -61,6 +65,7 @@ export default function ExplorePage() {
   const [projects, setProjects] = React.useState<ExploreProject[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const projectPagination = usePaginatedItems(projects, 9);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -264,7 +269,7 @@ export default function ExplorePage() {
                   loading && "opacity-70",
                 )}
               >
-                {projects.map((project) => (
+                {projectPagination.paginatedItems.map((project) => (
                   <Card
                     key={project.id}
                     className="group hover:bg-muted/20 gap-0 p-0 transition-colors"
@@ -306,6 +311,14 @@ export default function ExplorePage() {
                 ))}
               </div>
             )}
+            <div className="mt-4">
+              <ListPagination
+                page={projectPagination.page}
+                pageSize={projectPagination.pageSize}
+                totalItems={projects.length}
+                onPageChange={projectPagination.setPage}
+              />
+            </div>
           </section>
         </main>
       </div>

@@ -1066,10 +1066,10 @@ export function WikiReader() {
   return (
     <div className="internal-app bg-background flex h-screen flex-col overflow-hidden">
       {/* -- Header -- */}
-      <header className="border-border/60 relative flex h-14 shrink-0 items-center justify-center border-b px-3 sm:px-5">
-        <div className="flex h-full w-full items-center justify-between gap-3">
+      <header className="border-border/50 relative flex h-14 shrink-0 items-center justify-center border-b px-6 sm:px-16">
+        <div className="border-border/40 flex h-full w-full max-w-[1750px] items-center justify-between gap-3 border-x px-4 sm:px-7">
           {/* Left brand segment */}
-          <div className="ml-auto flex shrink-0 items-center gap-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden">
             {isSignedIn ? (
               <Button
                 variant="ghost"
@@ -1102,11 +1102,11 @@ export function WikiReader() {
                 alt="RepoSense"
                 className="size-6 rounded-md object-contain"
               />
-              <span className="text-foreground text-[17px] font-semibold tracking-tight">
+              <span className="text-foreground hidden text-[17px] font-semibold tracking-tight md:inline">
                 RepoSense
               </span>
             </Link>
-            <Breadcrumb className="hidden min-w-0 sm:block">
+            <Breadcrumb className="hidden min-w-0 lg:block">
               <BreadcrumbList className="flex-nowrap">
                 <BreadcrumbItem className="hidden lg:inline-flex">
                   <BreadcrumbLink asChild>
@@ -1145,33 +1145,41 @@ export function WikiReader() {
           </div>
 
           {/* Right actions segment */}
-          <div className="flex items-center gap-2.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             {project.canEdit && isSignedIn ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsEditing(!isEditing)}
-                className="border-border/60 text-foreground hover:bg-muted/40 h-8 rounded-[8px] px-3 text-xs font-medium"
+                className="border-border/60 text-foreground hover:bg-muted/40 size-8 rounded-lg p-0 text-xs font-medium xl:h-8 xl:w-auto xl:px-3"
+                title={isEditing ? "Return to reading mode" : "Edit wiki"}
               >
-                <Pencil className="mr-1.5 size-3.5" />
-                <span>{isEditing ? "Reading Mode" : "Edit Wiki"}</span>
+                <Pencil />
+                <span className="hidden xl:inline">
+                  {isEditing ? "Reading Mode" : "Edit Wiki"}
+                </span>
               </Button>
             ) : null}
             <Link href={`/pulls?projectId=${project.id}`}>
               <Button
                 variant="outline"
                 size="sm"
-                className="border-border/60 text-foreground hover:bg-muted/40 h-8 rounded-[8px] px-3 text-xs font-medium"
+                className="border-border/60 text-foreground hover:bg-muted/40 size-8 rounded-lg p-0 text-xs font-medium xl:h-8 xl:w-auto xl:px-3"
+                title="Pull requests"
               >
-                <GitPullRequest className="mr-1.5 size-3.5" />
-                <span className="hidden sm:inline">Pull Requests</span>
+                <GitPullRequest />
+                <span className="hidden xl:inline">Pull Requests</span>
               </Button>
             </Link>
             <Popover open={shareOpen} onOpenChange={setShareOpen}>
               <PopoverTrigger asChild>
-                <Button size="sm">
+                <Button
+                  size="sm"
+                  className="size-8 p-0 lg:h-8 lg:w-auto lg:px-3"
+                  title="Share wiki"
+                >
                   <Share2 data-icon="inline-start" />
-                  <span>Share</span>
+                  <span className="hidden lg:inline">Share</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1254,7 +1262,7 @@ export function WikiReader() {
               </PopoverContent>
             </Popover>
             {isSignedIn ? (
-              <div className="ml-1 flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:ml-1 sm:gap-1">
                 <NotificationCenter />
                 <AccountMenu />
               </div>
@@ -1296,8 +1304,8 @@ export function WikiReader() {
       ) : null}
 
       {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-4 sm:px-6 lg:px-10">
-        <div className="relative flex min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-6 sm:px-16">
+        <div className="border-border/40 relative flex min-h-0 w-full max-w-[1750px] flex-1 overflow-hidden border-x">
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
           {!qaOpen && sidebarOpen ? (
             <aside className="bg-sidebar border-sidebar-border absolute inset-y-0 left-0 z-20 flex w-[260px] shrink-0 scrollbar-none flex-col overflow-y-auto border-r px-4 py-5 shadow-lg md:relative md:z-10 md:shadow-none">

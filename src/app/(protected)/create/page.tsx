@@ -460,7 +460,7 @@ function CreateProjectContent() {
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-8">
       <div>
         <h1 className="text-foreground text-2xl font-bold tracking-tight">
-          New Repository Wiki
+          New Wiki
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Turn a GitHub repository into a structured, source-cited wiki powered
@@ -717,7 +717,7 @@ function CreateProjectContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="bg-muted/20 flex items-start justify-between gap-4 rounded-lg border border-border/70 p-3">
+              <div className="bg-muted/20 border-border/50 flex items-start justify-between gap-4 rounded-lg border p-3">
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-xs font-semibold">
                     {isPrivateRepo ? (
@@ -861,7 +861,7 @@ function CreateProjectContent() {
                 </div>
               ) : null}
 
-              <div className="flex items-center justify-between border-t border-border/70 pt-4">
+              <div className="border-border/50 flex items-center justify-between border-t pt-4">
                 <p className="text-muted-foreground text-[11px]">
                   Indexing runs in the background. You can close this tab.
                 </p>

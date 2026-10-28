@@ -43,6 +43,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import useProject from "~/hooks/use-project";
 import {
   Empty,
   EmptyDescription,
@@ -50,7 +51,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { RevisionDiff } from "~/components/wiki/revision-diff";
 
 type ProjectRole = "OWNER" | "EDITOR" | "CONTRIBUTOR" | "VIEWER";
 
@@ -119,13 +119,11 @@ export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { projects, setProjectId } = useProject();
   const [governance, setGovernance] = React.useState<Governance | null>(null);
   const [members, setMembers] = React.useState<Member[]>([]);
   const [revisions, setRevisions] = React.useState<Revision[]>([]);
   const [audit, setAudit] = React.useState<AuditEvent[]>([]);
-  const [expandedRevision, setExpandedRevision] = React.useState<string | null>(
-    null,
-  );
   const [inviteRole, setInviteRole] =
     React.useState<Exclude<ProjectRole, "OWNER">>("VIEWER");
   const [inviteUrl, setInviteUrl] = React.useState<string | null>(null);
@@ -268,9 +266,12 @@ export default function ProjectSettingsPage() {
     (requestedTab === "audit" && canManage)
       ? requestedTab
       : "general";
+  const availableProjects = (projects ?? []).filter(
+    (project) => !project.deletedAt,
+  );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Project settings</h1>
@@ -278,12 +279,39 @@ export default function ProjectSettingsPage() {
             Manage updates, access, versions, and security history.
           </p>
         </div>
-        <Button variant="outline" asChild>
-          <Link href={`/wiki/${projectId}`}>
-            <ExternalLink data-icon="inline-start" />
-            Open wiki
-          </Link>
-        </Button>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <Select
+            value={projectId}
+            onValueChange={(nextProjectId) => {
+              setProjectId(nextProjectId);
+              router.push(
+                `/settings/projects/${nextProjectId}?tab=${activeTab}`,
+              );
+            }}
+          >
+            <SelectTrigger
+              className="w-56 max-w-[70vw]"
+              aria-label="Switch repository"
+            >
+              <SelectValue placeholder="Select repository" />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectGroup>
+                {availableProjects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.repoOwner}/{project.repoName}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" asChild>
+            <Link href={`/wiki/${projectId}`}>
+              <ExternalLink data-icon="inline-start" />
+              Open wiki
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Tabs
@@ -544,102 +572,79 @@ export default function ProjectSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : null}
-                  {revisions.map((revision, revisionIndex) => {
-                    const previousRevision = revisions
-                      .slice(revisionIndex + 1)
-                      .find(
-                        (candidate) => candidate.page.id === revision.page.id,
-                      );
-                    const expanded = expandedRevision === revision.id;
-
+                  {revisions.map((revision) => {
                     return (
-                      <React.Fragment key={revision.id}>
-                        <TableRow>
-                          <TableCell>
-                            <p className="text-sm font-medium">
-                              {revision.page.title}
-                            </p>
-                            <p className="text-muted-foreground text-xs">
-                              {new Date(revision.createdAt).toLocaleString()}
-                            </p>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {revision.actor
-                              ? [
-                                  revision.actor.firstName,
-                                  revision.actor.lastName,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ") || "Member"
-                              : "Automatic update"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            +{revision.additions} / -{revision.deletions}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                revision.status === "PENDING"
-                                  ? "outline"
-                                  : "secondary"
-                              }
-                            >
-                              {revision.status === "PENDING"
-                                ? "Needs review"
-                                : "Published"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
+                      <TableRow key={revision.id}>
+                        <TableCell>
+                          <p className="text-sm font-medium">
+                            {revision.page.title}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {new Date(revision.createdAt).toLocaleString()}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {revision.actor
+                            ? [
+                                revision.actor.firstName,
+                                revision.actor.lastName,
+                              ]
+                                .filter(Boolean)
+                                .join(" ") || "Member"
+                            : "Automatic update"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          +{revision.additions} / -{revision.deletions}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              revision.status === "PENDING"
+                                ? "outline"
+                                : "secondary"
+                            }
+                          >
+                            {revision.status === "PENDING"
+                              ? "Needs review"
+                              : "Published"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" asChild>
+                              <Link
+                                href={`/settings/projects/${projectId}/revisions/${revision.id}`}
+                              >
+                                <GitCompareArrows data-icon="inline-start" />
+                                View diff
+                              </Link>
+                            </Button>
+                            {revision.status === "PENDING" && canPublish ? (
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  void revisionAction(revision.id, "approve")
+                                }
+                              >
+                                <Check data-icon="inline-start" />
+                                Approve
+                              </Button>
+                            ) : revision.status === "PUBLISHED" &&
+                              canPublish ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() =>
-                                  setExpandedRevision(
-                                    expanded ? null : revision.id,
-                                  )
+                                  void revisionAction(revision.id, "rollback")
                                 }
                               >
-                                <GitCompareArrows data-icon="inline-start" />
-                                {expanded ? "Hide diff" : "View diff"}
+                                <RotateCcw data-icon="inline-start" />
+                                Restore
                               </Button>
-                              {revision.status === "PENDING" && canPublish ? (
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    void revisionAction(revision.id, "approve")
-                                  }
-                                >
-                                  <Check data-icon="inline-start" />
-                                  Approve
-                                </Button>
-                              ) : revision.status === "PUBLISHED" &&
-                                canPublish ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    void revisionAction(revision.id, "rollback")
-                                  }
-                                >
-                                  <RotateCcw data-icon="inline-start" />
-                                  Restore
-                                </Button>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                        {expanded ? (
-                          <TableRow className="hover:bg-transparent">
-                            <TableCell colSpan={5} className="p-4">
-                              <RevisionDiff
-                                previous={previousRevision?.content ?? ""}
-                                current={revision.content}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </React.Fragment>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
                 </TableBody>
@@ -675,7 +680,10 @@ export default function ProjectSettingsPage() {
                   </Empty>
                 ) : null}
                 {audit.map((event) => (
-                  <Alert key={event.id}>
+                  <Alert
+                    key={event.id}
+                    className="border-border/40 bg-muted/20"
+                  >
                     <AlertTitle>
                       {event.action.replaceAll("_", " ").toLowerCase()}
                     </AlertTitle>

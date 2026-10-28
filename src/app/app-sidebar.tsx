@@ -4,30 +4,22 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useUser, useClerk } from "@clerk/nextjs";
 import {
   ArrowRight,
   Bookmark,
   BookOpen,
-  Check,
   Compass,
   FolderGit2,
   Globe2,
   History,
   KeyRound,
   Lock,
-  LogOut,
   MoreHorizontal,
-  Moon,
-  PanelLeft,
-  PanelLeftClose,
   Pencil,
   Plus,
   Search,
   Settings,
-  Sun,
   Trash2,
-  User as UserIcon,
   Video,
   GitPullRequest,
   Loader2,
@@ -35,7 +27,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -53,11 +44,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -79,11 +65,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import { Card, CardContent } from "~/components/ui/card";
 import useProject from "~/hooks/use-project";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
-import { reliableSignOut } from "~/lib/sign-out";
 
 const NAV_ITEMS = [
   { title: "Dashboard", icon: Compass, url: "/dashboard" },
@@ -108,19 +93,6 @@ type ProjectSummary = {
   _count?: { wikiPages: number };
 };
 
-function statusFor(project: ProjectSummary) {
-  const status = project.indexingJobs?.[0]?.status;
-  if (!status) return { color: "bg-muted-foreground/40", label: "Not indexed" };
-  if (status === "FAILED")
-    return { color: "bg-red-500", label: "Indexing failed" };
-  if (status === "COMPLETED")
-    return { color: "bg-emerald-500", label: "Ready" };
-  if (status === "RUNNING")
-    return { color: "bg-amber-500 animate-pulse", label: "Indexing" };
-  if (status === "QUEUED") return { color: "bg-amber-400", label: "Queued" };
-  return { color: "bg-muted-foreground/40", label: status.toLowerCase() };
-}
-
 interface AppSideBarProps {
   onClose?: () => void;
 }
@@ -128,9 +100,7 @@ interface AppSideBarProps {
 export function AppSideBar({ onClose }: AppSideBarProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
-  const { open, setOpen } = useSidebar();
-  const { user } = useUser();
-  const { signOut, openUserProfile } = useClerk();
+  const { open } = useSidebar();
   const {
     projects,
     project,
@@ -140,7 +110,6 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
     isError: projectsFailed,
   } = useProject();
 
-  const [profileOpen, setProfileOpen] = React.useState(false);
   const [busyProject, setBusyProject] = React.useState<string | null>(null);
 
   // Rename Dialog State
@@ -229,10 +198,10 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
   return (
     <Sidebar
       collapsible="offcanvas"
-      className="border-sidebar-border bg-sidebar select-none"
+      className="bg-sidebar select-none group-data-[side=left]:border-r-0 group-data-[side=right]:border-l-0"
     >
-      <SidebarHeader className="border-sidebar-border gap-2 border-b p-3">
-        <div className="flex items-center justify-between">
+      <SidebarHeader className="gap-2 p-3 pb-2">
+        <div className="flex h-8 items-center">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
               <Image
@@ -249,48 +218,35 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
               </span>
             )}
           </Link>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              if (onClose) onClose();
-              else setOpen(!open);
-            }}
-            className="text-muted-foreground hover:text-foreground size-7"
-            aria-label="Toggle sidebar"
-          >
-            {open ? (
-              <PanelLeftClose className="size-4" />
-            ) : (
-              <PanelLeft className="size-4" />
-            )}
-          </Button>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            window.dispatchEvent(new Event("open-command-palette"))
-          }
-          className={cn(
-            "bg-background text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 items-center rounded-lg border text-xs transition-colors",
-            open
-              ? "w-full justify-between px-3"
-              : "mx-auto size-8 justify-center p-0",
-          )}
-          title="Search anything (Ctrl+K)"
-        >
-          <div className="flex items-center gap-2">
-            <Search className="text-muted-foreground size-4 shrink-0" />
-            {open && <span>Search...</span>}
-          </div>
-          {open && (
-            <kbd className="border-border/80 bg-muted/60 text-muted-foreground pointer-events-none rounded border px-1.5 py-0.5 font-mono text-[10px]">
-              Ctrl K
-            </kbd>
-          )}
-        </button>
+        <Card className="border-border/40 gap-0 py-0 shadow-none">
+          <CardContent className="p-0">
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(new Event("open-command-palette"))
+              }
+              className={cn(
+                "text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 items-center rounded-lg text-xs transition-colors",
+                open
+                  ? "w-full justify-between px-3"
+                  : "mx-auto size-8 justify-center p-0",
+              )}
+              title="Search anything (Ctrl+K)"
+            >
+              <span className="flex items-center gap-2">
+                <Search className="size-4 shrink-0" />
+                {open && <span>Search...</span>}
+              </span>
+              {open && (
+                <kbd className="bg-muted text-muted-foreground pointer-events-none rounded px-1.5 py-0.5 font-mono text-[10px]">
+                  Ctrl K
+                </kbd>
+              )}
+            </button>
+          </CardContent>
+        </Card>
 
         <Link href="/create" className="block">
           <Button
@@ -299,15 +255,15 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
               "bg-background text-foreground hover:bg-muted h-9 rounded-lg text-xs font-semibold",
               open ? "w-full justify-start gap-2" : "mx-auto size-8 p-0",
             )}
-            title="New Repository Wiki"
+            title="New Wiki"
           >
             <Plus className="text-primary size-4 shrink-0" />
-            {open && <span>New Repository Wiki</span>}
+            {open && <span>New Wiki</span>}
           </Button>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="gap-3 overflow-y-auto p-2">
+      <SidebarContent className="scrollbar-none gap-2 overflow-y-auto px-2 py-1">
         <SidebarGroup className="p-0">
           {open && (
             <SidebarGroupLabel className="text-muted-foreground px-2 py-1 text-[11px] font-semibold tracking-wider uppercase">
@@ -328,13 +284,13 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
                       isActive={isActive}
                       tooltip={item.title}
                       className={cn(
-                        "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors",
+                        "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
                         isActive
                           ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground font-semibold shadow-xs"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
-                      <Link href={item.url} prefetch>
+                      <Link href={item.url} prefetch onClick={onClose}>
                         <Icon className="size-4 shrink-0" />
                         {open && <span className="truncate">{item.title}</span>}
                       </Link>
@@ -350,9 +306,13 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
                       `/settings/projects/${projectId}`,
                     )}
                     tooltip="Updates & access"
-                    className="text-muted-foreground hover:bg-muted hover:text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
                   >
-                    <Link href={`/settings/projects/${projectId}`} prefetch>
+                    <Link
+                      href={`/settings/projects/${projectId}`}
+                      prefetch
+                      onClick={onClose}
+                    >
                       <Settings className="size-4 shrink-0" />
                       {open && <span>Updates &amp; access</span>}
                     </Link>
@@ -396,7 +356,6 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
               ) : (
                 <SidebarMenu className="gap-0.5">
                   {visibleProjects.map((project) => {
-                    const status = statusFor(project);
                     const isCurrent = project.id === projectId;
                     const isBusy = busyProject === project.id;
 
@@ -404,25 +363,21 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
                       <SidebarMenuItem key={project.id}>
                         <div
                           className={cn(
-                            "group relative flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs transition-colors duration-200 ease-out",
+                            "group relative flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors duration-200 ease-out",
                             isCurrent
-                              ? "border-primary/20 bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent",
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <Link
                             href={`/wiki/${project.id}`}
                             prefetch
-                            onClick={() => setProjectId(project.id)}
+                            onClick={() => {
+                              setProjectId(project.id);
+                              onClose?.();
+                            }}
                             className="flex min-w-0 flex-1 items-center pr-1"
                           >
-                            <span
-                              className={cn(
-                                "mr-2 size-1.5 shrink-0 rounded-full",
-                                status.color,
-                              )}
-                              title={status.label}
-                            />
                             <span className="text-foreground truncate text-xs font-medium">
                               {project.name}
                             </span>
@@ -508,123 +463,6 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-sidebar-border border-t p-2">
-        <Popover open={profileOpen} onOpenChange={setProfileOpen}>
-          <div className="flex w-full items-center justify-between">
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="hover:bg-muted/60 flex flex-1 items-center gap-2.5 overflow-hidden rounded-lg p-1 text-left transition-colors"
-              >
-                <Avatar className="size-7 shrink-0 border">
-                  <AvatarImage
-                    src={user?.imageUrl}
-                    alt={user?.fullName ?? "User"}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary text-[11px] font-semibold">
-                    {user?.firstName?.[0] ??
-                      user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ??
-                      "U"}
-                  </AvatarFallback>
-                </Avatar>
-                {open && (
-                  <div className="flex min-w-0 flex-col truncate">
-                    <span className="text-foreground truncate text-xs font-semibold">
-                      {user?.fullName ??
-                        user?.primaryEmailAddress?.emailAddress?.split(
-                          "@",
-                        )[0] ??
-                        "Developer"}
-                    </span>
-                    <span className="text-muted-foreground truncate text-[10px]">
-                      {user?.primaryEmailAddress?.emailAddress}
-                    </span>
-                  </div>
-                )}
-              </button>
-            </PopoverTrigger>
-
-            {open && (
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-foreground ml-1 size-7 shrink-0"
-                  title="Settings"
-                >
-                  <Settings className="size-4" />
-                </Button>
-              </PopoverTrigger>
-            )}
-          </div>
-
-          <PopoverContent
-            side="top"
-            align="start"
-            sideOffset={10}
-            className="bg-popover text-foreground w-64 space-y-1.5 rounded-xl border p-2 shadow-2xl"
-          >
-            <div className="border-border/40 flex items-center gap-2.5 border-b px-2 py-1.5 pb-2">
-              <Avatar className="size-8 shrink-0">
-                <AvatarImage src={user?.imageUrl} />
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                  {user?.firstName?.[0] ?? "U"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="text-foreground truncate text-xs font-semibold">
-                  {user?.fullName ?? "Developer"}
-                </span>
-                <span className="text-muted-foreground truncate text-[10px]">
-                  {user?.primaryEmailAddress?.emailAddress}
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-1">
-              <div className="text-muted-foreground px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
-                Account
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileOpen(false);
-                  openUserProfile();
-                }}
-                className="text-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
-              >
-                <UserIcon className="text-muted-foreground size-3.5" />
-                <span>Account settings</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileOpen(false);
-                  router.push("/settings");
-                }}
-                className="text-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
-              >
-                <KeyRound className="text-muted-foreground size-3.5" />
-                <span>API keys</span>
-              </button>
-            </div>
-
-            <div className="border-border/40 space-y-0.5 border-t pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileOpen(false);
-                  void reliableSignOut(signOut);
-                }}
-                className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
-              >
-                <LogOut className="size-3.5" />
-                <span>Sign out</span>
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </SidebarFooter>
       <SidebarRail />
 
       {/* Shadcn Rename Wiki Dialog */}

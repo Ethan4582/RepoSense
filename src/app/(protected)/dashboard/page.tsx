@@ -1,33 +1,21 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useClerk, useUser } from "@clerk/nextjs";
 import {
   ArrowRight,
   BookOpen,
-  Compass,
-  ExternalLink,
-  FolderGit2,
-  GitBranch,
-  KeyRound,
   Link as LinkIcon,
   Loader2,
-  LogOut,
-  Moon,
   MoreHorizontal,
   Pencil,
   Plus,
   Search,
   Settings,
-  Share2,
   Sparkles,
   Star,
-  Sun,
   Trash2,
-  User as UserIcon,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -65,11 +53,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import useProject from "~/hooks/use-project";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
-import { reliableSignOut } from "~/lib/sign-out";
 
 interface EnrichedProject {
   id: string;
@@ -123,8 +109,6 @@ function getLanguageColor(language?: string | null): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user } = useUser();
-  const { signOut, openUserProfile } = useClerk();
   const {
     projects: rawProjects,
     isLoading,
@@ -202,15 +186,6 @@ export default function DashboardPage() {
       const url = `${window.location.origin}/wiki/${projectId}`;
       await navigator.clipboard.writeText(url);
       toast.success("Wiki link copied to clipboard");
-    } catch {
-      toast.error("Could not copy link");
-    }
-  };
-
-  const copyDashboardShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success("Dashboard link copied to clipboard");
     } catch {
       toast.error("Could not copy link");
     }
@@ -315,89 +290,41 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="bg-background text-foreground flex min-h-screen flex-col">
-      {/* Top Controls */}
-      <div className="flex h-14 items-center justify-end px-4 sm:px-6">
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="ring-border/50 hover:ring-primary/60 rounded-full ring-2 transition-all outline-none"
-              >
-                <Avatar className="size-7">
-                  <AvatarImage
-                    src={user?.imageUrl}
-                    alt={user?.fullName ?? "User"}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                    {user?.firstName?.[0] ?? "U"}
-                  </AvatarFallback>
-                </Avatar>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 text-xs">
-              <div className="border-border/50 border-b px-2 py-1.5">
-                <p className="text-foreground truncate font-semibold">
-                  {user?.fullName ?? "Developer"}
-                </p>
-                <p className="text-muted-foreground truncate text-[10px]">
-                  {user?.primaryEmailAddress?.emailAddress}
-                </p>
-              </div>
-              <DropdownMenuItem
-                onClick={() => openUserProfile()}
-                className="cursor-pointer gap-2"
-              >
-                <UserIcon className="size-3.5" />
-                Account Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => void reliableSignOut(signOut)}
-                className="text-destructive focus:text-destructive cursor-pointer gap-2"
-              >
-                <LogOut className="size-3.5" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
+    <div className="bg-background text-foreground flex min-h-full flex-col">
       {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 md:py-16">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 md:py-12">
         {/* Header & Quick Search Matching Reference Screen */}
         <section className="mx-auto max-w-2xl text-center">
           <h1 className="text-foreground text-3xl font-normal tracking-tight sm:text-4xl">
             Which repo would you like to understand?
           </h1>
 
-          <form onSubmit={handleSearchSubmit} className="relative mt-8">
-            <div className="bg-card/60 focus-within:border-primary/50 focus-within:ring-primary/10 relative flex items-center rounded-xl border transition-colors focus-within:ring-2">
-              <Search className="text-muted-foreground ml-3.5 size-4 shrink-0" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for repositories (or paste a link)"
-                className="text-foreground placeholder:text-muted-foreground w-full bg-transparent px-3 py-2.5 text-sm outline-none"
-              />
-              {isLink && (
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="bg-primary text-primary-foreground mr-2 h-7 gap-1 rounded-[12px] text-xs"
-                >
-                  <Sparkles className="size-3" />
-                  Index
-                </Button>
-              )}
-            </div>
-          </form>
+          <Card className="mt-8 gap-0 py-0 shadow-none">
+            <CardContent className="flex items-center gap-2 p-1.5">
+              <Search className="text-muted-foreground ml-2 size-4 shrink-0" />
+              <form
+                onSubmit={handleSearchSubmit}
+                className="flex min-w-0 flex-1 items-center gap-2"
+              >
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search repositories or paste a GitHub link"
+                  className="border-0 bg-transparent shadow-none focus-visible:ring-0"
+                />
+                {isLink ? (
+                  <Button type="submit" size="sm">
+                    <Sparkles data-icon="inline-start" />
+                    Index
+                  </Button>
+                ) : null}
+              </form>
+            </CardContent>
+          </Card>
         </section>
 
         {/* Repository Grid */}
-        <section className="mt-12">
+        <section className="mt-8">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {/* Card 1: Dedicated "+ Add repo" card */}
             <Link
@@ -427,7 +354,7 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/wiki/${project.id}`)}
-                  className="group bg-card relative flex min-h-[170px] cursor-pointer flex-col justify-between rounded-xl border border-border/70 p-5 shadow-xs transition-colors hover:border-border"
+                  className="group bg-card border-border/50 hover:bg-muted/20 relative flex min-h-[170px] cursor-pointer flex-col justify-between rounded-xl border p-5 shadow-xs transition-colors"
                 >
                   {/* Top: Repo name & Visibility / Actions */}
                   <div>

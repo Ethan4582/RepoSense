@@ -1,13 +1,16 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { MermaidDiagram } from './mermaid';
-import { cn } from '~/lib/utils';
-import { CitationPill } from './citation-pill';
+import * as React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import {
+  oneDark,
+  oneLight,
+} from "react-syntax-highlighter/dist/esm/styles/prism";
+import { MermaidDiagram } from "./mermaid";
+import { cn } from "~/lib/utils";
+import { CitationPill } from "./citation-pill";
 
 export interface CitationTarget {
   filePath: string;
@@ -19,27 +22,30 @@ function slugify(text: string) {
   return (
     text
       .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/[^a-z0-9\s-]/g, "")
       .trim()
-      .replace(/\s+/g, '-') || 'section'
+      .replace(/\s+/g, "-") || "section"
   );
 }
 
 function nodeToText(node: React.ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(nodeToText).join('');
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).join("");
   if (React.isValidElement(node)) {
     return nodeToText((node.props as { children?: React.ReactNode }).children);
   }
-  return '';
+  return "";
 }
 
 function renderCitations(markdown: string): string {
   // Support both [[path:start-end]] and [[path:line]]
-  return markdown.replace(/\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g, (_match: string, path: string, start: string, end?: string) => {
-    const finalLine = end ?? start;
-    return `[${path}:${start}${end && end !== start ? `-${end}` : ''}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
-  });
+  return markdown.replace(
+    /\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g,
+    (_match: string, path: string, start: string, end?: string) => {
+      const finalLine = end ?? start;
+      return `[${path}:${start}${end && end !== start ? `-${end}` : ""}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+    },
+  );
 }
 
 function useIsDark() {
@@ -47,10 +53,10 @@ function useIsDark() {
 
   React.useEffect(() => {
     const root = document.documentElement;
-    const update = () => setIsDark(root.classList.contains('dark'));
+    const update = () => setIsDark(root.classList.contains("dark"));
     update();
     const observer = new MutationObserver(update);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, []);
 
@@ -66,7 +72,7 @@ function CodeBlock({
   language?: string;
   isDark: boolean;
 }) {
-  const lineCount = React.useMemo(() => raw.split('\n').length, [raw]);
+  const lineCount = React.useMemo(() => raw.split("\n").length, [raw]);
   const isLong = lineCount > 8;
   const [collapsed, setCollapsed] = React.useState(isLong);
   const [copied, setCopied] = React.useState(false);
@@ -78,43 +84,76 @@ function CodeBlock({
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const badgeText = (language || 'text').toUpperCase();
+  const badgeText = (language || "text").toUpperCase();
 
   return (
-    <div className="bg-muted/20 my-4 overflow-hidden rounded-lg border border-border/70">
+    <div className="bg-muted/20 border-border/50 my-4 overflow-hidden rounded-lg border">
       <div
         onClick={() => isLong && setCollapsed(!collapsed)}
         className={cn(
-          'flex select-none items-center justify-between border-b border-border/70 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground',
-          isLong && 'cursor-pointer hover:bg-muted/70'
+          "border-border/50 bg-muted/40 text-muted-foreground flex items-center justify-between border-b px-3 py-1.5 text-xs select-none",
+          isLong && "hover:bg-muted/70 cursor-pointer",
         )}
       >
         <div className="flex items-center gap-2">
           {isLong ? (
             collapsed ? (
-              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+              <svg
+                className="size-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
             ) : (
-              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+              <svg
+                className="size-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             )
           ) : null}
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground">
+          <span className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold">
             {badgeText}
           </span>
         </div>
         <button
           onClick={handleCopy}
           type="button"
-          className="flex items-center gap-1 rounded px-2 py-1 font-mono text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground dark:hover:bg-neutral-800"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1 rounded px-2 py-1 font-mono text-[11px] transition dark:hover:bg-neutral-800"
           title="Copy code"
         >
           {copied ? (
             <>
-              <svg className="size-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg
+                className="size-3 text-emerald-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
               <span>Copied</span>
             </>
           ) : (
             <>
-              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <svg
+                className="size-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
               <span>Copy</span>
             </>
           )}
@@ -123,16 +162,18 @@ function CodeBlock({
 
       {!collapsed ? (
         <SyntaxHighlighter
-          language={language || 'bash'}
+          language={language || "bash"}
           style={isDark ? oneDark : oneLight}
           customStyle={{
             margin: 0,
-            padding: '1rem',
-            fontSize: '12.5px',
-            lineHeight: '1.6',
-            background: 'transparent',
+            padding: "1rem",
+            fontSize: "12.5px",
+            lineHeight: "1.6",
+            background: "transparent",
           }}
-          codeTagProps={{ style: { fontFamily: 'var(--font-mono, monospace)' } }}
+          codeTagProps={{
+            style: { fontFamily: "var(--font-mono, monospace)" },
+          }}
           wrapLongLines
         >
           {raw}
@@ -160,17 +201,26 @@ export function WikiMarkdown({
   const isDark = useIsDark();
   const prepared = React.useMemo(() => {
     // 1. Convert [[path:start-end]] or [[path:line]]
-    let res = content.replace(/\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g, (_m, path, start, end) => {
-      const finalLine = end ?? start;
-      return `[${path}:${start}${end && end !== start ? `-${end}` : ''}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
-    });
+    let res = content.replace(
+      /\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g,
+      (_m, path, start, end) => {
+        const finalLine = end ?? start;
+        return `[${path}:${start}${end && end !== start ? `-${end}` : ""}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+      },
+    );
 
     // 2. Also convert any raw unformatted "path/to/file.ext:12" or "README.md:12" or "path/file.ext:12-25" into citations
-    res = res.replace(/(?:^|\s)([\w.-]+(?:\/[\w.-]+)*\.[a-zA-Z0-9]+):(\d+)(?:-(\d+))?(?=[\s,.)]|$)/g, (fullMatch, path, start, end) => {
-      const prefix = fullMatch.startsWith(' ') || fullMatch.startsWith('\n') ? fullMatch[0] : '';
-      const finalLine = end ?? start;
-      return `${prefix}[${path}:${start}${end && end !== start ? `-${end}` : ''}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
-    });
+    res = res.replace(
+      /(?:^|\s)([\w.-]+(?:\/[\w.-]+)*\.[a-zA-Z0-9]+):(\d+)(?:-(\d+))?(?=[\s,.)]|$)/g,
+      (fullMatch, path, start, end) => {
+        const prefix =
+          fullMatch.startsWith(" ") || fullMatch.startsWith("\n")
+            ? fullMatch[0]
+            : "";
+        const finalLine = end ?? start;
+        return `${prefix}[${path}:${start}${end && end !== start ? `-${end}` : ""}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+      },
+    );
 
     return res;
   }, [content]);
@@ -183,19 +233,27 @@ export function WikiMarkdown({
   };
 
   return (
-    <div className={cn('wiki-prose max-w-none text-[17px] leading-[1.7] text-foreground [&.compact]:text-[14px] [&.compact]:leading-[1.65] [&.compact_h1]:text-[18px] [&.compact_h1]:mt-1 [&.compact_h1]:mb-3 [&.compact_h2]:text-[16px] [&.compact_h2]:mt-4 [&.compact_h2]:mb-2 [&.compact_h3]:text-[15px] [&.compact_h3]:mt-3 [&.compact_h3]:mb-1.5 [&.compact_p]:my-2.5', className)}>
+    <div
+      className={cn(
+        "wiki-prose text-foreground max-w-none text-[17px] leading-[1.7] [&.compact]:text-[14px] [&.compact]:leading-[1.65] [&.compact_h1]:mt-1 [&.compact_h1]:mb-3 [&.compact_h1]:text-[18px] [&.compact_h2]:mt-4 [&.compact_h2]:mb-2 [&.compact_h2]:text-[16px] [&.compact_h3]:mt-3 [&.compact_h3]:mb-1.5 [&.compact_h3]:text-[15px] [&.compact_p]:my-2.5",
+        className,
+      )}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="mt-2 mb-6 text-[30px] font-bold tracking-tight text-foreground">
+            <h1 className="text-foreground mt-2 mb-6 text-[30px] font-bold tracking-tight">
               {children}
             </h1>
           ),
           h2: ({ children }) => {
             const text = nodeToText(children);
             return (
-              <h2 id={headingId(text)} className="scroll-mt-24 mt-10 mb-4 text-[24px] font-semibold tracking-tight text-foreground">
+              <h2
+                id={headingId(text)}
+                className="text-foreground mt-10 mb-4 scroll-mt-24 text-[24px] font-semibold tracking-tight"
+              >
                 {children}
               </h2>
             );
@@ -203,67 +261,117 @@ export function WikiMarkdown({
           h3: ({ children }) => {
             const text = nodeToText(children);
             return (
-              <h3 id={headingId(text)} className="scroll-mt-24 mt-8 mb-3 text-[22px] font-semibold text-foreground">
+              <h3
+                id={headingId(text)}
+                className="text-foreground mt-8 mb-3 scroll-mt-24 text-[22px] font-semibold"
+              >
                 {children}
               </h3>
             );
           },
-          p: ({ children }) => <p className="my-4 text-foreground/90">{children}</p>,
-          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-          ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-6">{children}</ul>,
-          ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-6">{children}</ol>,
-          li: ({ children }) => <li className="text-foreground/90">{children}</li>,
+          p: ({ children }) => (
+            <p className="text-foreground/90 my-4">{children}</p>
+          ),
+          strong: ({ children }) => (
+            <strong className="text-foreground font-semibold">
+              {children}
+            </strong>
+          ),
+          ul: ({ children }) => (
+            <ul className="my-4 list-disc space-y-2 pl-6">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="my-4 list-decimal space-y-2 pl-6">{children}</ol>
+          ),
+          li: ({ children }) => (
+            <li className="text-foreground/90">{children}</li>
+          ),
           table: ({ children }) => (
-            <div className="my-5 overflow-x-auto rounded-lg border border-border/70">
-              <table className="w-full border-collapse text-xs">{children}</table>
+            <div className="border-border/50 my-5 overflow-x-auto rounded-lg border">
+              <table className="w-full border-collapse text-xs">
+                {children}
+              </table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
-          th: ({ children }) => (
-            <th className="border-b border-border/70 px-3 py-2 text-left font-semibold text-foreground">{children}</th>
+          thead: ({ children }) => (
+            <thead className="bg-muted/50">{children}</thead>
           ),
-          td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 align-top">{children}</td>,
+          th: ({ children }) => (
+            <th className="border-border/50 text-foreground border-b px-3 py-2 text-left font-semibold">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="border-border/50 border-b px-3 py-2 align-top">
+              {children}
+            </td>
+          ),
           blockquote: ({ children }) => (
-            <blockquote className="border-primary/60 my-4 border-l-2 pl-4 text-muted-foreground">
+            <blockquote className="border-primary/60 text-muted-foreground my-4 border-l-2 pl-4">
               {children}
             </blockquote>
           ),
-          hr: () => <hr className="my-8 border-t border-border/70" />,
+          hr: () => <hr className="border-border/50 my-8 border-t" />,
           a: ({ href, children }) => {
-            if (href?.startsWith('citation:')) {
-              const raw = href.slice('citation:'.length);
-              const lastColon = raw.lastIndexOf(':');
-              const secondColon = raw.lastIndexOf(':', lastColon - 1);
+            if (href?.startsWith("citation:")) {
+              const raw = href.slice("citation:".length);
+              const lastColon = raw.lastIndexOf(":");
+              const secondColon = raw.lastIndexOf(":", lastColon - 1);
               const path = decodeURIComponent(raw.slice(0, secondColon));
               const startLine = Number(raw.slice(secondColon + 1, lastColon));
               const endLine = Number(raw.slice(lastColon + 1));
 
               const target = { filePath: path, startLine, endLine };
-              const ref = commitSha || branch || 'main';
-              const lineAnchor = startLine === endLine ? `#L${startLine}` : `#L${startLine}-L${endLine}`;
+              const ref = commitSha || branch || "main";
+              const lineAnchor =
+                startLine === endLine
+                  ? `#L${startLine}`
+                  : `#L${startLine}-L${endLine}`;
               const githubUrl = githubRepo
-                ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${ref}/${path.replace(/^\/+/, '')}${lineAnchor}`
+                ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${ref}/${path.replace(/^\/+/, "")}${lineAnchor}`
                 : undefined;
-              return <CitationPill target={target} githubUrl={githubUrl} onCitation={onCitation} />;
+              return (
+                <CitationPill
+                  target={target}
+                  githubUrl={githubUrl}
+                  onCitation={onCitation}
+                />
+              );
             }
 
             // Check if link href or text has citation pattern (e.g. path:12 or path#L12)
             const textContent = nodeToText(children).trim();
             const hrefOrText = href || textContent;
-            const citationMatch = /(?:citation:)?([^:\s#]+)(?:[:#]L?(\d+))(?:(?:-|:L?)(\d+))?$/.exec(hrefOrText);
+            const citationMatch =
+              /(?:citation:)?([^:\s#]+)(?:[:#]L?(\d+))(?:(?:-|:L?)(\d+))?$/.exec(
+                hrefOrText,
+              );
             if (citationMatch && citationMatch[1] && citationMatch[2]) {
-              const cleanPath = decodeURIComponent(citationMatch[1].replace(/^citation:/, '').replace(/#.*$/, ''));
+              const cleanPath = decodeURIComponent(
+                citationMatch[1].replace(/^citation:/, "").replace(/#.*$/, ""),
+              );
               // Only consider valid file extensions
               if (/\.[a-zA-Z0-9]+$/.test(cleanPath)) {
                 const startLine = Number(citationMatch[2]);
-                const endLine = citationMatch[3] ? Number(citationMatch[3]) : startLine;
+                const endLine = citationMatch[3]
+                  ? Number(citationMatch[3])
+                  : startLine;
                 const target = { filePath: cleanPath, startLine, endLine };
-                const ref = commitSha || branch || 'main';
-                const lineAnchor = startLine === endLine ? `#L${startLine}` : `#L${startLine}-L${endLine}`;
+                const ref = commitSha || branch || "main";
+                const lineAnchor =
+                  startLine === endLine
+                    ? `#L${startLine}`
+                    : `#L${startLine}-L${endLine}`;
                 const githubUrl = githubRepo
-                  ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${ref}/${cleanPath.replace(/^\/+/, '')}${lineAnchor}`
+                  ? `https://github.com/${githubRepo.owner}/${githubRepo.repo}/blob/${ref}/${cleanPath.replace(/^\/+/, "")}${lineAnchor}`
                   : undefined;
-                return <CitationPill target={target} githubUrl={githubUrl} onCitation={onCitation} />;
+                return (
+                  <CitationPill
+                    target={target}
+                    githubUrl={githubUrl}
+                    onCitation={onCitation}
+                  />
+                );
               }
             }
 
@@ -272,7 +380,7 @@ export function WikiMarkdown({
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                className="font-medium text-primary underline underline-offset-2"
+                className="text-primary font-medium underline underline-offset-2"
               >
                 {children}
               </a>
@@ -281,19 +389,24 @@ export function WikiMarkdown({
 
           pre: ({ children }) => <>{children}</>,
           code: ({ className: codeClassName, children, ...props }) => {
-            const language = /language-(\w+)/.exec(codeClassName ?? '')?.[1];
-            const raw = nodeToText(children).replace(/\n$/, '');
+            const language = /language-(\w+)/.exec(codeClassName ?? "")?.[1];
+            const raw = nodeToText(children).replace(/\n$/, "");
 
-            if (language === 'mermaid') {
+            if (language === "mermaid") {
               return <MermaidDiagram chart={raw} />;
             }
 
-            if (language || raw.includes('\n')) {
-              return <CodeBlock raw={raw} language={language} isDark={isDark} />;
+            if (language || raw.includes("\n")) {
+              return (
+                <CodeBlock raw={raw} language={language} isDark={isDark} />
+              );
             }
 
             return (
-              <code className="bg-muted/60 rounded border border-border/70 px-1.5 py-0.5 font-mono text-[12px]" {...props}>
+              <code
+                className="bg-muted/60 border-border/50 rounded border px-1.5 py-0.5 font-mono text-[12px]"
+                {...props}
+              >
                 {children}
               </code>
             );

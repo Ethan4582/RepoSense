@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Image from 'next/image';
+import * as React from "react";
+import Image from "next/image";
 import {
   KeyRound,
   CheckCircle2,
@@ -11,15 +11,15 @@ import {
   Trash2,
   Plus,
   RefreshCw,
-} from 'lucide-react';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '~/components/ui/card';
+} from "~/components/ui/card";
 import {
   Table,
   TableBody,
@@ -27,7 +27,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '~/components/ui/table';
+} from "~/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +35,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '~/components/ui/dialog';
+} from "~/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,50 +45,50 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '~/components/ui/alert-dialog';
+} from "~/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '~/components/ui/select';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
-import { Badge } from '~/components/ui/badge';
+} from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
 import {
   PROVIDER_METADATA,
   getDefaultChatModel,
   getModelsByProvider,
   type ProviderId,
-} from '~/lib/providers';
-import { client } from '~/lib/api-client';
-import { cn } from '~/lib/utils';
+} from "~/lib/providers";
+import { client } from "~/lib/api-client";
+import { cn } from "~/lib/utils";
 
 const ALL_PROVIDERS: ProviderId[] = [
-  'OPENAI',
-  'GEMINI',
-  'ANTHROPIC',
-  'META',
-  'DEEPSEEK',
-  'XAI',
-  'GROQ',
+  "OPENAI",
+  "GEMINI",
+  "ANTHROPIC",
+  "META",
+  "DEEPSEEK",
+  "XAI",
+  "GROQ",
 ];
 
 const NON_EMBEDDING_PROVIDERS: ProviderId[] = [
-  'ANTHROPIC',
-  'META',
-  'DEEPSEEK',
-  'XAI',
-  'GROQ',
+  "ANTHROPIC",
+  "META",
+  "DEEPSEEK",
+  "XAI",
+  "GROQ",
 ];
 
 interface ApiKeyItem {
   id: string;
   provider: ProviderId;
   keyLast4: string;
-  status: 'UNVERIFIED' | 'VALID' | 'INVALID' | 'QUOTA_EXHAUSTED';
+  status: "UNVERIFIED" | "VALID" | "INVALID" | "QUOTA_EXHAUSTED";
   lastVerifiedAt?: string | null;
   lastUsedAt?: string | null;
 }
@@ -115,7 +115,7 @@ interface MeBody {
   user?: {
     defaultChatProvider?: ProviderId;
     defaultChatModel?: string;
-    defaultEmbeddingProvider?: 'GEMINI' | 'OPENAI';
+    defaultEmbeddingProvider?: "GEMINI" | "OPENAI";
   };
 }
 
@@ -126,21 +126,27 @@ function errorMessage(err: unknown, fallback: string) {
 export default function SettingsPage() {
   const [keys, setKeys] = React.useState<ApiKeyItem[]>([]);
   const [loadingKeys, setLoadingKeys] = React.useState(true);
-  const [testingProvider, setTestingProvider] = React.useState<ProviderId | null>(null);
+  const [testingProvider, setTestingProvider] =
+    React.useState<ProviderId | null>(null);
 
   // Key modal state
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [targetProvider, setTargetProvider] = React.useState<ProviderId>('OPENAI');
-  const [inputKey, setInputKey] = React.useState('');
+  const [targetProvider, setTargetProvider] =
+    React.useState<ProviderId>("OPENAI");
+  const [inputKey, setInputKey] = React.useState("");
   const [savingKey, setSavingKey] = React.useState(false);
 
   // Remove confirmation
-  const [removeConfirmProvider, setRemoveConfirmProvider] = React.useState<ProviderId | null>(null);
+  const [removeConfirmProvider, setRemoveConfirmProvider] =
+    React.useState<ProviderId | null>(null);
 
   // Defaults state - default pre-selected options
-  const [defaultChatProvider, setDefaultChatProvider] = React.useState<ProviderId>('OPENAI');
-  const [defaultChatModel, setDefaultChatModel] = React.useState<string>('gpt-6.1-sol');
-  const [defaultEmbeddingProvider, setDefaultEmbeddingProvider] = React.useState<'GEMINI' | 'OPENAI'>('OPENAI');
+  const [defaultChatProvider, setDefaultChatProvider] =
+    React.useState<ProviderId>("OPENAI");
+  const [defaultChatModel, setDefaultChatModel] =
+    React.useState<string>("gpt-6.1-sol");
+  const [defaultEmbeddingProvider, setDefaultEmbeddingProvider] =
+    React.useState<"GEMINI" | "OPENAI">("OPENAI");
   const [savingDefaults, setSavingDefaults] = React.useState(false);
 
   const fetchKeysAndMe = React.useCallback(async () => {
@@ -167,13 +173,16 @@ export default function SettingsPage() {
           if (meData.user.defaultChatModel) {
             setDefaultChatModel(meData.user.defaultChatModel);
           }
-          if (meData.user.defaultChatProvider && meData.user.defaultEmbeddingProvider) {
+          if (
+            meData.user.defaultChatProvider &&
+            meData.user.defaultEmbeddingProvider
+          ) {
             setDefaultEmbeddingProvider(meData.user.defaultEmbeddingProvider);
           }
         }
       }
     } catch (err) {
-      console.error('Failed to load settings data:', err);
+      console.error("Failed to load settings data:", err);
     } finally {
       setLoadingKeys(false);
     }
@@ -186,20 +195,20 @@ export default function SettingsPage() {
   const hasActiveEmbeddingKey = React.useMemo(() => {
     return keys.some(
       (k) =>
-        (k.provider === 'OPENAI' || k.provider === 'GEMINI') &&
-        (k.status === 'VALID' || k.status === 'UNVERIFIED')
+        (k.provider === "OPENAI" || k.provider === "GEMINI") &&
+        (k.status === "VALID" || k.status === "UNVERIFIED"),
     );
   }, [keys]);
 
-  const handleOpenAddKey = (provider: ProviderId = 'OPENAI') => {
+  const handleOpenAddKey = (provider: ProviderId = "OPENAI") => {
     setTargetProvider(provider);
-    setInputKey('');
+    setInputKey("");
     setDialogOpen(true);
   };
 
   const handleSaveKey = async () => {
     if (!inputKey.trim()) {
-      toast.error('Please enter an API key');
+      toast.error("Please enter an API key");
       return;
     }
 
@@ -214,7 +223,7 @@ export default function SettingsPage() {
 
       if (!res.ok) {
         const err = (await res.json()) as ErrorBody;
-        toast.error(err.error ?? 'Failed to save key');
+        toast.error(err.error ?? "Failed to save key");
         return;
       }
 
@@ -224,30 +233,44 @@ export default function SettingsPage() {
 
       if (verification) {
         if (verification.valid) {
-          toast.success(`${providerMeta.displayName} key verified and saved successfully!`);
-        } else if (verification.error?.code === 'QUOTA_EXHAUSTED') {
-          toast.error(`Key saved, but ${providerMeta.displayName} quota is exhausted or credit balance is zero.`);
-        } else if (verification.error?.code === 'RATE_LIMITED') {
-          toast.warning(`Key saved, but ${providerMeta.displayName} is temporarily rate-limited. Concurrency limit reached.`);
+          toast.success(
+            `${providerMeta.displayName} key verified and saved successfully!`,
+          );
+        } else if (verification.error?.code === "QUOTA_EXHAUSTED") {
+          toast.error(
+            `Key saved, but ${providerMeta.displayName} quota is exhausted or credit balance is zero.`,
+          );
+        } else if (verification.error?.code === "RATE_LIMITED") {
+          toast.warning(
+            `Key saved, but ${providerMeta.displayName} is temporarily rate-limited. Concurrency limit reached.`,
+          );
         } else {
-          toast.error(`Key saved, but verification failed: ${verification.error?.message ?? 'Invalid API key'}`);
+          toast.error(
+            `Key saved, but verification failed: ${verification.error?.message ?? "Invalid API key"}`,
+          );
         }
       } else {
         toast.success(`${providerMeta.displayName} key saved`);
       }
 
-      setInputKey('');
+      setInputKey("");
       setDialogOpen(false);
 
-      if (NON_EMBEDDING_PROVIDERS.includes(targetProvider) && !hasActiveEmbeddingKey) {
-        toast.warning('Please add an OpenAI or Gemini API key to enable code embeddings and RAG.', {
-          duration: 6000,
-        });
+      if (
+        NON_EMBEDDING_PROVIDERS.includes(targetProvider) &&
+        !hasActiveEmbeddingKey
+      ) {
+        toast.warning(
+          "Please add an OpenAI or Gemini API key to enable code embeddings and RAG.",
+          {
+            duration: 6000,
+          },
+        );
       }
 
       await fetchKeysAndMe();
     } catch (err) {
-      toast.error(errorMessage(err, 'Error saving key'));
+      toast.error(errorMessage(err, "Error saving key"));
     } finally {
       setSavingKey(false);
     }
@@ -256,33 +279,43 @@ export default function SettingsPage() {
   const handleTestKey = async (provider: ProviderId) => {
     try {
       setTestingProvider(provider);
-      const res = await client.keys[':provider'].test.$post({
+      const res = await client.keys[":provider"].test.$post({
         param: { provider },
       });
 
       if (!res.ok) {
         const err = (await res.json()) as ErrorBody;
-        toast.error(err.error ?? 'Key test failed');
+        toast.error(err.error ?? "Key test failed");
         return;
       }
 
       const data = (await res.json()) as VerificationBody;
       const verification = data.verification ?? null;
-      const isKeyValid = verification ? verification.valid : data.valid === true;
+      const isKeyValid = verification
+        ? verification.valid
+        : data.valid === true;
       const providerMeta = PROVIDER_METADATA[provider];
 
       if (isKeyValid) {
-        toast.success(`${providerMeta.displayName} key is active and verified!`);
-      } else if (verification?.error?.code === 'QUOTA_EXHAUSTED') {
-        toast.error(`${providerMeta.displayName} quota is exhausted: account has zero credits or exceeded limit.`);
-      } else if (verification?.error?.code === 'RATE_LIMITED') {
-        toast.warning(`${providerMeta.displayName} is temporarily rate-limited. Please retry shortly.`);
+        toast.success(
+          `${providerMeta.displayName} key is active and verified!`,
+        );
+      } else if (verification?.error?.code === "QUOTA_EXHAUSTED") {
+        toast.error(
+          `${providerMeta.displayName} quota is exhausted: account has zero credits or exceeded limit.`,
+        );
+      } else if (verification?.error?.code === "RATE_LIMITED") {
+        toast.warning(
+          `${providerMeta.displayName} is temporarily rate-limited. Please retry shortly.`,
+        );
       } else {
-        toast.error(`${providerMeta.displayName} key test failed: ${verification?.error?.message ?? 'Invalid API key'}`);
+        toast.error(
+          `${providerMeta.displayName} key test failed: ${verification?.error?.message ?? "Invalid API key"}`,
+        );
       }
       await fetchKeysAndMe();
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to test key'));
+      toast.error(errorMessage(err, "Failed to test key"));
     } finally {
       setTestingProvider(null);
     }
@@ -290,13 +323,13 @@ export default function SettingsPage() {
 
   const handleRemoveKey = async (provider: ProviderId) => {
     try {
-      const res = await client.keys[':provider'].$delete({
+      const res = await client.keys[":provider"].$delete({
         param: { provider },
       });
 
       if (!res.ok) {
         const err = (await res.json()) as ErrorBody;
-        toast.error(err.error ?? 'Failed to delete key');
+        toast.error(err.error ?? "Failed to delete key");
         return;
       }
 
@@ -304,7 +337,7 @@ export default function SettingsPage() {
       setRemoveConfirmProvider(null);
       await fetchKeysAndMe();
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to remove key'));
+      toast.error(errorMessage(err, "Failed to remove key"));
     }
   };
 
@@ -321,13 +354,13 @@ export default function SettingsPage() {
 
       if (!res.ok) {
         const err = (await res.json()) as ErrorBody;
-        toast.error(err.error ?? 'Failed to save defaults');
+        toast.error(err.error ?? "Failed to save defaults");
         return;
       }
 
-      toast.success('Default model preferences saved');
+      toast.success("Default model preferences saved");
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to save defaults'));
+      toast.error(errorMessage(err, "Failed to save defaults"));
     } finally {
       setSavingDefaults(false);
     }
@@ -338,29 +371,31 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-          <KeyRound className="size-5 text-primary" />
+        <h1 className="text-foreground flex items-center gap-2 text-xl font-bold tracking-tight">
+          <KeyRound className="text-primary size-5" />
           API Keys
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="text-muted-foreground mt-0.5 text-xs">
           Manage your AI provider keys and model preferences.
         </p>
       </div>
 
       {/* Provider API Keys Card */}
       <Card>
-        <CardHeader className="border-b border-border/70 bg-muted/20 px-5 py-4">
+        <CardHeader className="border-border/50 bg-muted/20 border-b px-5 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-sm font-semibold">Provider API Keys</CardTitle>
-              <CardDescription className="text-xs mt-0.5">
+              <CardTitle className="text-sm font-semibold">
+                Provider API Keys
+              </CardTitle>
+              <CardDescription className="mt-0.5 text-xs">
                 Configure your API keys to enable models across your projects.
               </CardDescription>
             </div>
             <Button
               size="sm"
-              onClick={() => handleOpenAddKey('OPENAI')}
-              className="h-7 text-xs gap-1"
+              onClick={() => handleOpenAddKey("OPENAI")}
+              className="h-7 gap-1 text-xs"
             >
               <Plus className="size-3" />
               Add Key
@@ -374,7 +409,9 @@ export default function SettingsPage() {
                 <TableHead className="text-xs font-medium">Provider</TableHead>
                 <TableHead className="text-xs font-medium">Status</TableHead>
                 <TableHead className="text-xs font-medium">Key</TableHead>
-                <TableHead className="text-xs font-medium text-right">Actions</TableHead>
+                <TableHead className="text-right text-xs font-medium">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -392,10 +429,13 @@ export default function SettingsPage() {
                             src={meta.logoAsset}
                             alt={meta.displayName}
                             fill
-                            className={cn('object-contain', meta.id === 'XAI' && 'dark:invert')}
+                            className={cn(
+                              "object-contain",
+                              meta.id === "XAI" && "dark:invert",
+                            )}
                           />
                         </div>
-                        <span className="font-medium text-xs text-foreground">
+                        <span className="text-foreground text-xs font-medium">
                           {meta.displayName}
                         </span>
                       </div>
@@ -403,33 +443,47 @@ export default function SettingsPage() {
 
                     <TableCell className="py-2.5">
                       {existing ? (
-                        existing.status === 'VALID' ? (
-                          <Badge variant="outline" className="gap-1 text-[11px] font-normal border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+                        existing.status === "VALID" ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-emerald-500/20 bg-emerald-500/10 text-[11px] font-normal text-emerald-600"
+                          >
                             <CheckCircle2 className="size-3" />
                             Connected
                           </Badge>
-                        ) : existing.status === 'INVALID' ? (
-                          <Badge variant="outline" className="gap-1 text-[11px] font-normal border-destructive/20 bg-destructive/10 text-destructive">
+                        ) : existing.status === "INVALID" ? (
+                          <Badge
+                            variant="outline"
+                            className="border-destructive/20 bg-destructive/10 text-destructive gap-1 text-[11px] font-normal"
+                          >
                             <XCircle className="size-3" />
                             Invalid Key
                           </Badge>
-                        ) : existing.status === 'QUOTA_EXHAUSTED' ? (
-                          <Badge variant="outline" className="gap-1 text-[11px] font-normal border-amber-500/20 bg-amber-500/10 text-amber-600">
+                        ) : existing.status === "QUOTA_EXHAUSTED" ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-amber-500/20 bg-amber-500/10 text-[11px] font-normal text-amber-600"
+                          >
                             <AlertCircle className="size-3" />
                             Quota Exhausted
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="text-[11px] font-normal">
+                          <Badge
+                            variant="secondary"
+                            className="text-[11px] font-normal"
+                          >
                             Unverified
                           </Badge>
                         )
                       ) : (
-                        <span className="text-xs text-muted-foreground/70">Not configured</span>
+                        <span className="text-muted-foreground/70 text-xs">
+                          Not configured
+                        </span>
                       )}
                     </TableCell>
 
-                    <TableCell className="py-2.5 font-mono text-xs text-muted-foreground">
-                      {existing ? `••••••••${existing.keyLast4}` : '—'}
+                    <TableCell className="text-muted-foreground py-2.5 font-mono text-xs">
+                      {existing ? `••••••••${existing.keyLast4}` : "—"}
                     </TableCell>
 
                     <TableCell className="py-2.5 text-right">
@@ -441,17 +495,19 @@ export default function SettingsPage() {
                               size="sm"
                               onClick={() => handleTestKey(provider)}
                               disabled={isTesting}
-                              className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                              className="text-muted-foreground hover:text-foreground h-7 gap-1 px-2 text-xs"
                               title="Verify key validity"
                             >
-                              <RefreshCw className={`size-3 ${isTesting ? 'animate-spin' : ''}`} />
-                              <span>{isTesting ? 'Testing...' : 'Test'}</span>
+                              <RefreshCw
+                                className={`size-3 ${isTesting ? "animate-spin" : ""}`}
+                              />
+                              <span>{isTesting ? "Testing..." : "Test"}</span>
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleOpenAddKey(provider)}
-                              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                              className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
                             >
                               Replace
                             </Button>
@@ -459,7 +515,7 @@ export default function SettingsPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => setRemoveConfirmProvider(provider)}
-                              className="size-7 text-muted-foreground hover:text-destructive"
+                              className="text-muted-foreground hover:text-destructive size-7"
                               title="Remove Key"
                             >
                               <Trash2 className="size-3.5" />
@@ -470,7 +526,7 @@ export default function SettingsPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleOpenAddKey(provider)}
-                            className="h-7 text-xs gap-1"
+                            className="h-7 gap-1 text-xs"
                           >
                             <Plus className="size-3" />
                             Add Key
@@ -488,17 +544,22 @@ export default function SettingsPage() {
 
       {/* Default Model Preferences Card */}
       <Card>
-        <CardHeader className="border-b border-border/70 bg-muted/20 px-5 py-4">
-          <CardTitle className="text-sm font-semibold">Default Model Preferences</CardTitle>
-          <CardDescription className="text-xs mt-0.5">
-            Choose your preferred chat and embedding models across all new projects.
+        <CardHeader className="border-border/50 bg-muted/20 border-b px-5 py-4">
+          <CardTitle className="text-sm font-semibold">
+            Default Model Preferences
+          </CardTitle>
+          <CardDescription className="mt-0.5 text-xs">
+            Choose your preferred chat and embedding models across all new
+            projects.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="space-y-4 p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {/* Default Chat Provider */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Default Chat Provider</Label>
+              <Label className="text-xs font-semibold">
+                Default Chat Provider
+              </Label>
               <Select
                 value={defaultChatProvider}
                 onValueChange={(val: ProviderId) => {
@@ -521,7 +582,9 @@ export default function SettingsPage() {
 
             {/* Default Chat Model */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Default Chat Model</Label>
+              <Label className="text-xs font-semibold">
+                Default Chat Model
+              </Label>
               <Select
                 value={defaultChatModel}
                 onValueChange={(val: string) => setDefaultChatModel(val)}
@@ -541,10 +604,14 @@ export default function SettingsPage() {
 
             {/* Default Embedding Provider */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Default Embedding Provider</Label>
+              <Label className="text-xs font-semibold">
+                Default Embedding Provider
+              </Label>
               <Select
                 value={defaultEmbeddingProvider}
-                onValueChange={(val: 'GEMINI' | 'OPENAI') => setDefaultEmbeddingProvider(val)}
+                onValueChange={(val: "GEMINI" | "OPENAI") =>
+                  setDefaultEmbeddingProvider(val)
+                }
               >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="Select Embedding Provider" />
@@ -561,14 +628,14 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end">
+          <div className="flex justify-end pt-2">
             <Button
               size="sm"
               onClick={handleSaveDefaults}
               disabled={savingDefaults}
               className="h-8 text-xs"
             >
-              {savingDefaults ? 'Saving...' : 'Save Preferences'}
+              {savingDefaults ? "Saving..." : "Save Preferences"}
             </Button>
           </div>
         </CardContent>
@@ -578,12 +645,14 @@ export default function SettingsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <KeyRound className="size-4 text-primary" />
-              Configure {PROVIDER_METADATA[targetProvider]?.displayName ?? 'API'} Key
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <KeyRound className="text-primary size-4" />
+              Configure{" "}
+              {PROVIDER_METADATA[targetProvider]?.displayName ?? "API"} Key
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Keys are encrypted at rest with AES-GCM and probed directly with {PROVIDER_METADATA[targetProvider]?.displayName}.
+            <DialogDescription className="text-muted-foreground text-xs">
+              Keys are encrypted at rest with AES-GCM and probed directly with{" "}
+              {PROVIDER_METADATA[targetProvider]?.displayName}.
             </DialogDescription>
           </DialogHeader>
 
@@ -614,23 +683,25 @@ export default function SettingsPage() {
                 placeholder="sk-... or paste your key here"
                 value={inputKey}
                 onChange={(e) => setInputKey(e.target.value)}
-                className="text-xs font-mono"
+                className="font-mono text-xs"
                 autoFocus
               />
             </div>
 
             {/* Embedding Guard Warning Inside Dialog */}
-            {NON_EMBEDDING_PROVIDERS.includes(targetProvider) && !hasActiveEmbeddingKey && (
-              <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300 space-y-1">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <AlertCircle className="size-3.5 shrink-0" />
-                  <span>Embedding Provider Required</span>
+            {NON_EMBEDDING_PROVIDERS.includes(targetProvider) &&
+              !hasActiveEmbeddingKey && (
+                <div className="space-y-1 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-300">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    <span>Embedding Provider Required</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    Please add an OpenAI or Gemini API key to enable code
+                    embeddings and RAG.
+                  </p>
                 </div>
-                <p className="text-[11px] leading-relaxed">
-                  Please add an OpenAI or Gemini API key to enable code embeddings and RAG.
-                </p>
-              </div>
-            )}
+              )}
           </div>
 
           <DialogFooter>
@@ -647,7 +718,7 @@ export default function SettingsPage() {
               size="sm"
               onClick={handleSaveKey}
               disabled={savingKey || !inputKey.trim()}
-              className="h-8 text-xs gap-1.5"
+              className="h-8 gap-1.5 text-xs"
             >
               {savingKey ? (
                 <>
@@ -655,7 +726,7 @@ export default function SettingsPage() {
                   <span>Verifying & Saving...</span>
                 </>
               ) : (
-                'Save Key'
+                "Save Key"
               )}
             </Button>
           </DialogFooter>
@@ -670,17 +741,25 @@ export default function SettingsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-semibold">
-              Remove {removeConfirmProvider && PROVIDER_METADATA[removeConfirmProvider].displayName} Key?
+              Remove{" "}
+              {removeConfirmProvider &&
+                PROVIDER_METADATA[removeConfirmProvider].displayName}{" "}
+              Key?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-muted-foreground">
-              Projects relying on this provider will not be able to generate responses until a new key is added.
+            <AlertDialogDescription className="text-muted-foreground text-xs">
+              Projects relying on this provider will not be able to generate
+              responses until a new key is added.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-xs">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => removeConfirmProvider && handleRemoveKey(removeConfirmProvider)}
-              className="h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() =>
+                removeConfirmProvider && handleRemoveKey(removeConfirmProvider)
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 text-xs"
             >
               Remove Key
             </AlertDialogAction>

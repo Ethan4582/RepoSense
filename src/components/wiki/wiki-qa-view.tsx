@@ -237,9 +237,9 @@ export function WikiQaView({
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
       {/* Left Pane: Pinned Chat Input Above Conversation Blocks */}
-      <section className="border-border/70 relative flex min-h-0 flex-1 flex-col overflow-hidden border-r">
+      <section className="border-border/50 relative flex min-h-0 flex-1 flex-col overflow-hidden border-r">
         {/* Top Header */}
-        <div className="border-border/70 bg-background/95 flex shrink-0 items-center justify-between border-b px-6 py-3 backdrop-blur-md">
+        <div className="border-border/50 bg-background/95 flex shrink-0 items-center justify-between border-b px-6 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -278,10 +278,10 @@ export function WikiQaView({
               <div
                 key={turn.id}
                 ref={isLatest ? latestTurnRef : undefined}
-                className="border-border/70 bg-card rounded-xl border p-6 shadow-xs"
+                className="border-border/50 bg-card rounded-xl border p-6 shadow-xs"
               >
                 {/* Question Header */}
-                <div className="border-border/70 flex items-start justify-between gap-4 border-b pb-4">
+                <div className="border-border/50 flex items-start justify-between gap-4 border-b pb-4">
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                       Q{index + 1}

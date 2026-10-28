@@ -9,16 +9,21 @@ import { cn } from "~/lib/utils";
 interface RevisionDiffProps {
   previous: string;
   current: string;
+  fullHeight?: boolean;
 }
 
-export function RevisionDiff({ previous, current }: RevisionDiffProps) {
+export function RevisionDiff({
+  previous,
+  current,
+  fullHeight = false,
+}: RevisionDiffProps) {
   const changes = diffLines(previous, current);
   let oldLine = 1;
   let newLine = 1;
 
   return (
-    <div className="bg-muted/20 overflow-hidden rounded-lg border">
-      <div className="flex items-center gap-2 border-b px-3 py-2">
+    <div className="bg-muted/20 border-border/50 overflow-hidden rounded-lg border">
+      <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
         <Badge variant="outline" className="bg-red-500/10">
           <Plus data-icon="inline-start" />
           Added
@@ -28,7 +33,9 @@ export function RevisionDiff({ previous, current }: RevisionDiffProps) {
           Deleted
         </Badge>
       </div>
-      <ScrollArea className="max-h-96">
+      <ScrollArea
+        className={fullHeight ? "h-[calc(100vh-17rem)] min-h-96" : "max-h-96"}
+      >
         <div className="min-w-max py-1 font-mono text-xs">
           {changes.flatMap((change, changeIndex) =>
             change.value

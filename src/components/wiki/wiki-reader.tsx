@@ -54,6 +54,15 @@ import { IndexingLoader } from "~/components/indexing-loader";
 import { restoreCitationRanges } from "~/lib/citations";
 import { ServerBusyNotice } from "~/components/server-busy-notice";
 import { NotificationCenter } from "~/components/notification-center";
+import { AccountMenu } from "~/components/account-menu";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { Separator } from "~/components/ui/separator";
@@ -1058,9 +1067,9 @@ export function WikiReader() {
     <div className="internal-app bg-background flex h-screen flex-col overflow-hidden">
       {/* -- Header -- */}
       <header className="border-border/60 relative flex h-14 shrink-0 items-center justify-center border-b px-3 sm:px-5">
-        <div className="flex h-full w-full max-w-[1500px] items-center justify-between gap-3">
+        <div className="flex h-full w-full items-center justify-between gap-3">
           {/* Left brand segment */}
-          <div className="flex items-center gap-2.5">
+          <div className="ml-auto flex shrink-0 items-center gap-2.5">
             {isSignedIn ? (
               <Button
                 variant="ghost"
@@ -1097,20 +1106,46 @@ export function WikiReader() {
                 RepoSense
               </span>
             </Link>
-            <span className="text-muted-foreground/30 font-light">/</span>
-            <a
-              href={project.repoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted-foreground hover:text-foreground truncate text-[15px] font-normal transition-colors"
-            >
-              {project.repoName}
-            </a>
+            <Breadcrumb className="hidden min-w-0 sm:block">
+              <BreadcrumbList className="flex-nowrap">
+                <BreadcrumbItem className="hidden lg:inline-flex">
+                  <BreadcrumbLink asChild>
+                    <Link href="/dashboard">Dashboard</Link>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden lg:block" />
+                <BreadcrumbItem className="min-w-0">
+                  {activePage ? (
+                    <BreadcrumbLink asChild>
+                      <Link
+                        href={`/wiki/${project.id}`}
+                        className="max-w-40 truncate"
+                      >
+                        {project.repoName}
+                      </Link>
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage className="max-w-40 truncate">
+                      {project.repoName}
+                    </BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+                {activePage ? (
+                  <>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem className="min-w-0">
+                      <BreadcrumbPage className="max-w-48 truncate">
+                        {activePage.title}
+                      </BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </>
+                ) : null}
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
 
           {/* Right actions segment */}
           <div className="flex items-center gap-2.5">
-            {isSignedIn ? <NotificationCenter /> : null}
             {project.canEdit && isSignedIn ? (
               <Button
                 variant="outline"
@@ -1218,6 +1253,12 @@ export function WikiReader() {
                 ) : null}
               </PopoverContent>
             </Popover>
+            {isSignedIn ? (
+              <div className="ml-1 flex items-center gap-1">
+                <NotificationCenter />
+                <AccountMenu />
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
@@ -1255,11 +1296,11 @@ export function WikiReader() {
       ) : null}
 
       {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-4 sm:px-6 lg:px-10">
         <div className="relative flex min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden">
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
           {!qaOpen && sidebarOpen ? (
-            <aside className="bg-sidebar border-sidebar-border absolute inset-y-0 left-0 z-20 flex w-[260px] shrink-0 flex-col overflow-y-auto border-r px-4 py-5 shadow-lg md:relative md:z-10 md:shadow-none">
+            <aside className="bg-sidebar border-sidebar-border absolute inset-y-0 left-0 z-20 flex w-[260px] shrink-0 scrollbar-none flex-col overflow-y-auto border-r px-4 py-5 shadow-lg md:relative md:z-10 md:shadow-none">
               <div className="mb-5">
                 <div className="text-muted-foreground text-[12px] font-normal">
                   {activePage?.updatedAt
@@ -1459,7 +1500,7 @@ export function WikiReader() {
                                     setActiveFile({ filePath: path });
                                     setQaOpen(true);
                                   }}
-                                  className="border-border/50 bg-background text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-[12px] transition-colors hover:border-neutral-400 dark:hover:border-neutral-600"
+                                  className="border-border/50 bg-background text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-[12px] transition-colors"
                                 >
                                   <FileCode2 className="size-3 shrink-0" />
                                   {path}
@@ -1710,7 +1751,7 @@ export function WikiReader() {
 
         {/* Code Viewer Drawer / Overlay when citation or file is clicked */}
         {activeFile && !qaOpen ? (
-          <div className="border-border/80 bg-background/95 animate-in slide-in-from-right fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l shadow-2xl backdrop-blur-xl duration-200">
+          <div className="border-border/50 bg-background/95 animate-in slide-in-from-right fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l shadow-2xl backdrop-blur-xl duration-200">
             <div className="flex h-full flex-col">
               <CodeViewer
                 projectId={projectId}

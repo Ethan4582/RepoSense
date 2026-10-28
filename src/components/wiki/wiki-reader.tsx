@@ -25,6 +25,7 @@ import {
   PanelLeft,
   Pencil,
   Save,
+  Settings,
   Share2,
   Sparkles,
   Sun,
@@ -1131,6 +1132,14 @@ export function WikiReader() {
                       {isPublic ? "Make private" : "Make public"}
                     </Button>
                   </div>
+                ) : null}
+                {project.isOwner ? (
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href={`/settings/projects/${project.id}`}>
+                      <Settings data-icon="inline-start" />
+                      Manage access and settings
+                    </Link>
+                  </Button>
                 ) : null}
               </PopoverContent>
             </Popover>

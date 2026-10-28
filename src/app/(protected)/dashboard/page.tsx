@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   Share2,
   Sparkles,
   Star,
@@ -32,6 +33,13 @@ import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { Input } from "~/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,6 +86,7 @@ interface EnrichedProject {
   stars?: number;
   language?: string | null;
   _count?: { wikiPages: number };
+  role?: "OWNER" | "EDITOR" | "CONTRIBUTOR" | "VIEWER";
 }
 
 function formatStars(count?: number | null): string {
@@ -116,7 +125,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user } = useUser();
   const { signOut, openUserProfile } = useClerk();
-  const { projects: rawProjects, isLoading, refetchProjects } = useProject();
+  const {
+    projects: rawProjects,
+    isLoading,
+    isError,
+    refetchProjects,
+  } = useProject();
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
@@ -135,7 +149,7 @@ export default function DashboardPage() {
   // Routing & Onboarding Flow:
   // When an authenticated user has zero repositories, automatically redirect them to /create
   React.useEffect(() => {
-    if (!isLoading && (!rawProjects || rawProjects.length === 0)) {
+    if (!isLoading && rawProjects?.length === 0) {
       router.replace("/create");
     }
   }, [isLoading, rawProjects, router]);
@@ -269,6 +283,25 @@ export default function DashboardPage() {
       );
     });
   }, [projects, searchQuery, isLink]);
+
+  if (isError) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center p-6">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Could not load your repositories</CardTitle>
+            <CardDescription>
+              Your account data is still safe. Retry the request or contact the
+              administrator if this continues.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => void refetchProjects()}>Try again</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading || !rawProjects || rawProjects.length === 0) {
     return (
@@ -472,6 +505,22 @@ export default function DashboardPage() {
                             >
                               <LinkIcon className="text-muted-foreground size-3.5" />
                               <span>Repository URL</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              asChild
+                              className="cursor-pointer gap-2"
+                            >
+                              <Link
+                                href={`/settings/projects/${project.id}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Settings className="text-muted-foreground size-3.5" />
+                                <span>
+                                  {project.role === "OWNER"
+                                    ? "Manage access"
+                                    : "Project settings"}
+                                </span>
+                              </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

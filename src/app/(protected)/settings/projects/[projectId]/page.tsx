@@ -257,11 +257,21 @@ export default function ProjectSettingsPage() {
       </div>
 
       <Tabs defaultValue="general">
-        <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="access">Access</TabsTrigger>
-          <TabsTrigger value="history">Versions</TabsTrigger>
-          {canManage && <TabsTrigger value="audit">Audit log</TabsTrigger>}
+        <TabsList className="bg-muted/60 h-auto w-full justify-start gap-1 rounded-xl p-1 sm:w-fit">
+          <TabsTrigger className="rounded-lg px-4" value="general">
+            General
+          </TabsTrigger>
+          <TabsTrigger className="rounded-lg px-4" value="access">
+            Access
+          </TabsTrigger>
+          <TabsTrigger className="rounded-lg px-4" value="history">
+            Versions
+          </TabsTrigger>
+          {canManage && (
+            <TabsTrigger className="rounded-lg px-4" value="audit">
+              Audit log
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="general" className="mt-4">

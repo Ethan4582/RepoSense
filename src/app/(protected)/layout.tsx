@@ -20,7 +20,7 @@ export default function SideBarLayout({ children }: Props) {
           <AppSideBar />
         </React.Suspense>
         <main className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto">
-          <header className="bg-background/95 sticky top-0 z-10 flex h-12 shrink-0 items-center justify-end border-b px-4 backdrop-blur">
+          <header className="bg-background/80 sticky top-0 z-10 flex h-12 shrink-0 items-center justify-end px-4 backdrop-blur">
             <NotificationCenter />
           </header>
           {children}

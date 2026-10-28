@@ -126,7 +126,13 @@ export function AppSideBar() {
   const { open, setOpen } = useSidebar();
   const { user } = useUser();
   const { signOut, openUserProfile } = useClerk();
-  const { projects, projectId, setProjectId, refetchProjects } = useProject();
+  const {
+    projects,
+    projectId,
+    setProjectId,
+    refetchProjects,
+    isError: projectsFailed,
+  } = useProject();
 
   const [profileOpen, setProfileOpen] = React.useState(false);
   const [busyProject, setBusyProject] = React.useState<string | null>(null);
@@ -340,7 +346,21 @@ export function AppSideBar() {
               </span>
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              {visibleProjects.length === 0 ? (
+              {projectsFailed ? (
+                <div className="border-destructive/30 bg-destructive/5 mx-1 flex flex-col gap-2 rounded-xl border p-3 text-center">
+                  <p className="text-destructive text-[10px] leading-4">
+                    Repositories could not be loaded.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px]"
+                    onClick={() => void refetchProjects()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : visibleProjects.length === 0 ? (
                 <div className="mx-1 rounded-[12px] border border-dashed border-[#e0e0e0] px-3 py-4 text-center">
                   <BookOpen className="text-muted-foreground/40 mx-auto mb-1.5 size-4" />
                   <p className="text-muted-foreground text-[10px] leading-4">

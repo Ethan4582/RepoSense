@@ -385,6 +385,29 @@ export const governanceRoutes = new Hono<AuthContext>()
     });
     return c.json({ success: true });
   })
+  .get("/:id/revisions", async (c) => {
+    const projectId = c.req.param("id");
+    if (!(await requireRole(c, projectId, "VIEWER"))) {
+      return c.json({ error: "Project not found" }, 404);
+    }
+    const revisions = await c.get("db").wikiPageRevision.findMany({
+      where: { page: { projectId } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        page: { select: { id: true, slug: true, title: true } },
+        actor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
+      },
+    });
+    return c.json({ revisions });
+  })
   .get("/:id/audit", async (c) => {
     const projectId = c.req.param("id");
     if (!(await requireRole(c, projectId, "OWNER"))) {

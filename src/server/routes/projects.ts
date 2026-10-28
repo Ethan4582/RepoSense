@@ -76,6 +76,10 @@ export const projectsRoutes = new Hono<AuthContext>()
       },
       orderBy: { createdAt: "desc" },
       include: {
+        userToProjects: {
+          where: { userId },
+          select: { role: true },
+        },
         indexingJobs: {
           orderBy: { startedAt: "desc" },
           take: 1,
@@ -90,6 +94,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         const meta = await getRepoGithubDetails(p.repoOwner, p.repoName, token);
         return {
           ...withoutProjectSecrets(p),
+          role: p.userToProjects[0]?.role ?? "VIEWER",
           description: meta.description,
           stars: meta.stars,
           language: meta.language,
@@ -555,7 +560,7 @@ export const projectsRoutes = new Hono<AuthContext>()
       include: {
         userToProjects: {
           where: { userId },
-          select: { id: true },
+          select: { id: true, role: true },
         },
       },
     });
@@ -574,6 +579,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         })
       : [];
 
+    const currentRole = project.userToProjects[0]?.role ?? null;
     return c.json({
       project: withoutProjectSecrets({
         ...project,
@@ -581,9 +587,11 @@ export const projectsRoutes = new Hono<AuthContext>()
         branches,
         activeBranch,
       }),
-      isOwner:
-        project.userToProjects.length > 0 &&
-        (await getProjectRole(db, projectId, userId)) === "OWNER",
+      isOwner: currentRole === "OWNER",
+      canEdit:
+        currentRole === "OWNER" ||
+        currentRole === "EDITOR" ||
+        currentRole === "CONTRIBUTOR",
     });
   })
   .patch("/:id", async (c) => {

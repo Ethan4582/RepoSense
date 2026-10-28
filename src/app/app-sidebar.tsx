@@ -59,6 +59,7 @@ import {
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -101,6 +102,7 @@ type ProjectSummary = {
   isPublicWiki: boolean;
   isPrivateRepo: boolean;
   deletedAt: string | Date | null;
+  role?: "OWNER" | "EDITOR" | "CONTRIBUTOR" | "VIEWER";
   indexingJobs?: Array<{ status: string }>;
   _count?: { wikiPages: number };
 };
@@ -137,6 +139,7 @@ export function AppSideBar() {
   // Delete Dialog State
   const [projectToDelete, setProjectToDelete] =
     React.useState<ProjectSummary | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = React.useState("");
 
   const updateProject = async (id: string, data: Record<string, unknown>) => {
     setBusyProject(id);
@@ -181,6 +184,7 @@ export function AppSideBar() {
   };
 
   const openDeleteDialog = (project: ProjectSummary) => {
+    setDeleteConfirmation("");
     setProjectToDelete(project);
   };
 
@@ -395,39 +399,49 @@ export function AppSideBar() {
                                   Open wiki
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => openRenameDialog(project)}
-                                className="gap-2"
-                              >
-                                <Pencil className="text-muted-foreground size-3.5" />
-                                Rename
+                              <DropdownMenuItem asChild className="gap-2">
+                                <Link href={`/settings/projects/${project.id}`}>
+                                  <Settings className="text-muted-foreground size-3.5" />
+                                  Project settings
+                                </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={project.isPrivateRepo || isBusy}
-                                onClick={() =>
-                                  void updateProject(project.id, {
-                                    isPublicWiki: !project.isPublicWiki,
-                                  })
-                                }
-                                className="gap-2"
-                              >
-                                {project.isPublicWiki ? (
-                                  <Lock className="text-muted-foreground size-3.5" />
-                                ) : (
-                                  <Globe2 className="text-muted-foreground size-3.5" />
-                                )}
-                                {project.isPublicWiki
-                                  ? "Make private"
-                                  : "Make public"}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => openDeleteDialog(project)}
-                                className="text-destructive focus:text-destructive gap-2"
-                              >
-                                <Trash2 className="size-3.5" />
-                                Delete wiki
-                              </DropdownMenuItem>
+                              {project.role === "OWNER" && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => openRenameDialog(project)}
+                                    className="gap-2"
+                                  >
+                                    <Pencil className="text-muted-foreground size-3.5" />
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={project.isPrivateRepo || isBusy}
+                                    onClick={() =>
+                                      void updateProject(project.id, {
+                                        isPublicWiki: !project.isPublicWiki,
+                                      })
+                                    }
+                                    className="gap-2"
+                                  >
+                                    {project.isPublicWiki ? (
+                                      <Lock className="text-muted-foreground size-3.5" />
+                                    ) : (
+                                      <Globe2 className="text-muted-foreground size-3.5" />
+                                    )}
+                                    {project.isPublicWiki
+                                      ? "Make private"
+                                      : "Make public"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => openDeleteDialog(project)}
+                                    className="text-destructive focus:text-destructive gap-2"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                    Delete wiki
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -622,12 +636,31 @@ export function AppSideBar() {
               generated wiki content. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="delete-wiki-confirmation" className="text-xs">
+              Type{" "}
+              <strong>
+                {projectToDelete?.repoOwner}/{projectToDelete?.repoName}
+              </strong>{" "}
+              to confirm.
+            </Label>
+            <Input
+              id="delete-wiki-confirmation"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setProjectToDelete(null)}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleConfirmDelete()}
+              disabled={
+                deleteConfirmation !==
+                `${projectToDelete?.repoOwner}/${projectToDelete?.repoName}`
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete wiki

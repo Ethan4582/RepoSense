@@ -244,6 +244,12 @@ function CreateProjectContent() {
       return;
     }
 
+    if (base.includes("/tree/")) {
+      toast.info(
+        "Feature branches are not supported. RepoSense always opens or indexes the repository's default-branch wiki.",
+      );
+    }
+
     setVerifying(true);
     setUrlError(null);
     resetVerification();

@@ -51,6 +51,7 @@ import { useSmoothStream } from "~/hooks/use-smooth-stream";
 import { IndexingLoader } from "~/components/indexing-loader";
 import { restoreCitationRanges } from "~/lib/citations";
 import { ServerBusyNotice } from "~/components/server-busy-notice";
+import { NotificationCenter } from "~/components/notification-center";
 
 interface WikiPageMeta {
   id: string;
@@ -90,6 +91,7 @@ interface WikiProject {
   chatProvider?: string | null;
   isPrivateRepo?: boolean;
   isOwner?: boolean;
+  canEdit?: boolean;
   wikiPages: WikiPageMeta[];
 }
 
@@ -427,6 +429,7 @@ export function WikiReader() {
                 const ownerData = (await ownerRes.json()) as {
                   project: WikiProject;
                   isOwner?: boolean;
+                  canEdit?: boolean;
                 };
                 if (!cancelled) {
                   setProject((prev) =>
@@ -434,6 +437,7 @@ export function WikiReader() {
                       ? {
                           ...prev,
                           isOwner: ownerData.isOwner ?? false,
+                          canEdit: ownerData.canEdit ?? false,
                           isPrivateRepo: ownerData.project.isPrivateRepo,
                           branches: ownerData.project.branches ?? prev.branches,
                           activeBranch:
@@ -467,10 +471,15 @@ export function WikiReader() {
         const data = (await privateRes.json()) as {
           project: WikiProject;
           isOwner?: boolean;
+          canEdit?: boolean;
         };
         if (cancelled) return;
         setIsPublic(false);
-        setProject({ ...data.project, isOwner: data.isOwner ?? true });
+        setProject({
+          ...data.project,
+          isOwner: data.isOwner ?? true,
+          canEdit: data.canEdit ?? data.isOwner ?? true,
+        });
 
         const first =
           data.project.wikiPages.find((p) => p.slug === "overview") ??
@@ -690,8 +699,13 @@ export function WikiReader() {
           const data = (await privateRes.json()) as {
             project: WikiProject;
             isOwner?: boolean;
+            canEdit?: boolean;
           };
-          setProject({ ...data.project, isOwner: data.isOwner ?? true });
+          setProject({
+            ...data.project,
+            isOwner: data.isOwner ?? true,
+            canEdit: data.canEdit ?? data.isOwner ?? true,
+          });
         }
       } else {
         setIsPublic(true);
@@ -1023,7 +1037,8 @@ export function WikiReader() {
 
           {/* Right actions segment */}
           <div className="flex items-center gap-2.5">
-            {project.isOwner && isSignedIn ? (
+            {isSignedIn ? <NotificationCenter /> : null}
+            {project.canEdit && isSignedIn ? (
               <Button
                 variant="outline"
                 size="sm"

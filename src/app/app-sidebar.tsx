@@ -128,6 +128,7 @@ export function AppSideBar() {
   const { signOut, openUserProfile } = useClerk();
   const {
     projects,
+    project,
     projectId,
     setProjectId,
     refetchProjects,
@@ -333,6 +334,23 @@ export function AppSideBar() {
                   </SidebarMenuItem>
                 );
               })}
+              {projectId && project ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith(
+                      `/settings/projects/${projectId}`,
+                    )}
+                    tooltip="Updates & access"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors"
+                  >
+                    <Link href={`/settings/projects/${projectId}`} prefetch>
+                      <Settings className="size-4 shrink-0" />
+                      {open && <span>Updates &amp; access</span>}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

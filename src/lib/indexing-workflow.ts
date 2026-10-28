@@ -684,7 +684,7 @@ async function executePipeline(opts: {
               : `The default-branch wiki for ${project.name} is up to date.`,
           href:
             pendingReviews > 0
-              ? `/settings/projects/${project.id}/history`
+              ? `/settings/projects/${project.id}?tab=history`
               : `/wiki/${project.id}`,
         },
         update: {},

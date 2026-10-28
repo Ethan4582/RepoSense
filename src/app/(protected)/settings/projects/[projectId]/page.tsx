@@ -2,8 +2,16 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Check, Copy, ExternalLink, RotateCcw, UserPlus } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  FileClock,
+  RotateCcw,
+  ShieldCheck,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
@@ -34,6 +42,13 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 
 type ProjectRole = "OWNER" | "EDITOR" | "CONTRIBUTOR" | "VIEWER";
 
@@ -99,6 +114,8 @@ function displayName(member: Member["user"]): string {
 
 export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [governance, setGovernance] = React.useState<Governance | null>(null);
   const [members, setMembers] = React.useState<Member[]>([]);
   const [revisions, setRevisions] = React.useState<Revision[]>([]);
@@ -238,6 +255,13 @@ export default function ProjectSettingsPage() {
   const canManage = governance.role === "OWNER";
   const canPublish =
     governance.role === "OWNER" || governance.role === "EDITOR";
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    requestedTab === "access" ||
+    requestedTab === "history" ||
+    (requestedTab === "audit" && canManage)
+      ? requestedTab
+      : "general";
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-8">
@@ -256,7 +280,12 @@ export default function ProjectSettingsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) =>
+          router.replace(`/settings/projects/${projectId}?tab=${value}`)
+        }
+      >
         <TabsList className="bg-muted/60 h-auto w-full justify-start gap-1 rounded-xl p-1 sm:w-fit">
           <TabsTrigger className="rounded-lg px-4" value="general">
             General
@@ -489,6 +518,26 @@ export default function ProjectSettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {revisions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Empty className="min-h-52 gap-3 p-6">
+                          <EmptyMedia variant="icon">
+                            <FileClock />
+                          </EmptyMedia>
+                          <EmptyHeader>
+                            <EmptyTitle className="text-sm">
+                              No versions yet
+                            </EmptyTitle>
+                            <EmptyDescription>
+                              Published edits and automatic updates will appear
+                              here.
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                   {revisions.map((revision) => (
                     <TableRow key={revision.id}>
                       <TableCell>
@@ -564,6 +613,22 @@ export default function ProjectSettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
+                {audit.length === 0 ? (
+                  <Empty className="min-h-52 gap-3 p-6">
+                    <EmptyMedia variant="icon">
+                      <ShieldCheck />
+                    </EmptyMedia>
+                    <EmptyHeader>
+                      <EmptyTitle className="text-sm">
+                        No security activity yet
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        Permission, ownership, and publishing changes will be
+                        recorded here.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : null}
                 {audit.map((event) => (
                   <Alert key={event.id}>
                     <AlertTitle>

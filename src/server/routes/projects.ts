@@ -974,7 +974,7 @@ export const projectsRoutes = new Hono<AuthContext>()
               type: "REVIEW_REQUIRED",
               title: "Wiki edit needs review",
               message: `A contributor proposed changes to “${page.title}”.`,
-              href: `/settings/projects/${projectId}/history`,
+              href: `/settings/projects/${projectId}?tab=history`,
             },
           });
         }
@@ -1030,7 +1030,7 @@ export const projectsRoutes = new Hono<AuthContext>()
             type: "WIKI_UPDATED",
             title: "Wiki page edited",
             message: `"${updated.title}" was edited by a project member.`,
-            href: `/settings/projects/${projectId}/history`,
+            href: `/settings/projects/${projectId}?tab=history`,
           },
         });
       }

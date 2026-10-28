@@ -15,8 +15,13 @@ API_URL = "https://reposense-api.t7labs.workers.dev"
 
 # Emergency circuit breaker: OFF | READ_ONLY | MAINTENANCE
 EMERGENCY_MODE = "OFF"
-# Global cap on concurrent indexing jobs across the platform
-MAX_GLOBAL_INDEXING_JOBS = "25"
+# Conservative free-tier workload guards. These protect Cloudflare compute;
+# model inference is paid through each user's own provider key.
+MAX_GLOBAL_INDEXING_JOBS = "3"
+MAX_DAILY_INDEXING_JOBS = "20"
+MAX_DAILY_INDEXED_FILES = "50000"
+INDEXING_BUSY_THRESHOLD_PERCENT = "80"
+SERVER_BUSY_RETRY_SECONDS = "1800"
 
 # Required Cloudflare Worker Secrets (Set with `npx wrangler secret put <NAME>` in production):
 # - ENCRYPTION_KEY: 32-byte base64 or 64-char hex key used for AES-256-GCM BYOK encryption

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { Prisma } from "@prisma/client";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthContext } from "../auth";
@@ -18,18 +19,33 @@ import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { writesPaused } from "~/lib/emergency";
 import { purgeWikiCache } from "~/lib/cache";
 import { withoutProjectSecrets } from "~/lib/project";
-import { getProjectBranches, pickActiveBranch } from "~/lib/branch";
+import { getProjectBranches } from "~/lib/branch";
 import { extractHeadings, extractCitationPaths } from "~/lib/chunker";
 import { indexingRoutes } from "./indexing";
 import { pullsRoutes } from "./pulls";
 import { estimateRoutes } from "./estimate";
 import { questionsRoutes } from "./questions";
+import {
+  checkIndexingCapacity,
+  SERVER_BUSY_MESSAGE,
+} from "~/lib/indexing-capacity";
 
-const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
+const PROVIDERS = [
+  "OPENAI",
+  "ANTHROPIC",
+  "GEMINI",
+  "META",
+  "DEEPSEEK",
+  "XAI",
+  "GROQ",
+] as const;
 
 const isEmergencyMode = () => writesPaused();
 
-async function purgeProjectWiki(db: AuthContext["Variables"]["db"], projectId: string) {
+async function purgeProjectWiki(
+  db: AuthContext["Variables"]["db"],
+  projectId: string,
+) {
   const pages = await db.wikiPage.findMany({
     where: { projectId },
     select: { slug: true, branch: true },
@@ -37,7 +53,7 @@ async function purgeProjectWiki(db: AuthContext["Variables"]["db"], projectId: s
   await purgeWikiCache(
     projectId,
     pages.map((page) => page.slug),
-    Array.from(new Set(pages.map((page) => page.branch)))
+    Array.from(new Set(pages.map((page) => page.branch))),
   );
 }
 
@@ -71,7 +87,7 @@ export const projectsRoutes = new Hono<AuthContext>()
           stars: meta.stars,
           language: meta.language,
         };
-      })
+      }),
     );
 
     return c.json({ projects: enriched });
@@ -86,18 +102,22 @@ export const projectsRoutes = new Hono<AuthContext>()
         githubToken: z.string().max(500).optional(),
         chatProvider: z.enum(PROVIDERS).optional().default("OPENAI"),
         chatModel: z.string().optional(),
-        embeddingProvider: z.enum(["OPENAI", "GEMINI"]).optional().default("OPENAI"),
+        embeddingProvider: z
+          .enum(["OPENAI", "GEMINI"])
+          .optional()
+          .default("OPENAI"),
         isPublicWiki: z.boolean().optional().default(true),
-      })
+      }),
     ),
     async (c) => {
       if (isEmergencyMode()) {
         return c.json(
           {
-            error: "Repository indexing is temporarily paused. Please try again later.",
+            error:
+              "Repository indexing is temporarily paused. Please try again later.",
             code: "EMERGENCY_MODE",
           },
-          503
+          503,
         );
       }
 
@@ -111,10 +131,13 @@ export const projectsRoutes = new Hono<AuthContext>()
       } catch (err) {
         return c.json(
           {
-            error: err instanceof Error ? err.message : "Invalid GitHub repository URL.",
+            error:
+              err instanceof Error
+                ? err.message
+                : "Invalid GitHub repository URL.",
             code: "INVALID_REPO_URL",
           },
-          400
+          400,
         );
       }
 
@@ -131,7 +154,7 @@ export const projectsRoutes = new Hono<AuthContext>()
             error: message,
             code: err instanceof GitHubAccessError ? err.code : "GITHUB_ERROR",
           },
-          400
+          400,
         );
       }
 
@@ -139,17 +162,20 @@ export const projectsRoutes = new Hono<AuthContext>()
       try {
         initialRef = await resolveRepoRef(
           coordinates.repoUrl,
-          { branch: coordinates.branch },
+          { branch: meta.defaultBranch },
           input.githubToken,
-          meta
+          meta,
         );
       } catch (err) {
         return c.json(
           {
-            error: err instanceof Error ? err.message : 'The requested GitHub branch could not be found.',
-            code: err instanceof GitHubAccessError ? err.code : 'GITHUB_ERROR',
+            error:
+              err instanceof Error
+                ? err.message
+                : "The requested GitHub branch could not be found.",
+            code: err instanceof GitHubAccessError ? err.code : "GITHUB_ERROR",
           },
-          400
+          400,
         );
       }
 
@@ -170,15 +196,57 @@ export const projectsRoutes = new Hono<AuthContext>()
             code: "DUPLICATE_PROJECT",
             projectId: existing.id,
           },
-          409
+          409,
         );
+      }
+
+      if (!meta.isPrivate) {
+        const reusable = await db.project.findFirst({
+          where: {
+            repoOwner: { equals: coordinates.owner, mode: "insensitive" },
+            repoName: { equals: coordinates.repo, mode: "insensitive" },
+            isPublicWiki: true,
+            deletedAt: null,
+            OR: [
+              { lastIndexedAt: { not: null } },
+              {
+                indexingJobs: {
+                  some: { status: { in: ["QUEUED", "RUNNING"] } },
+                },
+              },
+            ],
+          },
+          include: {
+            indexingJobs: {
+              where: { status: { in: ["QUEUED", "RUNNING"] } },
+              orderBy: { startedAt: "desc" },
+              take: 1,
+            },
+          },
+        });
+        if (reusable) {
+          const activeJob = reusable.indexingJobs[0];
+          return c.json(
+            {
+              project: withoutProjectSecrets(reusable),
+              projectId: reusable.id,
+              indexingJobId: activeJob?.id ?? null,
+              reused: true,
+              status: activeJob ? "INDEXING" : "READY",
+            },
+            activeJob ? 202 : 200,
+          );
+        }
       }
 
       let encryptedGithubToken: string | null = null;
       let githubTokenIv: string | null = null;
 
       if (input.githubToken?.trim()) {
-        const encrypted = await encryptKeyWithIv(input.githubToken.trim(), getEncryptionSecret());
+        const encrypted = await encryptKeyWithIv(
+          input.githubToken.trim(),
+          getEncryptionSecret(),
+        );
         encryptedGithubToken = encrypted.encryptedKey;
         githubTokenIv = encrypted.iv;
       }
@@ -187,8 +255,13 @@ export const projectsRoutes = new Hono<AuthContext>()
         input.embeddingProvider === "OPENAI"
           ? "text-embedding-3-small"
           : "gemini-embedding-001";
-      const embeddingDimensions = input.embeddingProvider === "OPENAI" ? 1536 : 768;
+      const embeddingDimensions =
+        input.embeddingProvider === "OPENAI" ? 1536 : 768;
       const chatModel = alignChatModel(input.chatProvider, input.chatModel);
+      const canonicalRepoKey =
+        !meta.isPrivate && input.isPublicWiki
+          ? `${coordinates.owner}/${coordinates.repo}`.toLowerCase()
+          : null;
 
       try {
         await resolveProjectKeys(userId, {
@@ -205,7 +278,7 @@ export const projectsRoutes = new Hono<AuthContext>()
                 ? err.message
                 : "Add valid provider API keys in Settings before creating this wiki.",
           },
-          400
+          400,
         );
       }
 
@@ -217,50 +290,94 @@ export const projectsRoutes = new Hono<AuthContext>()
       });
 
       if (activeJobs >= 1) {
+        const retryAfterSeconds = 300;
         return c.json(
           {
-            error: "You already have a repository being indexed. Please wait for it to finish.",
-            code: "INDEXING_IN_PROGRESS",
+            error: SERVER_BUSY_MESSAGE,
+            code: "SERVER_BUSY",
+            retryAfterSeconds,
+            retryAt: new Date(
+              Date.now() + retryAfterSeconds * 1000,
+            ).toISOString(),
           },
-          429
+          503,
+          { "Retry-After": String(retryAfterSeconds) },
         );
       }
 
-      const maxGlobalJobs = Number(process.env.MAX_GLOBAL_INDEXING_JOBS ?? 25);
-      const runningJobs = await db.indexingJob.count({ where: { status: "RUNNING" } });
-
-      if (Number.isFinite(maxGlobalJobs) && runningJobs >= maxGlobalJobs) {
+      const capacity = await checkIndexingCapacity(db);
+      if (!capacity.allowed) {
         return c.json(
           {
-            error: "The indexing queue is at capacity right now. Please try again in a few minutes.",
-            code: "INDEXING_CAPACITY",
+            error: SERVER_BUSY_MESSAGE,
+            code: "SERVER_BUSY",
+            retryAfterSeconds: capacity.retryAfterSeconds,
+            retryAt: capacity.retryAt,
           },
-          429
+          503,
+          { "Retry-After": String(capacity.retryAfterSeconds) },
         );
       }
 
-      const project = await db.project.create({
-        data: {
-          name: `${coordinates.owner}/${coordinates.repo}`,
-          repoOwner: coordinates.owner,
-          repoName: coordinates.repo,
-          repoUrl: coordinates.repoUrl,
-          encryptedGithubToken,
-          githubTokenIv,
-          isPrivateRepo: meta.isPrivate,
-          isPublicWiki: meta.isPrivate ? false : input.isPublicWiki,
-          defaultBranch: meta.defaultBranch,
-          lastIndexedBranch: initialRef.branch,
-          lastIndexedBranchKind: initialRef.branchKind,
-          lastIndexedCommitSha: initialRef.commitSha,
-          chatProvider: input.chatProvider,
-          chatModel,
-          embeddingProvider: input.embeddingProvider,
-          embeddingModel,
-          embeddingDimensions,
-          userToProjects: { create: { userId } },
-        },
-      });
+      let project;
+      try {
+        project = await db.project.create({
+          data: {
+            canonicalRepoKey,
+            name: `${coordinates.owner}/${coordinates.repo}`,
+            repoOwner: coordinates.owner,
+            repoName: coordinates.repo,
+            repoUrl: coordinates.repoUrl,
+            encryptedGithubToken,
+            githubTokenIv,
+            isPrivateRepo: meta.isPrivate,
+            isPublicWiki: meta.isPrivate ? false : input.isPublicWiki,
+            defaultBranch: meta.defaultBranch,
+            lastIndexedBranch: initialRef.branch,
+            lastIndexedBranchKind: initialRef.branchKind,
+            lastIndexedCommitSha: initialRef.commitSha,
+            chatProvider: input.chatProvider,
+            chatModel,
+            embeddingProvider: input.embeddingProvider,
+            embeddingModel,
+            embeddingDimensions,
+            userToProjects: { create: { userId } },
+          },
+        });
+      } catch (err) {
+        if (
+          canonicalRepoKey &&
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2002"
+        ) {
+          const canonical = await db.project.findUnique({
+            where: { canonicalRepoKey },
+            include: {
+              indexingJobs: { orderBy: { startedAt: "desc" }, take: 1 },
+            },
+          });
+          if (canonical) {
+            const latestJob = canonical.indexingJobs[0];
+            return c.json(
+              {
+                project: withoutProjectSecrets(canonical),
+                projectId: canonical.id,
+                indexingJobId: latestJob?.id ?? null,
+                reused: true,
+                status:
+                  latestJob?.status === "QUEUED" ||
+                  latestJob?.status === "RUNNING"
+                    ? "INDEXING"
+                    : "READY",
+              },
+              latestJob?.status === "QUEUED" || latestJob?.status === "RUNNING"
+                ? 202
+                : 200,
+            );
+          }
+        }
+        throw err;
+      }
 
       let indexingJobId: string | null = null;
 
@@ -284,7 +401,11 @@ export const projectsRoutes = new Hono<AuthContext>()
 
         const workflow = (
           c.env as
-            | { INDEXING_WORKFLOW?: { create: (opts: { params: unknown }) => Promise<unknown> } }
+            | {
+                INDEXING_WORKFLOW?: {
+                  create: (opts: { params: unknown }) => Promise<unknown>;
+                };
+              }
             | undefined
         )?.INDEXING_WORKFLOW;
 
@@ -296,7 +417,9 @@ export const projectsRoutes = new Hono<AuthContext>()
               });
             } catch (err) {
               const message =
-                err instanceof Error ? err.message : "Failed to start indexing workflow.";
+                err instanceof Error
+                  ? err.message
+                  : "Failed to start indexing workflow.";
               await db.indexingJob.update({
                 where: { id: job.id },
                 data: {
@@ -327,8 +450,11 @@ export const projectsRoutes = new Hono<AuthContext>()
         // Indexing deferred
       }
 
-      return c.json({ project: withoutProjectSecrets(project), indexingJobId }, 201);
-    }
+      return c.json(
+        { project: withoutProjectSecrets(project), indexingJobId },
+        201,
+      );
+    },
   )
   .post(
     "/verify-repo",
@@ -337,7 +463,7 @@ export const projectsRoutes = new Hono<AuthContext>()
       z.object({
         repoUrl: z.string().min(1).max(500),
         githubToken: z.string().max(500).optional(),
-      })
+      }),
     ),
     async (c) => {
       const { repoUrl, githubToken } = c.req.valid("json");
@@ -348,8 +474,13 @@ export const projectsRoutes = new Hono<AuthContext>()
         coordinates = parseRepoUrlRef(repoUrl);
       } catch (err) {
         return c.json(
-          { error: err instanceof Error ? err.message : "Please enter a valid GitHub repository URL." },
-          400
+          {
+            error:
+              err instanceof Error
+                ? err.message
+                : "Please enter a valid GitHub repository URL.",
+          },
+          400,
         );
       }
 
@@ -380,31 +511,28 @@ export const projectsRoutes = new Hono<AuthContext>()
         });
       } catch (err) {
         const message =
-          err instanceof GitHubAccessError ? err.message : "Unable to access this GitHub repository.";
+          err instanceof GitHubAccessError
+            ? err.message
+            : "Unable to access this GitHub repository.";
         return c.json(
           {
             error: message,
             code: err instanceof GitHubAccessError ? err.code : "GITHUB_ERROR",
           },
-          400
+          400,
         );
       }
-    }
+    },
   )
   .get("/:id", async (c) => {
     const projectId = c.req.param("id");
     const db = c.get("db");
     const userId = c.get("userId");
-    const requestedBranch = c.req.query("branch")?.trim();
-
     const project = await db.project.findFirst({
       where: {
         id: projectId,
         deletedAt: null,
-        OR: [
-          { isPublicWiki: true },
-          { userToProjects: { some: { userId } } },
-        ],
+        OR: [{ isPublicWiki: true }, { userToProjects: { some: { userId } } }],
       },
       include: {
         userToProjects: {
@@ -416,8 +544,11 @@ export const projectsRoutes = new Hono<AuthContext>()
 
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const branches = await getProjectBranches(db, projectId);
-    const activeBranch = pickActiveBranch(requestedBranch, branches, project);
+    const allBranches = await getProjectBranches(db, projectId);
+    const activeBranch = project.defaultBranch ?? project.lastIndexedBranch;
+    const branches = activeBranch
+      ? allBranches.filter((item) => item.branch === activeBranch)
+      : [];
     const wikiPages = activeBranch
       ? await db.wikiPage.findMany({
           where: { projectId, branch: activeBranch },
@@ -439,7 +570,10 @@ export const projectsRoutes = new Hono<AuthContext>()
     const db = c.get("db");
     const userId = c.get("userId");
     const projectId = c.req.param("id");
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = (await c.req.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
 
     const member = await db.userToProject.findUnique({
       where: { userId_projectId: { userId, projectId } },
@@ -453,21 +587,50 @@ export const projectsRoutes = new Hono<AuthContext>()
     const data: {
       name?: string;
       isPublicWiki?: boolean;
+      canonicalRepoKey?: string | null;
       chatProvider?: (typeof PROVIDERS)[number];
       chatModel?: string;
     } = {};
 
-    if (typeof body.name === "string" && body.name.trim().length > 0 && body.name.trim().length <= 120) {
+    if (
+      typeof body.name === "string" &&
+      body.name.trim().length > 0 &&
+      body.name.trim().length <= 120
+    ) {
       data.name = body.name.trim();
     }
 
     if (typeof body.isPublicWiki === "boolean") {
       data.isPublicWiki = project.isPrivateRepo ? false : body.isPublicWiki;
+      data.canonicalRepoKey = data.isPublicWiki
+        ? `${project.repoOwner}/${project.repoName}`.toLowerCase()
+        : null;
+
+      if (data.canonicalRepoKey) {
+        const canonical = await db.project.findUnique({
+          where: { canonicalRepoKey: data.canonicalRepoKey },
+          select: { id: true },
+        });
+        if (canonical && canonical.id !== projectId) {
+          return c.json(
+            {
+              error: "A public wiki already exists for this repository.",
+              code: "PUBLIC_WIKI_EXISTS",
+              projectId: canonical.id,
+            },
+            409,
+          );
+        }
+      }
     }
 
-    const requestedModel = typeof body.chatModel === "string" ? body.chatModel : undefined;
+    const requestedModel =
+      typeof body.chatModel === "string" ? body.chatModel : undefined;
 
-    if (typeof body.chatProvider === "string" && (PROVIDERS as readonly string[]).includes(body.chatProvider)) {
+    if (
+      typeof body.chatProvider === "string" &&
+      (PROVIDERS as readonly string[]).includes(body.chatProvider)
+    ) {
       data.chatProvider = body.chatProvider as (typeof PROVIDERS)[number];
       data.chatModel = alignChatModel(data.chatProvider, requestedModel);
     } else if (requestedModel) {
@@ -498,15 +661,25 @@ export const projectsRoutes = new Hono<AuthContext>()
       await tx.indexingJob.deleteMany({ where: { projectId } });
       await tx.question.deleteMany({ where: { projectId } });
 
-      const threads = await tx.qaThread.findMany({ where: { projectId }, select: { id: true } });
+      const threads = await tx.qaThread.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
       if (threads.length > 0) {
-        await tx.qaMessage.deleteMany({ where: { threadId: { in: threads.map((t) => t.id) } } });
+        await tx.qaMessage.deleteMany({
+          where: { threadId: { in: threads.map((t) => t.id) } },
+        });
         await tx.qaThread.deleteMany({ where: { projectId } });
       }
 
-      const meetings = await tx.meeting.findMany({ where: { projectId }, select: { id: true } });
+      const meetings = await tx.meeting.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
       if (meetings.length > 0) {
-        await tx.issue.deleteMany({ where: { meetingId: { in: meetings.map((m) => m.id) } } });
+        await tx.issue.deleteMany({
+          where: { meetingId: { in: meetings.map((m) => m.id) } },
+        });
         await tx.meeting.deleteMany({ where: { projectId } });
       }
 
@@ -514,7 +687,10 @@ export const projectsRoutes = new Hono<AuthContext>()
       await tx.project.delete({ where: { id: projectId } });
     });
 
-    return c.json({ success: true, message: "Project and all associated data permanently deleted." });
+    return c.json({
+      success: true,
+      message: "Project and all associated data permanently deleted.",
+    });
   })
   .post(
     "/:id/pages",
@@ -523,9 +699,11 @@ export const projectsRoutes = new Hono<AuthContext>()
       z.object({
         title: z.string().trim().min(1).max(200),
         sectionTitle: z.string().trim().max(100).optional(),
-        content: z.string().default("# New Page\n\nWrite documentation here..."),
+        content: z
+          .string()
+          .default("# New Page\n\nWrite documentation here..."),
         branch: z.string().optional(),
-      })
+      }),
     ),
     async (c) => {
       const projectId = c.req.param("id");
@@ -537,7 +715,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         where: { userId_projectId: { userId, projectId } },
         select: { id: true },
       });
-      if (!member) return c.json({ error: "Unauthorized" }, 403);
+      if (!member) return c.json({ error: "Page not found" }, 404);
 
       const project = await db.project.findFirst({
         where: { id: projectId, deletedAt: null },
@@ -545,8 +723,7 @@ export const projectsRoutes = new Hono<AuthContext>()
       });
       if (!project) return c.json({ error: "Project not found" }, 404);
 
-      const targetBranch =
-        body.branch?.trim() || project.lastIndexedBranch || project.defaultBranch || "main";
+      const targetBranch = project.defaultBranch || "main";
 
       let baseSlug = body.title
         .toLowerCase()
@@ -615,7 +792,7 @@ export const projectsRoutes = new Hono<AuthContext>()
 
       await purgeWikiCache(projectId, [slug], [targetBranch]);
       return c.json({ page: newPage }, 201);
-    }
+    },
   )
   .patch(
     "/:id/pages/reorder",
@@ -628,9 +805,9 @@ export const projectsRoutes = new Hono<AuthContext>()
             sectionTitle: z.string().optional(),
             sectionOrder: z.number().int(),
             pageOrder: z.number().int(),
-          })
+          }),
         ),
-      })
+      }),
     ),
     async (c) => {
       const projectId = c.req.param("id");
@@ -642,7 +819,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         where: { userId_projectId: { userId, projectId } },
         select: { id: true },
       });
-      if (!member) return c.json({ error: "Unauthorized" }, 403);
+      if (!member) return c.json({ error: "Page not found" }, 404);
 
       await db.$transaction(
         body.pages.map((item) =>
@@ -653,13 +830,13 @@ export const projectsRoutes = new Hono<AuthContext>()
               sectionOrder: item.sectionOrder,
               pageOrder: item.pageOrder,
             },
-          })
-        )
+          }),
+        ),
       );
 
       await purgeWikiCache(projectId);
       return c.json({ success: true });
-    }
+    },
   )
   .patch(
     "/:id/pages/:pageId",
@@ -671,7 +848,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         content: z.string().optional(),
         sectionOrder: z.number().int().optional(),
         pageOrder: z.number().int().optional(),
-      })
+      }),
     ),
     async (c) => {
       const projectId = c.req.param("id");
@@ -684,7 +861,7 @@ export const projectsRoutes = new Hono<AuthContext>()
         where: { userId_projectId: { userId, projectId } },
         select: { id: true },
       });
-      if (!member) return c.json({ error: "Unauthorized" }, 403);
+      if (!member) return c.json({ error: "Page not found" }, 404);
 
       const page = await db.wikiPage.findFirst({
         where: { id: pageId, projectId },
@@ -702,8 +879,10 @@ export const projectsRoutes = new Hono<AuthContext>()
       } = {};
 
       if (body.title !== undefined) updateData.title = body.title;
-      if (body.sectionTitle !== undefined) updateData.sectionTitle = body.sectionTitle;
-      if (body.sectionOrder !== undefined) updateData.sectionOrder = body.sectionOrder;
+      if (body.sectionTitle !== undefined)
+        updateData.sectionTitle = body.sectionTitle;
+      if (body.sectionOrder !== undefined)
+        updateData.sectionOrder = body.sectionOrder;
       if (body.pageOrder !== undefined) updateData.pageOrder = body.pageOrder;
       if (body.content !== undefined) {
         updateData.content = body.content;
@@ -718,7 +897,7 @@ export const projectsRoutes = new Hono<AuthContext>()
 
       await purgeWikiCache(projectId, [page.slug], [page.branch]);
       return c.json({ page: updated });
-    }
+    },
   )
   .delete("/:id/pages/:pageId", async (c) => {
     const projectId = c.req.param("id");
@@ -730,7 +909,7 @@ export const projectsRoutes = new Hono<AuthContext>()
       where: { userId_projectId: { userId, projectId } },
       select: { id: true },
     });
-    if (!member) return c.json({ error: "Unauthorized" }, 403);
+    if (!member) return c.json({ error: "Page not found" }, 404);
 
     const page = await db.wikiPage.findFirst({
       where: { id: pageId, projectId },
@@ -746,9 +925,6 @@ export const projectsRoutes = new Hono<AuthContext>()
     const userId = c.get("userId");
     const db = c.get("db");
     const filePath = c.req.query("path");
-    const branchQuery = c.req.query("branch")?.trim();
-    const branch = branchQuery === "" ? undefined : branchQuery;
-
     if (!filePath) return c.json({ error: "path is required" }, 400);
     if (filePath.length > 500) return c.json({ error: "File not found" }, 404);
 
@@ -761,8 +937,13 @@ export const projectsRoutes = new Hono<AuthContext>()
     });
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const activeBranch = branch ?? project.lastIndexedBranch ?? project.defaultBranch;
-    const content = await getFullFileContent(db, projectId, filePath, activeBranch);
+    const activeBranch = project.defaultBranch ?? "main";
+    const content = await getFullFileContent(
+      db,
+      projectId,
+      filePath,
+      activeBranch,
+    );
     if (content === null) return c.json({ error: "File not found" }, 404);
 
     return c.json({

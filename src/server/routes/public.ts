@@ -1,108 +1,116 @@
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { db } from '~/server/db';
-import { getFullFileContent } from '~/lib/embeddings';
-import { cachedJson } from '~/lib/cache';
-import { getProjectBranches, pickActiveBranch } from '~/lib/branch';
-import { parseRepoUrlRef, getRepoMetadata, GitHubAccessError } from '~/lib/github';
-import { estimateRoutes } from './estimate';
+import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
+import { db } from "~/server/db";
+import { getFullFileContent } from "~/lib/embeddings";
+import { cachedJson } from "~/lib/cache";
+import { getProjectBranches } from "~/lib/branch";
+import {
+  parseRepoUrlRef,
+  getRepoMetadata,
+  GitHubAccessError,
+} from "~/lib/github";
+import { estimateRoutes } from "./estimate";
 
 function plainSummary(markdown: string | undefined): string | null {
   if (!markdown) return null;
   const text = markdown
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/\[\[([^\]]+)\]\]/g, '$1')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/[*_`~>#|]/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/[*_`~>#|]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
   return text ? text.slice(0, 280) : null;
 }
 
 export const publicRoutes = new Hono()
-  .get('/explore', async (c) => {
-    const rawQuery = c.req.query('q')?.trim().toLowerCase().slice(0, 120) ?? '';
-    const query = rawQuery.length > 0 ? rawQuery : 'all';
+  .get("/explore", async (c) => {
+    const rawQuery = c.req.query("q")?.trim().toLowerCase().slice(0, 120) ?? "";
+    const query = rawQuery.length > 0 ? rawQuery : "all";
 
-    return cachedJson(c, `explore-${query}`, async () => {
-      const projects = await db.project.findMany({
-        where: {
-          isPublicWiki: true,
-          deletedAt: null,
-          lastIndexedAt: { not: null },
-          ...(query !== 'all'
-            ? {
-                OR: [
-                  { name: { contains: query, mode: 'insensitive' } },
-                  { repoOwner: { contains: query, mode: 'insensitive' } },
-                  { repoName: { contains: query, mode: 'insensitive' } },
-                ],
-              }
-            : {}),
-        },
-        orderBy: { lastIndexedAt: 'desc' },
-        take: 60,
-        select: {
-          id: true,
-          name: true,
-          repoOwner: true,
-          repoName: true,
-          repoUrl: true,
-          lastIndexedAt: true,
-          lastIndexedCommitSha: true,
-          defaultBranch: true,
-          lastIndexedBranch: true,
-          _count: { select: { wikiPages: true } },
-          wikiPages: {
-            where: { slug: 'overview' },
-            select: { content: true, branch: true },
-            orderBy: { updatedAt: 'desc' },
+    return cachedJson(
+      c,
+      `explore-${query}`,
+      async () => {
+        const projects = await db.project.findMany({
+          where: {
+            isPublicWiki: true,
+            deletedAt: null,
+            lastIndexedAt: { not: null },
+            ...(query !== "all"
+              ? {
+                  OR: [
+                    { name: { contains: query, mode: "insensitive" } },
+                    { repoOwner: { contains: query, mode: "insensitive" } },
+                    { repoName: { contains: query, mode: "insensitive" } },
+                  ],
+                }
+              : {}),
           },
-        },
-      });
+          orderBy: { lastIndexedAt: "desc" },
+          take: 60,
+          select: {
+            id: true,
+            name: true,
+            repoOwner: true,
+            repoName: true,
+            repoUrl: true,
+            lastIndexedAt: true,
+            lastIndexedCommitSha: true,
+            defaultBranch: true,
+            lastIndexedBranch: true,
+            _count: { select: { wikiPages: true } },
+            wikiPages: {
+              where: { slug: "overview" },
+              select: { content: true, branch: true },
+              orderBy: { updatedAt: "desc" },
+            },
+          },
+        });
 
-      return {
-        projects: projects.map((project) => {
-          const overview =
-            project.wikiPages.find(
-              (page) =>
-                page.branch === (project.defaultBranch ?? project.lastIndexedBranch)
-            ) ?? project.wikiPages[0];
+        return {
+          projects: projects.map((project) => {
+            const overview =
+              project.wikiPages.find(
+                (page) =>
+                  page.branch ===
+                  (project.defaultBranch ?? project.lastIndexedBranch),
+              ) ?? project.wikiPages[0];
 
-          return {
-            id: project.id,
-            name: project.name,
-            repoOwner: project.repoOwner,
-            repoName: project.repoName,
-            repoUrl: project.repoUrl,
-            lastIndexedAt: project.lastIndexedAt,
-            lastIndexedCommitSha: project.lastIndexedCommitSha,
-            defaultBranch: project.defaultBranch,
-            lastIndexedBranch: project.lastIndexedBranch,
-            pageCount: project._count.wikiPages,
-            summary: plainSummary(overview?.content),
-          };
-        }),
-      };
-    }, 60);
+            return {
+              id: project.id,
+              name: project.name,
+              repoOwner: project.repoOwner,
+              repoName: project.repoName,
+              repoUrl: project.repoUrl,
+              lastIndexedAt: project.lastIndexedAt,
+              lastIndexedCommitSha: project.lastIndexedCommitSha,
+              defaultBranch: project.defaultBranch,
+              lastIndexedBranch: project.lastIndexedBranch,
+              pageCount: project._count.wikiPages,
+              summary: plainSummary(overview?.content),
+            };
+          }),
+        };
+      },
+      60,
+    );
   })
-  .get('/projects/:id', async (c) => {
-    const projectId = c.req.param('id');
-    const requestedBranch = c.req.query('branch')?.trim();
-
+  .get("/projects/:id", async (c) => {
+    const projectId = c.req.param("id");
     // Gate on current visibility before reading the edge cache so a wiki that
     // was just made private is never served from a stale entry.
     const visible = await db.project.findFirst({
       where: { id: projectId, isPublicWiki: true, deletedAt: null },
       select: { id: true, updatedAt: true },
     });
-    if (!visible) return c.json({ error: 'Wiki not found' }, 404);
+    if (!visible) return c.json({ error: "Wiki not found" }, 404);
     const version = visible.updatedAt.getTime();
-    const branchKey = requestedBranch ?? 'default';
+    const branchKey = "default";
 
     return cachedJson(
       c,
@@ -125,14 +133,18 @@ export const publicRoutes = new Hono()
           },
         });
 
-        if (!project) throw new Error('Wiki not found');
+        if (!project) throw new Error("Wiki not found");
 
-        const branches = await getProjectBranches(db, projectId);
-        const activeBranch = pickActiveBranch(requestedBranch, branches, project);
+        const activeBranch = project.defaultBranch ?? project.lastIndexedBranch;
+        const branches = activeBranch
+          ? (await getProjectBranches(db, projectId)).filter(
+              (item) => item.branch === activeBranch,
+            )
+          : [];
         const wikiPages = activeBranch
           ? await db.wikiPage.findMany({
               where: { projectId, branch: activeBranch },
-              orderBy: [{ sectionOrder: 'asc' }, { pageOrder: 'asc' }],
+              orderBy: [{ sectionOrder: "asc" }, { pageOrder: "asc" }],
               select: {
                 id: true,
                 slug: true,
@@ -148,21 +160,19 @@ export const publicRoutes = new Hono()
         return {
           project: { ...project, wikiPages, branches, activeBranch },
         };
-      }
-    ).catch(() => c.json({ error: 'Wiki not found' }, 404));
+      },
+    ).catch(() => c.json({ error: "Wiki not found" }, 404));
   })
-  .get('/wiki/:id', async (c) => {
+  .get("/wiki/:id", async (c) => {
     // Route alias for /api/public/wiki/[id] matching client requests
-    const projectId = c.req.param('id');
-    const requestedBranch = c.req.query('branch')?.trim();
-
+    const projectId = c.req.param("id");
     const visible = await db.project.findFirst({
       where: { id: projectId, isPublicWiki: true, deletedAt: null },
       select: { id: true, updatedAt: true },
     });
-    if (!visible) return c.json({ error: 'Wiki not found' }, 404);
+    if (!visible) return c.json({ error: "Wiki not found" }, 404);
     const version = visible.updatedAt.getTime();
-    const branchKey = requestedBranch ?? 'default';
+    const branchKey = "default";
 
     return cachedJson(
       c,
@@ -185,14 +195,18 @@ export const publicRoutes = new Hono()
           },
         });
 
-        if (!project) throw new Error('Wiki not found');
+        if (!project) throw new Error("Wiki not found");
 
-        const branches = await getProjectBranches(db, projectId);
-        const activeBranch = pickActiveBranch(requestedBranch, branches, project);
+        const activeBranch = project.defaultBranch ?? project.lastIndexedBranch;
+        const branches = activeBranch
+          ? (await getProjectBranches(db, projectId)).filter(
+              (item) => item.branch === activeBranch,
+            )
+          : [];
         const wikiPages = activeBranch
           ? await db.wikiPage.findMany({
               where: { projectId, branch: activeBranch },
-              orderBy: [{ sectionOrder: 'asc' }, { pageOrder: 'asc' }],
+              orderBy: [{ sectionOrder: "asc" }, { pageOrder: "asc" }],
               select: {
                 id: true,
                 slug: true,
@@ -208,14 +222,12 @@ export const publicRoutes = new Hono()
         return {
           project: { ...project, wikiPages, branches, activeBranch },
         };
-      }
-    ).catch(() => c.json({ error: 'Wiki not found' }, 404));
+      },
+    ).catch(() => c.json({ error: "Wiki not found" }, 404));
   })
-  .get('/projects/:id/pages/:slug', async (c) => {
-    const projectId = c.req.param('id');
-    const slug = c.req.param('slug');
-    const requestedBranch = c.req.query('branch')?.trim();
-
+  .get("/projects/:id/pages/:slug", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
     const visible = await db.project.findFirst({
       where: { id: projectId, isPublicWiki: true, deletedAt: null },
       select: {
@@ -225,11 +237,10 @@ export const publicRoutes = new Hono()
         lastIndexedBranch: true,
       },
     });
-    if (!visible) return c.json({ error: 'Page not found' }, 404);
+    if (!visible) return c.json({ error: "Page not found" }, 404);
     const version = visible.updatedAt.getTime();
-    const branch =
-      requestedBranch ?? visible.defaultBranch ?? visible.lastIndexedBranch;
-    const branchKey = branch ?? 'default';
+    const branch = visible.defaultBranch ?? visible.lastIndexedBranch;
+    const branchKey = branch ?? "default";
 
     return cachedJson(
       c,
@@ -259,77 +270,81 @@ export const publicRoutes = new Hono()
           },
         });
 
-        if (!page) throw new Error('Page not found');
+        if (!page) throw new Error("Page not found");
         return { page };
-      }
-    ).catch(() => c.json({ error: 'Page not found' }, 404));
+      },
+    ).catch(() => c.json({ error: "Page not found" }, 404));
   })
-  .get('/projects/:id/file', async (c) => {
-    const projectId = c.req.param('id');
-    const filePath = c.req.query('path');
-    const requestedBranch = c.req.query('branch')?.trim();
-
-    if (!filePath) return c.json({ error: 'path is required' }, 400);
-    if (filePath.length > 500) return c.json({ error: 'File not found' }, 404);
+  .get("/projects/:id/file", async (c) => {
+    const projectId = c.req.param("id");
+    const filePath = c.req.query("path");
+    if (!filePath) return c.json({ error: "path is required" }, 400);
+    if (filePath.length > 500) return c.json({ error: "File not found" }, 404);
 
     const project = await db.project.findFirst({
       where: { id: projectId, isPublicWiki: true, deletedAt: null },
       select: { id: true, defaultBranch: true, lastIndexedBranch: true },
     });
-    if (!project) return c.json({ error: 'Wiki not found' }, 404);
+    if (!project) return c.json({ error: "Wiki not found" }, 404);
 
-    const branch =
-      requestedBranch ?? project.defaultBranch ?? project.lastIndexedBranch;
+    const branch = project.defaultBranch ?? project.lastIndexedBranch;
     const content = await getFullFileContent(db, projectId, filePath, branch);
-    if (content === null) return c.json({ error: 'File not found' }, 404);
+    if (content === null) return c.json({ error: "File not found" }, 404);
 
     return c.json({
       filePath,
       branch,
       content,
-      lines: content.split('\n').length,
+      lines: content.split("\n").length,
     });
   })
-  .get('/projects/:id/questions/:questionId', async (c) => {
-    const projectId = c.req.param('id');
-    const questionId = c.req.param('questionId');
+  .get("/projects/:id/questions/:questionId", async (c) => {
+    const projectId = c.req.param("id");
+    const questionId = c.req.param("questionId");
 
     const project = await db.project.findFirst({
       where: { id: projectId, isPublicWiki: true, deletedAt: null },
       select: { id: true },
     });
-    if (!project) return c.json({ error: 'Question not found' }, 404);
+    if (!project) return c.json({ error: "Question not found" }, 404);
 
     const question = await db.question.findFirst({
       where: { id: questionId, projectId },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, imageUrl: true } },
+        user: {
+          select: { id: true, firstName: true, lastName: true, imageUrl: true },
+        },
       },
     });
 
-    if (!question) return c.json({ error: 'Question not found' }, 404);
+    if (!question) return c.json({ error: "Question not found" }, 404);
     return c.json({ question });
   })
-  .route('/estimate', estimateRoutes)
+  .route("/estimate", estimateRoutes)
   .post(
-    '/verify-repo',
+    "/verify-repo",
     zValidator(
-      'json',
+      "json",
       z.object({
         repoUrl: z.string().min(1).max(500),
         githubToken: z.string().max(500).optional(),
-      })
+      }),
     ),
     async (c) => {
-      const { repoUrl, githubToken } = c.req.valid('json');
+      const { repoUrl, githubToken } = c.req.valid("json");
 
       let coordinates: ReturnType<typeof parseRepoUrlRef>;
       try {
         coordinates = parseRepoUrlRef(repoUrl);
       } catch (err) {
         return c.json(
-          { error: err instanceof Error ? err.message : 'Please enter a valid GitHub repository URL.' },
-          400
+          {
+            error:
+              err instanceof Error
+                ? err.message
+                : "Please enter a valid GitHub repository URL.",
+          },
+          400,
         );
       }
 
@@ -337,8 +352,8 @@ export const publicRoutes = new Hono()
         const meta = await getRepoMetadata(coordinates.repoUrl, githubToken);
         const existingWiki = await db.project.findFirst({
           where: {
-            repoOwner: { equals: coordinates.owner, mode: 'insensitive' },
-            repoName: { equals: coordinates.repo, mode: 'insensitive' },
+            repoOwner: { equals: coordinates.owner, mode: "insensitive" },
+            repoName: { equals: coordinates.repo, mode: "insensitive" },
             isPublicWiki: true,
             deletedAt: null,
             lastIndexedAt: { not: null },
@@ -360,14 +375,16 @@ export const publicRoutes = new Hono()
         });
       } catch (err) {
         const message =
-          err instanceof GitHubAccessError ? err.message : 'Unable to access this GitHub repository.';
+          err instanceof GitHubAccessError
+            ? err.message
+            : "Unable to access this GitHub repository.";
         return c.json(
           {
             error: message,
-            code: err instanceof GitHubAccessError ? err.code : 'GITHUB_ERROR',
+            code: err instanceof GitHubAccessError ? err.code : "GITHUB_ERROR",
           },
-          400
+          400,
         );
       }
-    }
+    },
   );

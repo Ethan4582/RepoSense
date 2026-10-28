@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import {
   ChevronDown,
   ChevronRight,
@@ -13,7 +11,6 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  Sparkles,
 } from 'lucide-react';
 import useProject from '~/hooks/use-project';
 import { Button } from '~/components/ui/button';
@@ -69,7 +66,6 @@ function formatDate(value: string) {
 }
 
 export default function PullRequestsPage() {
-  const router = useRouter();
   const { projectId, project, projects, setProjectId } = useProject();
   const [filter, setFilter] = React.useState<Filter>('all');
   const [search, setSearch] = React.useState('');
@@ -78,7 +74,6 @@ export default function PullRequestsPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<number>>(new Set());
   const [reloadKey, setReloadKey] = React.useState(0);
-  const [generating, setGenerating] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('projectId');
@@ -148,32 +143,6 @@ export default function PullRequestsPage() {
       else next.add(id);
       return next;
     });
-  };
-
-  const generateDocs = async (pr: PullRequest) => {
-    if (!projectId || generating !== null) return;
-    setGenerating(pr.number);
-
-    try {
-      const res = await fetch(`/api/projects/${projectId}/indexing/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          branch: pr.branchName,
-          pullRequestNumber: pr.number,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? 'Could not start indexing.');
-
-      toast.success(`Generating docs for #${pr.number}.`);
-      router.push(
-        `/wiki/${projectId}?branch=${encodeURIComponent(pr.branchName)}&pr=${pr.number}`
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not start indexing.');
-      setGenerating(null);
-    }
   };
 
   return (
@@ -374,18 +343,15 @@ export default function PullRequestsPage() {
                     <div className="mt-4 flex items-center justify-between gap-2 pt-1">
                       <div className="flex items-center gap-2">
                         <Button
+                          asChild
                           variant="outline"
                           size="sm"
-                          className="h-7 gap-1.5 text-[11px] rounded-md border-[#e0e0e0] hover:border-[#d4d4d4]"
-                          onClick={() => void generateDocs(pr)}
-                          disabled={generating !== null}
+                          className="h-7 gap-1.5 rounded-md border-[#e0e0e0] text-[11px] hover:border-[#d4d4d4]"
                         >
-                          {generating === pr.number ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <Sparkles className="size-3" />
-                          )}
-                          Generate docs
+                          <Link href={`/wiki/${projectId}`}>
+                            <ExternalLink className="size-3" />
+                            View wiki
+                          </Link>
                         </Button>
                         <span className="text-[10px] text-muted-foreground">
                           Updated {formatDate(pr.updatedAt)}

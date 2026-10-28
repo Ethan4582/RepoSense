@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useUser, useClerk } from '@clerk/nextjs';
+import * as React from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useUser, useClerk } from "@clerk/nextjs";
 import {
   ArrowRight,
   Bookmark,
@@ -31,7 +31,7 @@ import {
   Video,
   GitPullRequest,
   Loader2,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -44,17 +44,21 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from '~/components/ui/sidebar';
+} from "~/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
+} from "~/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +66,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '~/components/ui/dialog';
+} from "~/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,20 +76,21 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '~/components/ui/alert-dialog';
-import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
-import useProject from '~/hooks/use-project';
-import { cn } from '~/lib/utils';
-import { toast } from 'sonner';
+} from "~/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import useProject from "~/hooks/use-project";
+import { cn } from "~/lib/utils";
+import { toast } from "sonner";
+import { reliableSignOut } from "~/lib/sign-out";
 
 const NAV_ITEMS = [
-  { title: 'Dashboard', icon: Compass, url: '/dashboard' },
-  { title: 'Public Wikis', icon: Globe2, url: '/explore' },
-  { title: 'QA', icon: Bookmark, url: '/qa' },
-  { title: 'History', icon: History, url: '/history' },
-  { title: 'Pull Requests', icon: GitPullRequest, url: '/pulls' },
-  { title: 'Meetings', icon: Video, url: '/meetings' },
-  { title: 'API Keys', icon: KeyRound, url: '/settings' },
+  { title: "Dashboard", icon: Compass, url: "/dashboard" },
+  { title: "Public Wikis", icon: Globe2, url: "/explore" },
+  { title: "QA", icon: Bookmark, url: "/qa" },
+  { title: "History", icon: History, url: "/history" },
+  { title: "Pull Requests", icon: GitPullRequest, url: "/pulls" },
+  { title: "Meetings", icon: Video, url: "/meetings" },
+  { title: "API Keys", icon: KeyRound, url: "/settings" },
 ];
 
 type ProjectSummary = {
@@ -102,12 +107,15 @@ type ProjectSummary = {
 
 function statusFor(project: ProjectSummary) {
   const status = project.indexingJobs?.[0]?.status;
-  if (!status) return { color: 'bg-muted-foreground/40', label: 'Not indexed' };
-  if (status === 'FAILED') return { color: 'bg-red-500', label: 'Indexing failed' };
-  if (status === 'COMPLETED') return { color: 'bg-emerald-500', label: 'Ready' };
-  if (status === 'RUNNING') return { color: 'bg-amber-500 animate-pulse', label: 'Indexing' };
-  if (status === 'QUEUED') return { color: 'bg-amber-400', label: 'Queued' };
-  return { color: 'bg-muted-foreground/40', label: status.toLowerCase() };
+  if (!status) return { color: "bg-muted-foreground/40", label: "Not indexed" };
+  if (status === "FAILED")
+    return { color: "bg-red-500", label: "Indexing failed" };
+  if (status === "COMPLETED")
+    return { color: "bg-emerald-500", label: "Ready" };
+  if (status === "RUNNING")
+    return { color: "bg-amber-500 animate-pulse", label: "Indexing" };
+  if (status === "QUEUED") return { color: "bg-amber-400", label: "Queued" };
+  return { color: "bg-muted-foreground/40", label: status.toLowerCase() };
 }
 
 export function AppSideBar() {
@@ -122,29 +130,34 @@ export function AppSideBar() {
   const [busyProject, setBusyProject] = React.useState<string | null>(null);
 
   // Rename Dialog State
-  const [projectToRename, setProjectToRename] = React.useState<ProjectSummary | null>(null);
-  const [renameValue, setRenameValue] = React.useState('');
+  const [projectToRename, setProjectToRename] =
+    React.useState<ProjectSummary | null>(null);
+  const [renameValue, setRenameValue] = React.useState("");
 
   // Delete Dialog State
-  const [projectToDelete, setProjectToDelete] = React.useState<ProjectSummary | null>(null);
-
+  const [projectToDelete, setProjectToDelete] =
+    React.useState<ProjectSummary | null>(null);
 
   const updateProject = async (id: string, data: Record<string, unknown>) => {
     setBusyProject(id);
     try {
       const res = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const payload = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error ?? 'Could not update wiki.');
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(payload.error ?? "Could not update wiki.");
       }
       await refetchProjects();
-      toast.success('Wiki updated');
+      toast.success("Wiki updated");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update wiki.');
+      toast.error(
+        err instanceof Error ? err.message : "Could not update wiki.",
+      );
     } finally {
       setBusyProject(null);
     }
@@ -177,30 +190,45 @@ export function AppSideBar() {
     setProjectToDelete(null);
     setBusyProject(targetProject.id);
     try {
-      const res = await fetch(`/api/projects/${targetProject.id}/archive`, { method: 'PATCH' });
-      if (!res.ok) throw new Error('Could not delete wiki.');
+      const res = await fetch(`/api/projects/${targetProject.id}/archive`, {
+        method: "PATCH",
+      });
+      if (!res.ok) throw new Error("Could not delete wiki.");
       await refetchProjects();
-      toast.success('Wiki deleted');
-      if (projectId === targetProject.id) router.push('/');
+      toast.success("Wiki deleted");
+      if (projectId === targetProject.id) router.push("/");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not delete wiki.');
+      toast.error(
+        err instanceof Error ? err.message : "Could not delete wiki.",
+      );
     } finally {
       setBusyProject(null);
     }
   };
 
-  const visibleProjects = (projects ?? []).filter((project) => !project.deletedAt);
+  const visibleProjects = (projects ?? []).filter(
+    (project) => !project.deletedAt,
+  );
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-[#ececec] bg-sidebar select-none">
-      <SidebarHeader className="border-b border-[#ececec] p-3 space-y-3">
+    <Sidebar
+      collapsible="icon"
+      className="bg-sidebar border-r border-[#ececec] select-none"
+    >
+      <SidebarHeader className="space-y-3 border-b border-[#ececec] p-3">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
-              <Image src="/logo.png" alt="RepoSense" fill className="object-cover" priority />
+              <Image
+                src="/logo.png"
+                alt="RepoSense"
+                fill
+                className="object-cover"
+                priority
+              />
             </div>
             {open && (
-              <span className="text-base font-bold tracking-tight text-foreground">
+              <span className="text-foreground text-base font-bold tracking-tight">
                 Repo<span className="text-primary">Sense</span>
               </span>
             )}
@@ -210,28 +238,36 @@ export function AppSideBar() {
             variant="ghost"
             size="icon"
             onClick={() => setOpen(!open)}
-            className="size-7 text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground size-7"
             aria-label="Toggle sidebar"
           >
-            {open ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
+            {open ? (
+              <PanelLeftClose className="size-4" />
+            ) : (
+              <PanelLeft className="size-4" />
+            )}
           </Button>
         </div>
 
         <button
           type="button"
-          onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
+          onClick={() =>
+            window.dispatchEvent(new Event("open-command-palette"))
+          }
           className={cn(
-            'flex h-9 items-center rounded-[12px] border border-[#e0e0e0] bg-background text-xs text-muted-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted hover:text-foreground',
-            open ? 'w-full justify-between px-3' : 'mx-auto size-8 justify-center p-0'
+            "bg-background text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 items-center rounded-[12px] border border-[#e0e0e0] text-xs transition-colors duration-200 ease-out hover:border-[#d4d4d4]",
+            open
+              ? "w-full justify-between px-3"
+              : "mx-auto size-8 justify-center p-0",
           )}
           title="Search anything (Ctrl+K)"
         >
           <div className="flex items-center gap-2">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <Search className="text-muted-foreground size-4 shrink-0" />
             {open && <span>Search...</span>}
           </div>
           {open && (
-            <kbd className="pointer-events-none rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+            <kbd className="border-border/80 bg-muted/60 text-muted-foreground pointer-events-none rounded border px-1.5 py-0.5 font-mono text-[10px]">
               Ctrl K
             </kbd>
           )}
@@ -241,12 +277,12 @@ export function AppSideBar() {
           <Button
             variant="outline"
             className={cn(
-              'h-9 rounded-[12px] border border-[#e0e0e0] bg-background text-xs font-semibold text-foreground transition-colors duration-200 ease-out hover:border-[#d4d4d4] hover:bg-muted',
-              open ? 'w-full justify-start gap-2' : 'mx-auto size-8 p-0'
+              "bg-background text-foreground hover:bg-muted h-9 rounded-[12px] border border-[#e0e0e0] text-xs font-semibold transition-colors duration-200 ease-out hover:border-[#d4d4d4]",
+              open ? "w-full justify-start gap-2" : "mx-auto size-8 p-0",
             )}
             title="New Repository Wiki"
           >
-            <Plus className="size-4 shrink-0 text-primary" />
+            <Plus className="text-primary size-4 shrink-0" />
             {open && <span>New Repository Wiki</span>}
           </Button>
         </Link>
@@ -255,7 +291,7 @@ export function AppSideBar() {
       <SidebarContent className="gap-3 overflow-y-auto p-2">
         <SidebarGroup className="p-0">
           {open && (
-            <SidebarGroupLabel className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <SidebarGroupLabel className="text-muted-foreground px-2 py-1 text-[11px] font-semibold tracking-wider uppercase">
               Workspace
             </SidebarGroupLabel>
           )}
@@ -263,7 +299,8 @@ export function AppSideBar() {
             <SidebarMenu className="gap-0.5">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.url || pathname.startsWith(`${item.url}/`);
+                const isActive =
+                  pathname === item.url || pathname.startsWith(`${item.url}/`);
 
                 return (
                   <SidebarMenuItem key={item.url}>
@@ -272,10 +309,10 @@ export function AppSideBar() {
                       isActive={isActive}
                       tooltip={item.title}
                       className={cn(
-                        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
+                        "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors",
                         isActive
-                          ? 'bg-primary font-semibold text-primary-foreground shadow-xs hover:bg-primary hover:text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground font-semibold shadow-xs"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
                       <Link href={item.url} prefetch>
@@ -292,17 +329,17 @@ export function AppSideBar() {
 
         {open && (
           <SidebarGroup className="p-0">
-            <SidebarGroupLabel className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <SidebarGroupLabel className="text-muted-foreground flex items-center justify-between px-2 py-1 text-[11px] font-semibold tracking-wider uppercase">
               <span>Repositories</span>
-              <span className="text-[10px] font-normal normal-case text-muted-foreground/70">
+              <span className="text-muted-foreground/70 text-[10px] font-normal normal-case">
                 {visibleProjects.length}
               </span>
             </SidebarGroupLabel>
             <SidebarGroupContent>
               {visibleProjects.length === 0 ? (
                 <div className="mx-1 rounded-[12px] border border-dashed border-[#e0e0e0] px-3 py-4 text-center">
-                  <BookOpen className="mx-auto mb-1.5 size-4 text-muted-foreground/40" />
-                  <p className="text-[10px] leading-4 text-muted-foreground">
+                  <BookOpen className="text-muted-foreground/40 mx-auto mb-1.5 size-4" />
+                  <p className="text-muted-foreground text-[10px] leading-4">
                     No wikis yet. Link a GitHub repository to generate one.
                   </p>
                 </div>
@@ -317,10 +354,10 @@ export function AppSideBar() {
                       <SidebarMenuItem key={project.id}>
                         <div
                           className={cn(
-                            'group relative flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs transition-colors duration-200 ease-out',
+                            "group relative flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs transition-colors duration-200 ease-out",
                             isCurrent
-                              ? 'border-[#2c64e3]/30 bg-[#2c64e3]/18 font-medium text-foreground dark:bg-[#2c64e3]/25 dark:border-[#2c64e3]/40'
-                              : 'border-transparent text-muted-foreground hover:border-[#ececec] hover:bg-muted hover:text-foreground'
+                              ? "text-foreground border-[#2c64e3]/30 bg-[#2c64e3]/18 font-medium dark:border-[#2c64e3]/40 dark:bg-[#2c64e3]/25"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent hover:border-[#ececec]",
                           )}
                         >
                           <Link
@@ -329,7 +366,7 @@ export function AppSideBar() {
                             onClick={() => setProjectId(project.id)}
                             className="flex min-w-0 flex-1 items-center pr-1"
                           >
-                            <span className="truncate text-xs font-medium text-foreground">
+                            <span className="text-foreground truncate text-xs font-medium">
                               {project.name}
                             </span>
                           </Link>
@@ -338,7 +375,7 @@ export function AppSideBar() {
                             <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
-                                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background/80 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                                className="text-muted-foreground hover:bg-background/80 hover:text-foreground shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 {isBusy ? (
@@ -348,35 +385,45 @@ export function AppSideBar() {
                                 )}
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 text-xs">
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-48 text-xs"
+                            >
                               <DropdownMenuItem asChild className="gap-2">
                                 <Link href={`/wiki/${project.id}`}>
-                                  <ArrowRight className="size-3.5 text-muted-foreground" />
+                                  <ArrowRight className="text-muted-foreground size-3.5" />
                                   Open wiki
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openRenameDialog(project)} className="gap-2">
-                                <Pencil className="size-3.5 text-muted-foreground" />
+                              <DropdownMenuItem
+                                onClick={() => openRenameDialog(project)}
+                                className="gap-2"
+                              >
+                                <Pencil className="text-muted-foreground size-3.5" />
                                 Rename
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 disabled={project.isPrivateRepo || isBusy}
                                 onClick={() =>
-                                  void updateProject(project.id, { isPublicWiki: !project.isPublicWiki })
+                                  void updateProject(project.id, {
+                                    isPublicWiki: !project.isPublicWiki,
+                                  })
                                 }
                                 className="gap-2"
                               >
                                 {project.isPublicWiki ? (
-                                  <Lock className="size-3.5 text-muted-foreground" />
+                                  <Lock className="text-muted-foreground size-3.5" />
                                 ) : (
-                                  <Globe2 className="size-3.5 text-muted-foreground" />
+                                  <Globe2 className="text-muted-foreground size-3.5" />
                                 )}
-                                {project.isPublicWiki ? 'Make private' : 'Make public'}
+                                {project.isPublicWiki
+                                  ? "Make private"
+                                  : "Make public"}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => openDeleteDialog(project)}
-                                className="gap-2 text-destructive focus:text-destructive"
+                                className="text-destructive focus:text-destructive gap-2"
                               >
                                 <Trash2 className="size-3.5" />
                                 Delete wiki
@@ -400,24 +447,29 @@ export function AppSideBar() {
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="flex flex-1 items-center gap-2.5 overflow-hidden rounded-[12px] p-1 text-left transition-colors hover:bg-muted/60"
+                className="hover:bg-muted/60 flex flex-1 items-center gap-2.5 overflow-hidden rounded-[12px] p-1 text-left transition-colors"
               >
                 <Avatar className="size-7 shrink-0 border border-[#e0e0e0]">
-                  <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
-                  <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
+                  <AvatarImage
+                    src={user?.imageUrl}
+                    alt={user?.fullName ?? "User"}
+                  />
+                  <AvatarFallback className="bg-primary/10 text-primary text-[11px] font-semibold">
                     {user?.firstName?.[0] ??
                       user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ??
-                      'U'}
+                      "U"}
                   </AvatarFallback>
                 </Avatar>
                 {open && (
                   <div className="flex min-w-0 flex-col truncate">
-                    <span className="truncate text-xs font-semibold text-foreground">
+                    <span className="text-foreground truncate text-xs font-semibold">
                       {user?.fullName ??
-                        user?.primaryEmailAddress?.emailAddress?.split('@')[0] ??
-                        'Developer'}
+                        user?.primaryEmailAddress?.emailAddress?.split(
+                          "@",
+                        )[0] ??
+                        "Developer"}
                     </span>
-                    <span className="truncate text-[10px] text-muted-foreground">
+                    <span className="text-muted-foreground truncate text-[10px]">
                       {user?.primaryEmailAddress?.emailAddress}
                     </span>
                   </div>
@@ -430,7 +482,7 @@ export function AppSideBar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="ml-1 size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground ml-1 size-7 shrink-0"
                   title="Settings"
                 >
                   <Settings className="size-4" />
@@ -443,27 +495,27 @@ export function AppSideBar() {
             side="top"
             align="start"
             sideOffset={10}
-            className="w-64 space-y-1.5 rounded-xl border bg-popover p-2 text-foreground shadow-2xl"
+            className="bg-popover text-foreground w-64 space-y-1.5 rounded-xl border p-2 shadow-2xl"
           >
-            <div className="flex items-center gap-2.5 border-b border-border/40 px-2 py-1.5 pb-2">
+            <div className="border-border/40 flex items-center gap-2.5 border-b px-2 py-1.5 pb-2">
               <Avatar className="size-8 shrink-0">
                 <AvatarImage src={user?.imageUrl} />
-                <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                  {user?.firstName?.[0] ?? 'U'}
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                  {user?.firstName?.[0] ?? "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-xs font-semibold text-foreground">
-                  {user?.fullName ?? 'Developer'}
+                <span className="text-foreground truncate text-xs font-semibold">
+                  {user?.fullName ?? "Developer"}
                 </span>
-                <span className="truncate text-[10px] text-muted-foreground">
+                <span className="text-muted-foreground truncate text-[10px]">
                   {user?.primaryEmailAddress?.emailAddress}
                 </span>
               </div>
             </div>
 
             <div className="pt-1">
-              <div className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="text-muted-foreground px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
                 Account
               </div>
               <button
@@ -472,37 +524,32 @@ export function AppSideBar() {
                   setProfileOpen(false);
                   openUserProfile();
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
+                className="text-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
               >
-                <UserIcon className="size-3.5 text-muted-foreground" />
+                <UserIcon className="text-muted-foreground size-3.5" />
                 <span>Account settings</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setProfileOpen(false);
-                  router.push('/settings');
+                  router.push("/settings");
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted"
+                className="text-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
               >
-                <KeyRound className="size-3.5 text-muted-foreground" />
+                <KeyRound className="text-muted-foreground size-3.5" />
                 <span>API keys</span>
               </button>
             </div>
 
-            <div className="space-y-0.5 border-t border-border/40 pt-1">
-
+            <div className="border-border/40 space-y-0.5 border-t pt-1">
               <button
                 type="button"
-                onClick={async () => {
+                onClick={() => {
                   setProfileOpen(false);
-                  try {
-                    await signOut({ redirectUrl: '/sign-in' });
-                  } catch {
-                    window.location.href = '/sign-in';
-                  }
+                  void reliableSignOut(signOut);
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
+                className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
               >
                 <LogOut className="size-3.5" />
                 <span>Sign out</span>
@@ -513,12 +560,16 @@ export function AppSideBar() {
       </SidebarFooter>
 
       {/* Shadcn Rename Wiki Dialog */}
-      <Dialog open={!!projectToRename} onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}>
+      <Dialog
+        open={!!projectToRename}
+        onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename Wiki</DialogTitle>
             <DialogDescription>
-              Enter a new display name for the &ldquo;{projectToRename?.name}&rdquo; repository wiki.
+              Enter a new display name for the &ldquo;{projectToRename?.name}
+              &rdquo; repository wiki.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -535,10 +586,20 @@ export function AppSideBar() {
               autoFocus
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setProjectToRename(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setProjectToRename(null)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!renameValue.trim() || renameValue.trim() === projectToRename?.name}>
+              <Button
+                type="submit"
+                disabled={
+                  !renameValue.trim() ||
+                  renameValue.trim() === projectToRename?.name
+                }
+              >
                 Save changes
               </Button>
             </DialogFooter>
@@ -547,16 +608,24 @@ export function AppSideBar() {
       </Dialog>
 
       {/* Shadcn Delete Wiki AlertDialog */}
-      <AlertDialog open={!!projectToDelete} onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}>
+      <AlertDialog
+        open={!!projectToDelete}
+        onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the &ldquo;{projectToDelete?.name}&rdquo; repository and all associated data, including chat questions, conversation history, indexing jobs, indexed files, and generated wiki content. This action cannot be undone.
+              This will permanently delete the &ldquo;{projectToDelete?.name}
+              &rdquo; repository and all associated data, including chat
+              questions, conversation history, indexing jobs, indexed files, and
+              generated wiki content. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleConfirmDelete()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

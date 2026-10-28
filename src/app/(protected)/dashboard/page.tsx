@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useClerk, useUser } from '@clerk/nextjs';
+import * as React from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useClerk, useUser } from "@clerk/nextjs";
 import {
   ArrowRight,
   BookOpen,
@@ -27,18 +27,18 @@ import {
   Sun,
   Trash2,
   User as UserIcon,
-} from 'lucide-react';
-import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
-import { Switch } from '~/components/ui/switch';
-import { Input } from '~/components/ui/input';
+} from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { Switch } from "~/components/ui/switch";
+import { Input } from "~/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu';
+} from "~/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +46,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '~/components/ui/dialog';
+} from "~/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,11 +56,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '~/components/ui/alert-dialog';
-import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
-import useProject from '~/hooks/use-project';
-import { cn } from '~/lib/utils';
-import { toast } from 'sonner';
+} from "~/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import useProject from "~/hooks/use-project";
+import { cn } from "~/lib/utils";
+import { toast } from "sonner";
+import { reliableSignOut } from "~/lib/sign-out";
 
 interface EnrichedProject {
   id: string;
@@ -80,35 +81,35 @@ interface EnrichedProject {
 }
 
 function formatStars(count?: number | null): string {
-  if (!count) return '0';
-  if (count >= 1_000_000) return (count / 1_000_000).toFixed(1) + 'm';
-  if (count >= 1_000) return (count / 1_000).toFixed(1) + 'k';
+  if (!count) return "0";
+  if (count >= 1_000_000) return (count / 1_000_000).toFixed(1) + "m";
+  if (count >= 1_000) return (count / 1_000).toFixed(1) + "k";
   return String(count);
 }
 
 function getLanguageColor(language?: string | null): string {
-  if (!language) return '#8b949e';
+  if (!language) return "#8b949e";
   const colors: Record<string, string> = {
-    TypeScript: '#3178c6',
-    JavaScript: '#f1e05a',
-    Python: '#3572A5',
-    Rust: '#dea584',
-    Go: '#00ADD8',
-    Java: '#b07219',
-    'C++': '#f34b7d',
-    C: '#555555',
-    Ruby: '#701516',
-    PHP: '#4F5D95',
-    Swift: '#F05138',
-    Kotlin: '#A97BFF',
-    HTML: '#e34c26',
-    CSS: '#563d7c',
-    Shell: '#89e051',
-    Vue: '#41b883',
-    Svelte: '#ff3e00',
-    Dart: '#00b4ab',
+    TypeScript: "#3178c6",
+    JavaScript: "#f1e05a",
+    Python: "#3572A5",
+    Rust: "#dea584",
+    Go: "#00ADD8",
+    Java: "#b07219",
+    "C++": "#f34b7d",
+    C: "#555555",
+    Ruby: "#701516",
+    PHP: "#4F5D95",
+    Swift: "#F05138",
+    Kotlin: "#A97BFF",
+    HTML: "#e34c26",
+    CSS: "#563d7c",
+    Shell: "#89e051",
+    Vue: "#41b883",
+    Svelte: "#ff3e00",
+    Dart: "#00b4ab",
   };
-  return colors[language] ?? '#6366f1';
+  return colors[language] ?? "#6366f1";
 }
 
 export default function DashboardPage() {
@@ -117,24 +118,32 @@ export default function DashboardPage() {
   const { signOut, openUserProfile } = useClerk();
   const { projects: rawProjects, isLoading, refetchProjects } = useProject();
 
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = React.useState("");
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
-  const [localVisibility, setLocalVisibility] = React.useState<Record<string, boolean>>({});
-  const [projectToRename, setProjectToRename] = React.useState<EnrichedProject | null>(null);
-  const [renameValue, setRenameValue] = React.useState('');
-  const [projectToDelete, setProjectToDelete] = React.useState<EnrichedProject | null>(null);
+  const [localVisibility, setLocalVisibility] = React.useState<
+    Record<string, boolean>
+  >({});
+  const [projectToRename, setProjectToRename] =
+    React.useState<EnrichedProject | null>(null);
+  const [renameValue, setRenameValue] = React.useState("");
+  const [projectToDelete, setProjectToDelete] =
+    React.useState<EnrichedProject | null>(null);
 
-  const projects = (rawProjects as unknown as EnrichedProject[] | undefined) ?? [];
+  const projects =
+    (rawProjects as unknown as EnrichedProject[] | undefined) ?? [];
 
   // Routing & Onboarding Flow:
   // When an authenticated user has zero repositories, automatically redirect them to /create
   React.useEffect(() => {
     if (!isLoading && (!rawProjects || rawProjects.length === 0)) {
-      router.replace('/create');
+      router.replace("/create");
     }
   }, [isLoading, rawProjects, router]);
 
-  const handleStartRename = (project: EnrichedProject, e?: React.MouseEvent) => {
+  const handleStartRename = (
+    project: EnrichedProject,
+    e?: React.MouseEvent,
+  ) => {
     if (e) e.stopPropagation();
     setProjectToRename(project);
     setRenameValue(project.name);
@@ -144,16 +153,16 @@ export default function DashboardPage() {
     if (!projectToRename || !renameValue.trim()) return;
     try {
       const res = await fetch(`/api/projects/${projectToRename.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: renameValue.trim() }),
       });
-      if (!res.ok) throw new Error('Failed to rename repository');
-      toast.success('Repository renamed');
+      if (!res.ok) throw new Error("Failed to rename repository");
+      toast.success("Repository renamed");
       setProjectToRename(null);
       await refetchProjects();
     } catch {
-      toast.error('Could not rename repository');
+      toast.error("Could not rename repository");
     }
   };
 
@@ -162,12 +171,14 @@ export default function DashboardPage() {
     const target = projectToDelete;
     setProjectToDelete(null);
     try {
-      const res = await fetch(`/api/projects/${target.id}/archive`, { method: 'PATCH' });
-      if (!res.ok) throw new Error('Could not delete repository');
-      toast.success('Repository permanently deleted');
+      const res = await fetch(`/api/projects/${target.id}/archive`, {
+        method: "PATCH",
+      });
+      if (!res.ok) throw new Error("Could not delete repository");
+      toast.success("Repository permanently deleted");
       await refetchProjects();
     } catch {
-      toast.error('Could not delete repository');
+      toast.error("Could not delete repository");
     }
   };
 
@@ -176,25 +187,28 @@ export default function DashboardPage() {
     try {
       const url = `${window.location.origin}/wiki/${projectId}`;
       await navigator.clipboard.writeText(url);
-      toast.success('Wiki link copied to clipboard');
+      toast.success("Wiki link copied to clipboard");
     } catch {
-      toast.error('Could not copy link');
+      toast.error("Could not copy link");
     }
   };
 
   const copyDashboardShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      toast.success('Dashboard link copied to clipboard');
+      toast.success("Dashboard link copied to clipboard");
     } catch {
-      toast.error('Could not copy link');
+      toast.error("Could not copy link");
     }
   };
 
-  const handleToggleVisibility = async (project: EnrichedProject, e: React.MouseEvent) => {
+  const handleToggleVisibility = async (
+    project: EnrichedProject,
+    e: React.MouseEvent,
+  ) => {
     e.stopPropagation();
     if (project.isPrivateRepo) {
-      toast.error('Private repositories cannot have public wikis');
+      toast.error("Private repositories cannot have public wikis");
       return;
     }
 
@@ -206,18 +220,20 @@ export default function DashboardPage() {
 
     try {
       const res = await fetch(`/api/projects/${project.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPublicWiki: nextPublic }),
       });
       if (!res.ok) {
-        throw new Error('Failed to update visibility');
+        throw new Error("Failed to update visibility");
       }
-      toast.success(nextPublic ? 'Wiki is now Public' : 'Wiki is now Private');
+      toast.success(nextPublic ? "Wiki is now Public" : "Wiki is now Private");
       await refetchProjects();
     } catch (err) {
       setLocalVisibility((prev) => ({ ...prev, [project.id]: currentPublic }));
-      toast.error(err instanceof Error ? err.message : 'Could not update visibility');
+      toast.error(
+        err instanceof Error ? err.message : "Could not update visibility",
+      );
     } finally {
       setTogglingId(null);
     }
@@ -228,21 +244,23 @@ export default function DashboardPage() {
     const trimmed = searchQuery.trim();
     if (!trimmed) return;
 
-    if (trimmed.includes('github.com/') || trimmed.startsWith('http')) {
+    if (trimmed.includes("github.com/") || trimmed.startsWith("http")) {
       router.push(`/create?repo=${encodeURIComponent(trimmed)}`);
     }
   };
 
-  const isLink = searchQuery.trim().includes('github.com/') || searchQuery.trim().startsWith('http');
+  const isLink =
+    searchQuery.trim().includes("github.com/") ||
+    searchQuery.trim().startsWith("http");
 
   const filteredProjects = React.useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q || isLink) return projects;
     return projects.filter((p) => {
       const fullName = `${p.repoOwner}/${p.repoName}`.toLowerCase();
-      const name = (p.name ?? '').toLowerCase();
-      const desc = (p.description ?? '').toLowerCase();
-      const lang = (p.language ?? '').toLowerCase();
+      const name = (p.name ?? "").toLowerCase();
+      const desc = (p.description ?? "").toLowerCase();
+      const lang = (p.language ?? "").toLowerCase();
       return (
         fullName.includes(q) ||
         name.includes(q) ||
@@ -252,11 +270,11 @@ export default function DashboardPage() {
     });
   }, [projects, searchQuery, isLink]);
 
-  if (isLoading || (!rawProjects || rawProjects.length === 0)) {
+  if (isLoading || !rawProjects || rawProjects.length === 0) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3 text-xs text-muted-foreground">
-          <Loader2 className="size-6 animate-spin text-primary" />
+      <div className="bg-background flex h-screen items-center justify-center">
+        <div className="text-muted-foreground flex flex-col items-center gap-3 text-xs">
+          <Loader2 className="text-primary size-6 animate-spin" />
           <span>Loading repositories...</span>
         </div>
       </div>
@@ -264,44 +282,47 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="bg-background text-foreground flex min-h-screen flex-col">
       {/* Top Controls */}
       <div className="flex h-14 items-center justify-end px-4 sm:px-6">
         <div className="flex items-center gap-2">
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="rounded-full ring-2 ring-border/50 transition-all hover:ring-primary/60 outline-none"
+                className="ring-border/50 hover:ring-primary/60 rounded-full ring-2 transition-all outline-none"
               >
                 <Avatar className="size-7">
-                  <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'User'} />
+                  <AvatarImage
+                    src={user?.imageUrl}
+                    alt={user?.fullName ?? "User"}
+                  />
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                    {user?.firstName?.[0] ?? 'U'}
+                    {user?.firstName?.[0] ?? "U"}
                   </AvatarFallback>
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 text-xs">
-              <div className="px-2 py-1.5 border-b border-border/50">
-                <p className="font-semibold text-foreground truncate">{user?.fullName ?? 'Developer'}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress}</p>
+              <div className="border-border/50 border-b px-2 py-1.5">
+                <p className="text-foreground truncate font-semibold">
+                  {user?.fullName ?? "Developer"}
+                </p>
+                <p className="text-muted-foreground truncate text-[10px]">
+                  {user?.primaryEmailAddress?.emailAddress}
+                </p>
               </div>
-              <DropdownMenuItem onClick={() => openUserProfile()} className="gap-2 cursor-pointer">
+              <DropdownMenuItem
+                onClick={() => openUserProfile()}
+                className="cursor-pointer gap-2"
+              >
                 <UserIcon className="size-3.5" />
                 Account Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={async () => {
-                  try {
-                    await signOut({ redirectUrl: '/sign-in' });
-                  } catch {
-                    window.location.href = '/sign-in';
-                  }
-                }}
-                className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                onClick={() => void reliableSignOut(signOut)}
+                className="text-destructive focus:text-destructive cursor-pointer gap-2"
               >
                 <LogOut className="size-3.5" />
                 Sign out
@@ -312,27 +333,27 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 px-4 sm:px-6 py-12 md:py-16 max-w-6xl w-full mx-auto">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 md:py-16">
         {/* Header & Quick Search Matching Reference Screen */}
-        <section className="text-center max-w-2xl mx-auto">
-          <h1 className="text-3xl sm:text-4xl font-normal tracking-tight text-foreground">
+        <section className="mx-auto max-w-2xl text-center">
+          <h1 className="text-foreground text-3xl font-normal tracking-tight sm:text-4xl">
             Which repo would you like to understand?
           </h1>
 
-          <form onSubmit={handleSearchSubmit} className="mt-8 relative">
-            <div className="relative flex items-center rounded-[12px] border border-[#e0e0e0] bg-card/60 transition-colors duration-200 ease-out hover:border-[#d4d4d4] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
-              <Search className="size-4 shrink-0 text-muted-foreground ml-3.5" />
+          <form onSubmit={handleSearchSubmit} className="relative mt-8">
+            <div className="bg-card/60 focus-within:border-primary/50 focus-within:ring-primary/10 relative flex items-center rounded-[12px] border border-[#e0e0e0] transition-colors duration-200 ease-out focus-within:ring-2 hover:border-[#d4d4d4]">
+              <Search className="text-muted-foreground ml-3.5 size-4 shrink-0" />
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search for repositories (or paste a link)"
-                className="w-full bg-transparent px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                className="text-foreground placeholder:text-muted-foreground w-full bg-transparent px-3 py-2.5 text-sm outline-none"
               />
               {isLink && (
                 <Button
                   type="submit"
                   size="sm"
-                  className="h-7 text-xs mr-2 gap-1 bg-primary text-primary-foreground rounded-[12px]"
+                  className="bg-primary text-primary-foreground mr-2 h-7 gap-1 rounded-[12px] text-xs"
                 >
                   <Sparkles className="size-3" />
                   Index
@@ -344,18 +365,18 @@ export default function DashboardPage() {
 
         {/* Repository Grid */}
         <section className="mt-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {/* Card 1: Dedicated "+ Add repo" card */}
             <Link
               href="/create"
-              className="group relative flex flex-col justify-between rounded-[12px] border border-dashed border-[#e0e0e0] bg-primary/[0.03] hover:bg-primary/[0.06] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] min-h-[170px]"
+              className="group bg-primary/[0.03] hover:bg-primary/[0.06] relative flex min-h-[170px] flex-col justify-between rounded-[12px] border border-dashed border-[#e0e0e0] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
             >
-              <div className="flex items-center gap-2 text-primary font-semibold">
+              <div className="text-primary flex items-center gap-2 font-semibold">
                 <Plus className="size-5" />
-                <span className="font-semibold text-base">Add repo</span>
+                <span className="text-base font-semibold">Add repo</span>
               </div>
-              <div className="flex items-center justify-end mt-8">
-                <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:translate-x-0.5">
+              <div className="mt-8 flex items-center justify-end">
+                <div className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-full transition-transform group-hover:translate-x-0.5">
                   <ArrowRight className="size-4" />
                 </div>
               </div>
@@ -363,37 +384,52 @@ export default function DashboardPage() {
 
             {/* Repository Cards */}
             {filteredProjects.map((project) => {
-              const isPublic = localVisibility[project.id] ?? project.isPublicWiki;
+              const isPublic =
+                localVisibility[project.id] ?? project.isPublicWiki;
               const isBusy = togglingId === project.id;
-              const primaryLang = project.language || 'Documentation';
+              const primaryLang = project.language || "Documentation";
               const langColor = getLanguageColor(project.language);
 
               return (
                 <div
                   key={project.id}
                   onClick={() => router.push(`/wiki/${project.id}`)}
-                  className="group relative flex flex-col justify-between rounded-xl border border-[#e5e5e5] bg-card p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4] cursor-pointer min-h-[170px]"
+                  className="group bg-card relative flex min-h-[170px] cursor-pointer flex-col justify-between rounded-xl border border-[#e5e5e5] p-5 transition-colors duration-200 ease-out hover:border-[#d4d4d4]"
                 >
                   {/* Top: Repo name & Visibility / Actions */}
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h2 className="font-medium text-[15px] text-foreground tracking-tight truncate flex-1" title={`${project.repoOwner}/${project.repoName}`}>
+                      <h2
+                        className="text-foreground flex-1 truncate text-[15px] font-medium tracking-tight"
+                        title={`${project.repoOwner}/${project.repoName}`}
+                      >
                         {project.repoOwner} / {project.repoName}
                       </h2>
 
-                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="flex shrink-0 items-center gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {/* Visibility Tag & Quick Toggle */}
                         <div
-                          className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 transition-colors"
-                          title={project.isPrivateRepo ? 'Private repository' : `Toggle visibility (currently ${isPublic ? 'Public' : 'Private'})`}
+                          className="border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] transition-colors"
+                          title={
+                            project.isPrivateRepo
+                              ? "Private repository"
+                              : `Toggle visibility (currently ${isPublic ? "Public" : "Private"})`
+                          }
                         >
-                          <span className="font-normal">{isPublic ? 'Public' : 'Private'}</span>
+                          <span className="font-normal">
+                            {isPublic ? "Public" : "Private"}
+                          </span>
                           {!project.isPrivateRepo && (
                             <Switch
                               checked={isPublic}
                               disabled={isBusy}
-                              onClick={(e) => handleToggleVisibility(project, e)}
-                              className="scale-75 origin-center data-[state=checked]:bg-emerald-500"
+                              onClick={(e) =>
+                                handleToggleVisibility(project, e)
+                              }
+                              className="origin-center scale-75 data-[state=checked]:bg-emerald-500"
                             />
                           )}
                         </div>
@@ -404,17 +440,20 @@ export default function DashboardPage() {
                             <button
                               type="button"
                               title="More options"
-                              className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                              className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors"
                             >
                               <MoreHorizontal className="size-4" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 text-xs">
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-48 text-xs"
+                          >
                             <DropdownMenuItem
                               onClick={(e) => handleStartRename(project, e)}
-                              className="gap-2 cursor-pointer"
+                              className="cursor-pointer gap-2"
                             >
-                              <Pencil className="size-3.5 text-muted-foreground" />
+                              <Pencil className="text-muted-foreground size-3.5" />
                               <span>Edit filename</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -422,16 +461,16 @@ export default function DashboardPage() {
                                 e.stopPropagation();
                                 router.push(`/wiki/${project.id}?mode=edit`);
                               }}
-                              className="gap-2 cursor-pointer"
+                              className="cursor-pointer gap-2"
                             >
-                              <Pencil className="size-3.5 text-muted-foreground" />
+                              <Pencil className="text-muted-foreground size-3.5" />
                               <span>Edit wiki</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={(e) => copyShareLink(project.id, e)}
-                              className="gap-2 cursor-pointer"
+                              className="cursor-pointer gap-2"
                             >
-                              <LinkIcon className="size-3.5 text-muted-foreground" />
+                              <LinkIcon className="text-muted-foreground size-3.5" />
                               <span>Repository URL</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -440,7 +479,7 @@ export default function DashboardPage() {
                                 e.stopPropagation();
                                 setProjectToDelete(project);
                               }}
-                              className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                              className="text-destructive focus:text-destructive cursor-pointer gap-2"
                             >
                               <Trash2 className="size-3.5" />
                               <span>Delete</span>
@@ -451,22 +490,23 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Middle: Description */}
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground line-clamp-2 min-h-[34px]">
-                      {project.description || `${project.name} living architecture and code wiki.`}
+                    <p className="text-muted-foreground mt-2 line-clamp-2 min-h-[34px] text-xs leading-relaxed">
+                      {project.description ||
+                        `${project.name} living architecture and code wiki.`}
                     </p>
                   </div>
 
                   {/* Bottom: Stars, Language, and Open arrow */}
-                  <div className="mt-5 flex items-center justify-between border-t border-border/40 pt-3">
+                  <div className="border-border/40 mt-5 flex items-center justify-between border-t pt-3">
                     <div className="flex items-center gap-3">
                       {/* Star count */}
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                      <div className="text-muted-foreground flex items-center gap-1 font-mono text-xs">
                         <Star className="size-3.5 fill-amber-400 text-amber-400" />
                         <span>{formatStars(project.stars)}</span>
                       </div>
 
                       {/* Primary language badge */}
-                      <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
                         <span
                           className="size-2 rounded-full"
                           style={{ backgroundColor: langColor }}
@@ -476,7 +516,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Open arrow */}
-                    <div className="flex size-7 items-center justify-center rounded-full bg-muted/40 text-muted-foreground transition-all group-hover:bg-primary group-hover:text-primary-foreground group-hover:translate-x-0.5">
+                    <div className="bg-muted/40 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex size-7 items-center justify-center rounded-full transition-all group-hover:translate-x-0.5">
                       <ArrowRight className="size-3.5" />
                     </div>
                   </div>
@@ -486,22 +526,30 @@ export default function DashboardPage() {
           </div>
 
           {filteredProjects.length === 0 && (
-            <div className="mt-12 text-center py-12 rounded-2xl border border-dashed border-border/60">
-              <BookOpen className="size-8 mx-auto text-muted-foreground/40 mb-3" />
-              <h3 className="text-sm font-medium text-foreground">No repositories match your search</h3>
-              <p className="text-xs text-muted-foreground mt-1">Try another keyword or paste a GitHub link.</p>
+            <div className="border-border/60 mt-12 rounded-2xl border border-dashed py-12 text-center">
+              <BookOpen className="text-muted-foreground/40 mx-auto mb-3 size-8" />
+              <h3 className="text-foreground text-sm font-medium">
+                No repositories match your search
+              </h3>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Try another keyword or paste a GitHub link.
+              </p>
             </div>
           )}
         </section>
       </main>
 
       {/* Rename Dialog */}
-      <Dialog open={!!projectToRename} onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}>
+      <Dialog
+        open={!!projectToRename}
+        onOpenChange={(isOpen) => !isOpen && setProjectToRename(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Filename / Name</DialogTitle>
             <DialogDescription>
-              Enter a new display name for the &ldquo;{projectToRename?.name}&rdquo; repository.
+              Enter a new display name for the &ldquo;{projectToRename?.name}
+              &rdquo; repository.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -518,10 +566,20 @@ export default function DashboardPage() {
               autoFocus
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setProjectToRename(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setProjectToRename(null)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!renameValue.trim() || renameValue.trim() === projectToRename?.name}>
+              <Button
+                type="submit"
+                disabled={
+                  !renameValue.trim() ||
+                  renameValue.trim() === projectToRename?.name
+                }
+              >
                 Save changes
               </Button>
             </DialogFooter>
@@ -530,16 +588,24 @@ export default function DashboardPage() {
       </Dialog>
 
       {/* Delete Confirmation AlertDialog */}
-      <AlertDialog open={!!projectToDelete} onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}>
+      <AlertDialog
+        open={!!projectToDelete}
+        onOpenChange={(isOpen) => !isOpen && setProjectToDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the &ldquo;{projectToDelete?.name}&rdquo; repository and all associated data, including chat questions, conversation history, indexing jobs, indexed files, and generated wiki content. This action cannot be undone.
+              This will permanently delete the &ldquo;{projectToDelete?.name}
+              &rdquo; repository and all associated data, including chat
+              questions, conversation history, indexing jobs, indexed files, and
+              generated wiki content. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setProjectToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleConfirmDelete()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

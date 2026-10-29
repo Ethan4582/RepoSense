@@ -6,13 +6,6 @@ import { useParams } from "next/navigation";
 import { ArrowLeft, GitCompareArrows } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { RevisionDiff } from "~/components/wiki/revision-diff";
 
 interface Revision {
@@ -107,22 +100,19 @@ export default function RevisionDiffPage() {
         </div>
       </div>
 
-      <Card className="min-h-0 flex-1 gap-3 py-4">
-        <CardHeader className="px-4">
-          <CardTitle>Wiki changes</CardTitle>
-          <CardDescription>
-            The complete page comparison is isolated here so the versions list
-            stays compact.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-h-0 px-4">
-          <RevisionDiff
-            previous={previousRevision?.content ?? ""}
-            current={revision.content}
-            fullHeight
-          />
-        </CardContent>
-      </Card>
+      <RevisionDiff
+        previous={previousRevision?.content ?? ""}
+        current={revision.content}
+        files={[
+          {
+            id: revision.page.id,
+            path: revision.page.title,
+            previous: previousRevision?.content ?? "",
+            current: revision.content,
+          },
+        ]}
+        fullHeight
+      />
     </main>
   );
 }

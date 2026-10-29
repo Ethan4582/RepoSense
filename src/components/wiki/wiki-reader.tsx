@@ -16,14 +16,12 @@ import {
   ChevronRight,
   Check,
   FileCode2,
-  FolderTree,
   GitBranch,
   GitCompareArrows,
   GitPullRequest,
   Globe2,
   Loader2,
   Moon,
-  PanelLeft,
   Pencil,
   Save,
   Settings,
@@ -39,8 +37,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { SidebarProvider } from "~/components/ui/sidebar";
-import { AppSideBar } from "~/app/app-sidebar";
 import { cn } from "~/lib/utils";
 import { getModelInfo, PROVIDER_METADATA } from "~/lib/providers/catalog";
 import type { ProviderId } from "~/lib/providers/types";
@@ -55,14 +51,6 @@ import { restoreCitationRanges } from "~/lib/citations";
 import { ServerBusyNotice } from "~/components/server-busy-notice";
 import { NotificationCenter } from "~/components/notification-center";
 import { AccountMenu } from "~/components/account-menu";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { Separator } from "~/components/ui/separator";
@@ -161,9 +149,7 @@ export function WikiReader() {
   const [loading, setLoading] = React.useState(true);
   const [pageLoading, setPageLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const [historySidebarOpen, setHistorySidebarOpen] = React.useState(false);
-  const [appNavOpen, setAppNavOpen] = React.useState(false);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [visibilityBusy, setVisibilityBusy] = React.useState(false);
   const [indexing, setIndexing] = React.useState<IndexingJob | null>(null);
@@ -383,23 +369,41 @@ export function WikiReader() {
     const container = articleRef.current;
     if (!container) return;
 
-    const update = () => {
-      const headings = Array.from(
+    let ticking = false;
+    let headingElements: HTMLElement[] = [];
+
+    const refreshHeadings = () => {
+      headingElements = Array.from(
         container.querySelectorAll<HTMLElement>("h2[id], h3[id]"),
       );
-      const threshold = container.getBoundingClientRect().top + 96;
-      let current = headings[0]?.id ?? null;
-      for (const heading of headings) {
-        if (heading.getBoundingClientRect().top <= threshold)
-          current = heading.id;
-        else break;
-      }
-      setActiveHeadingId(current);
     };
 
-    update();
-    container.addEventListener("scroll", update, { passive: true });
-    return () => container.removeEventListener("scroll", update);
+    refreshHeadings();
+
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          ticking = false;
+          if (headingElements.length === 0) {
+            refreshHeadings();
+          }
+          const threshold = container.getBoundingClientRect().top + 96;
+          let current = headingElements[0]?.id ?? null;
+          for (const heading of headingElements) {
+            if (heading.getBoundingClientRect().top <= threshold) {
+              current = heading.id;
+            } else {
+              break;
+            }
+          }
+          setActiveHeadingId((prev) => (prev !== current ? current : prev));
+        });
+        ticking = true;
+      }
+    };
+
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
   }, [activePage?.slug, activePage?.content]);
 
   const scrollToHeading = React.useCallback((id: string) => {
@@ -623,9 +627,20 @@ export function WikiReader() {
     [project],
   );
 
-  const openCitation = (target: CitationTarget) => {
+  const openCitation = React.useCallback((target: CitationTarget) => {
     setActiveFile(target);
-  };
+  }, []);
+
+  const githubRepo = React.useMemo(
+    () =>
+      project
+        ? {
+            owner: project.repoOwner,
+            repo: project.repoName,
+          }
+        : undefined,
+    [project?.repoOwner, project?.repoName],
+  );
 
   const switchBranch = (branch: string, pullRequestNumber?: number) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -1066,82 +1081,23 @@ export function WikiReader() {
   return (
     <div className="internal-app bg-background flex h-screen flex-col overflow-hidden">
       {/* -- Header -- */}
-      <header className="border-border/50 relative flex h-14 shrink-0 items-center justify-center border-b px-6 sm:px-16">
-        <div className="border-border/40 flex h-full w-full max-w-[1750px] items-center justify-between gap-3 border-x px-4 sm:px-7">
-          {/* Left brand segment */}
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden">
-            {isSignedIn ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setAppNavOpen(true)}
-                aria-label="Open workspace navigation"
-                title="Open workspace"
-              >
-                <PanelLeft />
-              </Button>
-            ) : null}
-            {!qaOpen ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen((current) => !current)}
-                aria-label={
-                  sidebarOpen ? "Close wiki navigation" : "Open wiki navigation"
-                }
-                title={
-                  sidebarOpen ? "Close wiki navigation" : "Open wiki navigation"
-                }
-              >
-                <FolderTree />
-              </Button>
-            ) : null}
-            <Link href="/" className="flex shrink-0 items-center gap-2">
+      <header className="border-border/80 dark:border-neutral-800 relative flex h-14 shrink-0 items-center justify-center border-b px-4 sm:px-8 lg:px-12">
+        <div className="border-border/80 dark:border-neutral-800 flex h-full w-full max-w-[1700px] items-center justify-between gap-3 border-x px-4 sm:px-6">
+          {/* Left brand segment: logo and text branding only */}
+          <div className="flex shrink-0 items-center gap-2.5">
+            <Link
+              href={isSignedIn ? "/dashboard" : "/"}
+              className="flex items-center gap-2"
+            >
               <img
                 src="/logo.png"
                 alt="RepoSense"
                 className="size-6 rounded-md object-contain"
               />
-              <span className="text-foreground hidden text-[17px] font-semibold tracking-tight md:inline">
+              <span className="text-foreground text-[16px] font-semibold tracking-tight">
                 RepoSense
               </span>
             </Link>
-            <Breadcrumb className="hidden min-w-0 lg:block">
-              <BreadcrumbList className="flex-nowrap">
-                <BreadcrumbItem className="hidden lg:inline-flex">
-                  <BreadcrumbLink asChild>
-                    <Link href="/dashboard">Dashboard</Link>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden lg:block" />
-                <BreadcrumbItem className="min-w-0">
-                  {activePage ? (
-                    <BreadcrumbLink asChild>
-                      <Link
-                        href={`/wiki/${project.id}`}
-                        className="max-w-40 truncate"
-                      >
-                        {project.repoName}
-                      </Link>
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage className="max-w-40 truncate">
-                      {project.repoName}
-                    </BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-                {activePage ? (
-                  <>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem className="min-w-0">
-                      <BreadcrumbPage className="max-w-48 truncate">
-                        {activePage.title}
-                      </BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </>
-                ) : null}
-              </BreadcrumbList>
-            </Breadcrumb>
           </div>
 
           {/* Right actions segment */}
@@ -1304,11 +1260,11 @@ export function WikiReader() {
       ) : null}
 
       {/* -- Body: Symmetric Outer Frame with dashed hairlines, separated by spacing -- */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-6 sm:px-16">
-        <div className="border-border/40 relative flex min-h-0 w-full max-w-[1750px] flex-1 overflow-hidden border-x">
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-4 sm:px-8 lg:px-12">
+        <div className="border-border/80 dark:border-neutral-800 relative flex min-h-0 w-full max-w-[1700px] flex-1 overflow-hidden border-x">
           {/* Left column: Wiki Navigation with matching border intersecting the header line */}
-          {!qaOpen && sidebarOpen ? (
-            <aside className="bg-sidebar border-sidebar-border absolute inset-y-0 left-0 z-20 flex w-[260px] shrink-0 scrollbar-none flex-col overflow-y-auto border-r px-4 py-5 shadow-lg md:relative md:z-10 md:shadow-none">
+          {!qaOpen ? (
+            <aside className="bg-muted/25 dark:bg-black/40 border-border/80 dark:border-neutral-800 hidden w-[280px] shrink-0 scrollbar-none flex-col overflow-y-auto border-r px-5 py-6 md:flex">
               <div className="mb-5">
                 <div className="text-muted-foreground text-[12px] font-normal">
                   {activePage?.updatedAt
@@ -1361,7 +1317,6 @@ export function WikiReader() {
                               type="button"
                               onClick={() => {
                                 setActiveSlug(page.slug);
-                                setSidebarOpen(true);
                                 setQaOpen(false);
                               }}
                               className={cn(
@@ -1459,14 +1414,18 @@ export function WikiReader() {
               />
             ) : (
               <div className="flex min-h-0 flex-1 overflow-hidden">
-                {/* Documentation article � scrollable, centered with 48px to 64px empty gutters on each side */}
+                {/* Documentation article - scrollable, centered with comfortable margins */}
                 <article
                   ref={articleRef}
+                  style={{
+                    willChange: "scroll-position",
+                    WebkitOverflowScrolling: "touch",
+                  }}
                   className={cn(
-                    "min-w-0 flex-1 scrollbar-none overflow-y-auto pb-[136px]",
+                    "min-w-0 flex-1 scrollbar-none overflow-y-auto pb-[136px] overscroll-contain scroll-smooth",
                     isEmbed
                       ? "px-6 pt-6 sm:px-10"
-                      : "px-[clamp(24px,4vw,56px)] pt-10",
+                      : "px-6 sm:px-12 lg:px-16 pt-8",
                   )}
                 >
                   <div
@@ -1489,6 +1448,34 @@ export function WikiReader() {
                       </div>
                     ) : activePage?.content ? (
                       <>
+                        {/* Mobile Wiki Page Navigation (hidden on desktop) */}
+                        <div className="mb-4 md:hidden">
+                          <details className="border-border/80 dark:border-neutral-800 bg-muted/20 rounded-lg border px-3.5 py-2 text-xs">
+                            <summary className="text-foreground flex cursor-pointer items-center justify-between font-medium select-none">
+                              <span className="truncate pr-2">
+                                {activePage.title}
+                              </span>
+                              <ChevronRight className="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90" />
+                            </summary>
+                            <div className="mt-2.5 space-y-1 border-border/50 border-t pt-2">
+                              {project.wikiPages.map((page) => (
+                                <button
+                                  key={page.slug}
+                                  type="button"
+                                  onClick={() => setActiveSlug(page.slug)}
+                                  className={cn(
+                                    "w-full rounded px-2 py-1.5 text-left text-xs transition-colors",
+                                    page.slug === activeSlug
+                                      ? "bg-primary/10 text-primary font-medium"
+                                      : "text-muted-foreground hover:text-foreground",
+                                  )}
+                                >
+                                  {page.title}
+                                </button>
+                              ))}
+                            </div>
+                          </details>
+                        </div>
                         {activePage.relevantFiles &&
                         activePage.relevantFiles.length > 0 ? (
                           <details className="group border-border/40 bg-muted/10 hover:bg-muted/20 mb-6 rounded-lg border px-4 py-2.5 text-xs transition-colors">
@@ -1622,10 +1609,7 @@ export function WikiReader() {
                           <WikiMarkdown
                             content={activePage.content}
                             onCitation={openCitation}
-                            githubRepo={{
-                              owner: project.repoOwner,
-                              repo: project.repoName,
-                            }}
+                            githubRepo={githubRepo}
                             commitSha={project.lastIndexedCommitSha}
                             branch={activeBranch}
                           />
@@ -1690,9 +1674,9 @@ export function WikiReader() {
                   </div>
                 </div>
 
-                {/* Right "On this page" panel: 280px wide with no left line */}
+                {/* Right "On this page" panel */}
                 {displayHeadings.length >= 2 ? (
-                  <aside className="hidden w-[280px] shrink-0 scrollbar-none overflow-y-auto p-6 min-[1100px]:block">
+                  <aside className="bg-muted/25 dark:bg-black/40 border-border/80 dark:border-neutral-800 hidden w-[270px] shrink-0 scrollbar-none overflow-y-auto border-l p-6 min-[1100px]:block">
                     <div className="sticky top-6">
                       <div className="text-foreground mb-3 text-[17px] font-bold">
                         On this page
@@ -1786,22 +1770,6 @@ export function WikiReader() {
         />
       </div>
 
-      {/* Explicit workspace navigation overlay */}
-      {isSignedIn && appNavOpen ? (
-        <>
-          <button
-            type="button"
-            aria-label="Close workspace navigation"
-            className="bg-foreground/15 fixed inset-0 z-40 backdrop-blur-[1px]"
-            onClick={() => setAppNavOpen(false)}
-          />
-          <div className="fixed inset-y-0 left-0 z-50 w-64 shadow-xl">
-            <SidebarProvider defaultOpen className="h-full min-h-0">
-              <AppSideBar onClose={() => setAppNavOpen(false)} />
-            </SidebarProvider>
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }

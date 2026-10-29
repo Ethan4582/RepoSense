@@ -38,12 +38,13 @@ function nodeToText(node: React.ReactNode): string {
 }
 
 function renderCitations(markdown: string): string {
-  // Support both [[path:start-end]] and [[path:line]]
+  // Support both [[path:start-end]] and [[path:line]], including Next.js brackets in path like [[...route]] or [id]
   return markdown.replace(
-    /\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g,
+    /\[\[((?:\[\[[^\]\n]+\]\]|\[[^\]\n]+\]|[^:\]\n])+?):(\d+)(?:-(\d+))?\]\]/g,
     (_match: string, path: string, start: string, end?: string) => {
       const finalLine = end ?? start;
-      return `[${path}:${start}${end && end !== start ? `-${end}` : ""}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
+      const escapedLabel = path.replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+      return `[${escapedLabel}:${start}${end && end !== start ? `-${end}` : ""}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
     },
   );
 }
@@ -201,13 +202,7 @@ export function WikiMarkdown({
   const isDark = useIsDark();
   const prepared = React.useMemo(() => {
     // 1. Convert [[path:start-end]] or [[path:line]]
-    let res = content.replace(
-      /\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g,
-      (_m, path, start, end) => {
-        const finalLine = end ?? start;
-        return `[${path}:${start}${end && end !== start ? `-${end}` : ""}](citation:${encodeURIComponent(path)}:${start}:${finalLine})`;
-      },
-    );
+    let res = renderCitations(content);
 
     // 2. Also convert any raw unformatted "path/to/file.ext:12" or "README.md:12" or "path/file.ext:12-25" into citations
     res = res.replace(
@@ -241,6 +236,7 @@ export function WikiMarkdown({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => url}
         components={{
           h1: ({ children }) => (
             <h1 className="text-foreground mt-2 mb-6 text-[30px] font-bold tracking-tight">

@@ -6,6 +6,7 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "~/components/ui/sidebar";
 import { AppSideBar } from "../app-sidebar";
 import { GlobalCommandPalette } from "~/components/global-command-palette";
@@ -14,6 +15,7 @@ import useProject from "~/hooks/use-project";
 import { Separator } from "~/components/ui/separator";
 import { AccountMenu } from "~/components/account-menu";
 import Link from "next/link";
+import { cn } from "~/lib/utils";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -26,6 +28,16 @@ import {
 type Props = {
   children: React.ReactNode;
 };
+
+function CollapsedSidebarTrigger() {
+  const { open } = useSidebar();
+
+  return (
+    <div className={cn(open && "hidden")}>
+      <SidebarTrigger />
+    </div>
+  );
+}
 
 export default function SideBarLayout({ children }: Props) {
   const pathname = usePathname();
@@ -68,7 +80,7 @@ export default function SideBarLayout({ children }: Props) {
         <SidebarInset className="h-screen min-w-0 scrollbar-none overflow-y-auto">
           <header className="bg-background/90 border-border/60 sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b px-3 backdrop-blur sm:px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <SidebarTrigger />
+              <CollapsedSidebarTrigger />
               <Separator orientation="vertical" className="h-4" />
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-nowrap">

@@ -35,6 +35,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarTrigger,
   useSidebar,
 } from "~/components/ui/sidebar";
 import {
@@ -201,7 +202,7 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
       className="bg-sidebar select-none group-data-[side=left]:border-r-0 group-data-[side=right]:border-l-0"
     >
       <SidebarHeader className="gap-2 p-3 pb-2">
-        <div className="flex h-8 items-center">
+        <div className="flex h-8 items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative size-7 shrink-0 overflow-hidden rounded-lg">
               <Image
@@ -218,6 +219,7 @@ export function AppSideBar({ onClose }: AppSideBarProps = {}) {
               </span>
             )}
           </Link>
+          {open ? <SidebarTrigger className="size-7" /> : null}
         </div>
 
         <Card className="border-border/40 gap-0 py-0 shadow-none">

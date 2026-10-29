@@ -179,6 +179,7 @@ function FileDiff({
             "w-full",
             fullHeight ? "max-h-[calc(100vh-19rem)]" : "max-h-96",
           )}
+          showHorizontal
         >
           <div className="text-foreground min-w-max py-1 font-mono text-[13px]">
             {sections.length === 0 ? (
@@ -188,7 +189,7 @@ function FileDiff({
             ) : (
               sections.map((section, sectionIndex) => (
                 <React.Fragment key={`${file.id}-section-${sectionIndex}`}>
-                  <div className="bg-muted/40 text-muted-foreground border-b px-4 py-1.5 text-[11px]">
+                  <div className="bg-muted/30 text-muted-foreground px-4 py-1.5 text-[11px]">
                     @@ {section[0]?.oldNumber ?? "-"},{section.length} →{" "}
                     {section[0]?.newNumber ?? "-"},{section.length} @@
                   </div>

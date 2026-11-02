@@ -30,6 +30,23 @@ export function extractCitationRanges(markdown: string): SourceLineRange[] {
   return ranges;
 }
 
+export function extractAllCitationRanges(markdown: string): SourceLineRange[] {
+  const ranges: SourceLineRange[] = [];
+  const regex =
+    /\[\[((?:\[\[[^\]\n]+\]\]|\[[^\]\n]+\]|[^:\]\n])+?):(\d+)(?:-(\d+))?\]\]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(markdown)) !== null) {
+    const filePath = match[1]?.trim();
+    const startLine = Number(match[2]);
+    const endLine = match[3] ? Number(match[3]) : startLine;
+    if (!filePath || startLine < 1 || endLine < startLine) continue;
+    ranges.push({ filePath, startLine, endLine });
+  }
+
+  return ranges;
+}
+
 function rangeFromStoredReference(value: unknown): SourceLineRange | null {
   if (!value || typeof value !== "object") return null;
   const reference = value as {

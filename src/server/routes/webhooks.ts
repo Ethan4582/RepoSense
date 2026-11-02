@@ -34,7 +34,10 @@ function safeEqual(left: string, right: string): boolean {
   return mismatch === 0;
 }
 
-async function verifyGithubSignature(rawBody: string, signature: string): Promise<boolean> {
+async function verifyGithubSignature(
+  rawBody: string,
+  signature: string,
+): Promise<boolean> {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   if (!secret || !signature.startsWith("sha256=")) return false;
   const key = await crypto.subtle.importKey(
@@ -68,7 +71,8 @@ export const webhookRoutes = new Hono().post("/github", async (c) => {
     .then(() => true)
     .catch(() => false);
   if (!claimed) return c.json({ accepted: true, duplicate: true });
-  if (event !== "pull_request") return c.json({ accepted: true, ignored: true });
+  if (event !== "pull_request")
+    return c.json({ accepted: true, ignored: true });
 
   let body: unknown;
   try {
@@ -95,7 +99,10 @@ export const webhookRoutes = new Hono().post("/github", async (c) => {
       OR: [
         { githubRepositoryId: String(payload.repository.id) },
         {
-          repoOwner: { equals: payload.repository.owner.login, mode: "insensitive" },
+          repoOwner: {
+            equals: payload.repository.owner.login,
+            mode: "insensitive",
+          },
           repoName: { equals: payload.repository.name, mode: "insensitive" },
         },
       ],
@@ -104,43 +111,64 @@ export const webhookRoutes = new Hono().post("/github", async (c) => {
   if (!project) return c.json({ accepted: true, ignored: true });
 
   const targetCommitSha = payload.pull_request.merge_commit_sha;
+  const idempotencyKey = `merge:${project.id}:${targetCommitSha}`;
   const delayMs = (5 * 60 + Math.floor(Math.random() * 5 * 60)) * 1000;
   const availableAt = new Date(Date.now() + delayMs);
   const queued = await db.indexingJob.findFirst({
     where: { projectId: project.id, status: "QUEUED", trigger: "MERGE" },
     orderBy: { availableAt: "desc" },
   });
-  const job = queued
+  const existingForCommit = await db.indexingJob.findUnique({
+    where: { idempotencyKey },
+  });
+  const branchState = await db.branchIndexState.findUnique({
+    where: {
+      projectId_branch: {
+        projectId: project.id,
+        branch: payload.repository.default_branch,
+      },
+    },
+    select: { activeCommitSha: true },
+  });
+  const job =
+    queued ??
+    existingForCommit ??
+    (await db.indexingJob.create({
+      data: {
+        projectId: project.id,
+        branch: payload.repository.default_branch,
+        branchKind: "MAIN",
+        pullRequestNumber: payload.pull_request.number,
+        baseCommitSha:
+          branchState?.activeCommitSha ?? project.lastIndexedCommitSha,
+        commitSha: targetCommitSha,
+        trigger: "MERGE",
+        requestedByUserId: project.ownerId,
+        priority: 200,
+        availableAt,
+        idempotencyKey,
+        githubDeliveryId: deliveryId,
+        status: "QUEUED",
+        currentStep: "LOADING_REPO",
+        currentDetail: "Waiting for the automatic update window...",
+      },
+    }));
+  /* Coalesce pending merges, but never replace a completed generation. */
+  const finalJob = queued
     ? await db.indexingJob.update({
         where: { id: queued.id },
         data: {
           commitSha: targetCommitSha,
           pullRequestNumber: payload.pull_request.number,
           githubDeliveryId: deliveryId,
+          idempotencyKey,
           availableAt,
           currentDetail: "Waiting for the automatic update window...",
         },
       })
-    : await db.indexingJob.create({
-        data: {
-          projectId: project.id,
-          branch: payload.repository.default_branch,
-          branchKind: "MAIN",
-          pullRequestNumber: payload.pull_request.number,
-          baseCommitSha: project.lastIndexedCommitSha,
-          commitSha: targetCommitSha,
-          trigger: "MERGE",
-          requestedByUserId: project.ownerId,
-          priority: 200,
-          availableAt,
-          githubDeliveryId: deliveryId,
-          status: "QUEUED",
-          currentStep: "LOADING_REPO",
-          currentDetail: "Waiting for the automatic update window...",
-        },
-      });
+    : job;
 
-  const dedupeKey = `wiki-update-queued:${project.id}:${job.id}`;
+  const dedupeKey = `wiki-update-queued:${project.id}:${finalJob.id}`;
   await db.notification.upsert({
     where: { dedupeKey },
     create: {
@@ -157,5 +185,5 @@ export const webhookRoutes = new Hono().post("/github", async (c) => {
     },
   });
 
-  return c.json({ accepted: true, jobId: job.id }, 202);
+  return c.json({ accepted: true, jobId: finalJob.id }, 202);
 });

@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import type { AuthContext } from "../auth";
-import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { resolveProjectKeys } from "~/lib/providers/guard";
 import {
   GitHubAccessError,
@@ -111,27 +110,6 @@ export const indexingRoutes = new Hono<AuthContext>()
       return c.json({ error: "Project not found" }, 404);
     }
 
-    const activeJobs = await db.indexingJob.count({
-      where: {
-        project: { userToProjects: { some: { userId } } },
-        status: { in: ["QUEUED", "RUNNING"] },
-      },
-    });
-
-    if (activeJobs >= 1) {
-      const retryAfterSeconds = 300;
-      return c.json(
-        {
-          error: SERVER_BUSY_MESSAGE,
-          code: "SERVER_BUSY",
-          retryAfterSeconds,
-          retryAt: new Date(Date.now() + retryAfterSeconds * 1000).toISOString(),
-        },
-        503,
-        { "Retry-After": String(retryAfterSeconds) },
-      );
-    }
-
     const capacity = await checkIndexingCapacity(db);
     if (!capacity.allowed) {
       return c.json(
@@ -169,19 +147,11 @@ export const indexingRoutes = new Hono<AuthContext>()
       );
     }
 
-    const completed = await db.indexingJob.findFirst({
-      where: {
-        projectId,
-        branch: target.branch,
-        commitSha: target.commitSha,
-        baseCommitSha: project.lastIndexedCommitSha,
-        trigger: "MANUAL",
-        requestedByUserId: userId,
-        status: "COMPLETED",
-      },
-      select: { id: true },
+    const branchState = await db.branchIndexState.findUnique({
+      where: { projectId_branch: { projectId, branch: target.branch } },
+      select: { activeCommitSha: true },
     });
-    if (completed) {
+    if (branchState?.activeCommitSha === target.commitSha) {
       return c.json(
         {
           error: `The branch "${target.branch}" is already indexed at its latest commit.`,
@@ -192,6 +162,38 @@ export const indexingRoutes = new Hono<AuthContext>()
       );
     }
 
+    const idempotencyKey = `manual:${projectId}:${target.branch}:${target.commitSha}`;
+    const existingJob = await db.indexingJob.findUnique({
+      where: { idempotencyKey },
+    });
+    if (
+      existingJob &&
+      ["QUEUED", "RUNNING", "COMPLETED"].includes(existingJob.status)
+    ) {
+      return c.json(
+        { job: existingJob },
+        existingJob.status === "COMPLETED" ? 200 : 202,
+      );
+    }
+    if (existingJob?.status === "FAILED") {
+      const retriedJob = await db.indexingJob.update({
+        where: { id: existingJob.id },
+        data: {
+          status: "QUEUED",
+          availableAt: new Date(),
+          attemptCount: 0,
+          errorCode: null,
+          errorMessage: null,
+          finishedAt: null,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          generationId: null,
+          requestedByUserId: userId,
+        },
+      });
+      return c.json({ job: retriedJob }, 202);
+    }
+
     const job = await db.indexingJob.create({
       data: {
         projectId,
@@ -199,59 +201,15 @@ export const indexingRoutes = new Hono<AuthContext>()
         branchKind: target.branchKind,
         pullRequestNumber: target.pullRequestNumber,
         commitSha: target.commitSha,
+        requestedByUserId: userId,
+        baseCommitSha:
+          branchState?.activeCommitSha ?? project.lastIndexedCommitSha,
+        idempotencyKey,
         status: "QUEUED",
         currentStep: "LOADING_REPO",
         startedAt: new Date(),
       },
     });
-
-    const workflow = (
-      c.env as
-        | {
-            INDEXING_WORKFLOW?: {
-              create: (opts: { params: unknown }) => Promise<unknown>;
-            };
-          }
-        | undefined
-    )?.INDEXING_WORKFLOW;
-
-    if (workflow) {
-      const run = async () => {
-        try {
-          await workflow.create({
-            params: { projectId, jobId: job.id, userId },
-          });
-        } catch (err) {
-          const message =
-            err instanceof Error
-              ? err.message
-              : "Failed to start indexing workflow.";
-          await db.indexingJob.update({
-            where: { id: job.id },
-            data: {
-              status: "FAILED",
-              errorCode: "WORKFLOW_START_FAILED",
-              errorMessage: message,
-              finishedAt: new Date(),
-            },
-          });
-        }
-      };
-
-      try {
-        c.executionCtx.waitUntil(run());
-      } catch {
-        await run();
-      }
-    } else {
-      runIndexingWorkflow({
-        projectId,
-        jobId: job.id,
-        userId,
-        step: inlineStepRunner,
-        db,
-      }).catch(() => {});
-    }
 
     return c.json({ job });
   });

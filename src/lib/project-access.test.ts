@@ -13,4 +13,11 @@ describe("project access", () => {
       deletions: 1,
     });
   });
+
+  it("counts repeated lines by position instead of treating them as a set", () => {
+    expect(diffLineCounts("same\nsame", "same\nchanged")).toEqual({
+      additions: 1,
+      deletions: 1,
+    });
+  });
 });

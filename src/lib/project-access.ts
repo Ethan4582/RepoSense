@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, ProjectRole } from "@prisma/client";
+import { diffLines } from "diff";
 
 const ROLE_RANK = {
   VIEWER: 0,
@@ -59,12 +60,11 @@ export function diffLineCounts(
   previous: string,
   next: string,
 ): { additions: number; deletions: number } {
-  const previousLines = new Set(previous.split("\n"));
-  const nextLines = new Set(next.split("\n"));
-  return {
-    additions: next.split("\n").filter((line) => !previousLines.has(line)).length,
-    deletions: previous
-      .split("\n")
-      .filter((line) => !nextLines.has(line)).length,
-  };
+  return diffLines(previous, next).reduce(
+    (counts, change) => ({
+      additions: counts.additions + (change.added ? (change.count ?? 0) : 0),
+      deletions: counts.deletions + (change.removed ? (change.count ?? 0) : 0),
+    }),
+    { additions: 0, deletions: 0 },
+  );
 }

@@ -70,6 +70,12 @@ enum IndexingTrigger {
   PUSH
 }
 
+enum IndexGenerationStatus {
+  BUILDING
+  PUBLISHED
+  FAILED
+}
+
 enum NotificationType {
   INDEXING
   WIKI_UPDATED
@@ -157,6 +163,8 @@ model Project {
   savedQuestion           Question[]
   meetings                Meeting[]
   indexingJobs            IndexingJob[]
+  indexGenerations        IndexGeneration[]
+  branchIndexStates       BranchIndexState[]
   invitations             ProjectInvitation[]
   auditEvents             ProjectAuditEvent[]
 
@@ -251,6 +259,8 @@ model IndexingJob {
   leaseOwner                String?
   leaseExpiresAt            DateTime?
   githubDeliveryId          String?
+  idempotencyKey            String?         @unique
+  generationId              String?
   githubRequestCount        Int             @default(0)
   processedChunks           Int             @default(0)
   estimatedProviderTokens   Int             @default(0)
@@ -271,6 +281,39 @@ model IndexingJob {
   @@index([projectId])
   @@index([status])
   @@index([status, availableAt, priority])
+}
+
+model IndexGeneration {
+  id               String                @id @default(cuid())
+  projectId        String
+  project          Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch           String
+  stagingBranch    String                @unique
+  commitSha        String
+  baseCommitSha    String?
+  status           IndexGenerationStatus @default(BUILDING)
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime              @default(now())
+  publishedAt      DateTime?
+  failedAt         DateTime?
+
+  @@index([projectId, branch, status])
+  @@index([projectId, createdAt])
+}
+
+model BranchIndexState {
+  id                 String   @id @default(cuid())
+  projectId          String
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch             String
+  activeCommitSha    String
+  activeGenerationId String?
+  indexedAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([projectId, branch])
+  @@index([projectId, indexedAt])
 }
 
 model UserToProject {

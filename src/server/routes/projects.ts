@@ -15,7 +15,6 @@ import {
   getRepoGithubDetails,
 } from "~/lib/github";
 import { getFullFileContent } from "~/lib/embeddings";
-import { runIndexingWorkflow, inlineStepRunner } from "~/lib/indexing-workflow";
 import { writesPaused } from "~/lib/emergency";
 import { purgeWikiCache } from "~/lib/cache";
 import { withoutProjectSecrets } from "~/lib/project";
@@ -415,60 +414,13 @@ export const projectsRoutes = new Hono<AuthContext>()
             baseCommitSha: null,
             trigger: "INITIAL",
             requestedByUserId: userId,
+            idempotencyKey: `initial:${project.id}:${initialRef.branch}:${initialRef.commitSha}`,
             status: "QUEUED",
             currentStep: "LOADING_REPO",
             startedAt: new Date(),
           },
         });
         indexingJobId = job.id;
-
-        const workflow = (
-          c.env as
-            | {
-                INDEXING_WORKFLOW?: {
-                  create: (opts: { params: unknown }) => Promise<unknown>;
-                };
-              }
-            | undefined
-        )?.INDEXING_WORKFLOW;
-
-        if (workflow) {
-          const run = async () => {
-            try {
-              await workflow.create({
-                params: { projectId: project.id, jobId: job.id, userId },
-              });
-            } catch (err) {
-              const message =
-                err instanceof Error
-                  ? err.message
-                  : "Failed to start indexing workflow.";
-              await db.indexingJob.update({
-                where: { id: job.id },
-                data: {
-                  status: "FAILED",
-                  errorCode: "WORKFLOW_START_FAILED",
-                  errorMessage: message,
-                  finishedAt: new Date(),
-                },
-              });
-            }
-          };
-
-          try {
-            c.executionCtx.waitUntil(run());
-          } catch {
-            await run();
-          }
-        } else {
-          runIndexingWorkflow({
-            projectId: project.id,
-            jobId: job.id,
-            userId,
-            step: inlineStepRunner,
-            db,
-          }).catch(() => {});
-        }
       } catch {
         // Indexing deferred
       }

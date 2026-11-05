@@ -290,7 +290,7 @@ export function extractHeadings(
 }
 
 export function extractCitationPaths(markdown: string): string[] {
-  const matches = markdown.matchAll(/\[\[([^:\]]+):(\d+)-(\d+)\]\]/g);
+  const matches = markdown.matchAll(/\[\[((?:\[\[[^\]\n]+\]\]|\[[^\]\n]+\]|[^:\]\n])+?):(\d+)(?:-(\d+))?\]\]/g);
   const paths = new Set<string>();
   for (const match of matches) {
     if (match[1]) paths.add(match[1]);

@@ -10,6 +10,7 @@ import { meetingsRoutes } from "./routes/meetings";
 import { publicRoutes } from "./routes/public";
 import { estimateRoutes } from "./routes/estimate";
 import { maintenanceActive } from "~/lib/emergency";
+import { webhookRoutes } from "./routes/webhooks";
 
 const app = new Hono<AuthContext>().basePath("/api");
 
@@ -74,6 +75,7 @@ app.get("/health", (c) => {
 // Public wiki and explore endpoints (no Clerk, no user context)
 app.route("/public", publicRoutes);
 app.route("/estimate", estimateRoutes);
+app.route("/webhooks", webhookRoutes);
 
 // Protect all remaining routes with Clerk authentication
 app.use("*", clerkAuthMiddleware);

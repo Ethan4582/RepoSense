@@ -5,5 +5,6 @@ export function withoutProjectSecrets<T extends object>(project: T): T {
   delete safe.encryptedGithubToken;
   delete safe.githubTokenIv;
   delete safe.repoSkeleton;
+  delete safe.canonicalRepoKey;
   return safe as T;
 }

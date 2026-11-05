@@ -28,12 +28,23 @@ export interface EmbeddingBatchOptions {
   provider: EmbeddingProviderId;
   model: string;
   apiKey: string;
+  replaceFilePaths?: string[];
 }
 
 const EMBED_BATCH_SIZE = 100;
 
 export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<number> {
-  const { db, projectId, branch, commitSha, chunks, provider, model, apiKey } = opts;
+  const {
+    db,
+    projectId,
+    branch,
+    commitSha,
+    chunks,
+    provider,
+    model,
+    apiKey,
+    replaceFilePaths = [],
+  } = opts;
   if (chunks.length === 0) return 0;
 
   const embeddingModel = getEmbeddingModel(provider, model, apiKey);
@@ -49,33 +60,59 @@ export async function embedAndStoreChunks(opts: EmbeddingBatchOptions): Promise<
     });
 
     const ids = batch.map(() => crypto.randomUUID());
-
-    await db.sourceCodeEmbedding.createMany({
-      data: batch.map((chunk, index) => ({
-        id: ids[index]!,
-        projectId,
-        branch,
-        commitSha,
-        filePath: chunk.filePath,
-        directory: chunk.directory,
-        chunkIndex: chunk.chunkIndex,
-        startLine: chunk.startLine,
-        endLine: chunk.endLine,
-        chunkContent: chunk.chunkContent,
-        fullFileContent: chunk.fullFileContent ?? null,
-      })),
-    });
-
     const vectors = embeddings.map((embedding) => `[${embedding.join(',')}]`);
-
-    await db.$executeRawUnsafe(
-      `UPDATE "SourceCodeEmbedding" AS s
-       SET "${column}" = v.emb::vector
-       FROM unnest($1::text[], $2::text[]) AS v(id, emb)
-       WHERE s."id" = v.id`,
-      ids,
-      vectors
-    );
+    await db.$transaction(async (tx) => {
+      if (offset === 0 && replaceFilePaths.length > 0) {
+        await tx.sourceCodeEmbedding.deleteMany({
+          where: { projectId, branch, filePath: { in: replaceFilePaths } },
+        });
+      }
+      for (let index = 0; index < batch.length; index += 1) {
+        const chunk = batch[index]!;
+        await tx.sourceCodeEmbedding.upsert({
+          where: {
+            projectId_branch_filePath_chunkIndex: {
+              projectId,
+              branch,
+              filePath: chunk.filePath,
+              chunkIndex: chunk.chunkIndex,
+            },
+          },
+          create: {
+            id: ids[index]!,
+            projectId,
+            branch,
+            commitSha,
+            filePath: chunk.filePath,
+            directory: chunk.directory,
+            chunkIndex: chunk.chunkIndex,
+            startLine: chunk.startLine,
+            endLine: chunk.endLine,
+            chunkContent: chunk.chunkContent,
+            fullFileContent: chunk.fullFileContent ?? null,
+          },
+          update: {
+            commitSha,
+            directory: chunk.directory,
+            startLine: chunk.startLine,
+            endLine: chunk.endLine,
+            chunkContent: chunk.chunkContent,
+            fullFileContent: chunk.fullFileContent ?? null,
+          },
+          select: { id: true },
+        }).then((row) => {
+          ids[index] = row.id;
+        });
+      }
+      await tx.$executeRawUnsafe(
+        `UPDATE "SourceCodeEmbedding" AS s
+         SET "${column}" = v.emb::vector
+         FROM unnest($1::text[], $2::text[]) AS v(id, emb)
+         WHERE s."id" = v.id`,
+        ids,
+        vectors,
+      );
+    });
 
     stored += batch.length;
   }

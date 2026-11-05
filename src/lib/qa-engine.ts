@@ -1,8 +1,12 @@
-import { embed, generateText, streamText } from 'ai';
-import type { Prisma, PrismaClient, Project } from '@prisma/client';
-import { getEmbeddingModel, getModel } from '~/lib/providers';
-import { resolveProjectKeys, type ResolvedProjectKeys } from '~/lib/providers/guard';
-import { searchCodeChunks, type MatchedChunk } from './embeddings';
+import { embed, generateText, streamText } from "ai";
+import type { Prisma, PrismaClient, Project } from "@prisma/client";
+import { getEmbeddingModel, getModel } from "~/lib/providers";
+import {
+  resolveProjectKeys,
+  type ResolvedProjectKeys,
+} from "~/lib/providers/guard";
+import { searchCodeChunks, type MatchedChunk } from "./embeddings";
+import { verifyAnswerCitations } from "./citation-verifier";
 
 export interface ScannedFileRange {
   filePath: string;
@@ -45,19 +49,24 @@ function buildPrompt(opts: {
   const codeContext = opts.chunks
     .map(
       (chunk) =>
-        `--- ${chunk.filePath} (lines ${chunk.startLine}-${chunk.endLine}, similarity ${chunk.similarity?.toFixed?.(3) ?? 'n/a'}) ---\n${chunk.chunkContent}`
+        `--- ${chunk.filePath} (lines ${chunk.startLine}-${chunk.endLine}, similarity ${chunk.similarity?.toFixed?.(3) ?? "n/a"}) ---\n${chunk.chunkContent}`,
     )
-    .join('\n\n');
+    .join("\n\n");
 
   const wikiContext = opts.wikiPages
-    .map((page) => `--- WIKI: ${page.title} ---\n${page.content.slice(0, 6000)}`)
-    .join('\n\n');
+    .map(
+      (page) => `--- WIKI: ${page.title} ---\n${page.content.slice(0, 6000)}`,
+    )
+    .join("\n\n");
 
   const historyContext = (opts.history ?? [])
-    .map((message) => `${message.role.toUpperCase()}: ${message.content.slice(0, 2000)}`)
-    .join('\n\n');
+    .map(
+      (message) =>
+        `${message.role.toUpperCase()}: ${message.content.slice(0, 2000)}`,
+    )
+    .join("\n\n");
 
-  return `CONVERSATION HISTORY:\n${historyContext || 'No previous messages.'}\n\nQUESTION:\n${opts.question}\n\nWIKI CONTEXT:\n${wikiContext || 'No matching wiki pages.'}\n\nSOURCE CODE CONTEXT:\n${codeContext || 'No matching source chunks.'}`;
+  return `CONVERSATION HISTORY:\n${historyContext || "No previous messages."}\n\nQUESTION:\n${opts.question}\n\nWIKI CONTEXT:\n${wikiContext || "No matching wiki pages."}\n\nSOURCE CODE CONTEXT:\n${codeContext || "No matching source chunks."}`;
 }
 
 const QA_SYSTEM_PROMPT = `You are DeepWiki, a senior codebase investigator. Answer the question using only the supplied wiki and source context.
@@ -71,7 +80,7 @@ Requirements:
 
 function resolveWikiPages(
   pages: Array<{ title: string; content: string }>,
-  question: string
+  question: string,
 ): Array<{ title: string; content: string }> {
   const terms = question
     .toLowerCase()
@@ -83,7 +92,7 @@ function resolveWikiPages(
       const haystack = `${page.title}\n${page.content}`.toLowerCase();
       const score = terms.reduce(
         (sum, term) => sum + (haystack.includes(term) ? 1 : 0),
-        0
+        0,
       );
       return { page, score };
     })
@@ -104,12 +113,13 @@ export interface QaContext {
 }
 
 async function prepare(opts: QaContext) {
-  const keys = opts.keys ?? (await resolveProjectKeys(opts.userId, opts.project));
+  const keys =
+    opts.keys ?? (await resolveProjectKeys(opts.userId, opts.project));
 
   const embeddingModel = getEmbeddingModel(
     keys.embeddingProvider,
     keys.embeddingModel,
-    keys.embeddingApiKey
+    keys.embeddingApiKey,
   );
   const { embedding } = await embed({
     model: embeddingModel as never,
@@ -129,7 +139,7 @@ async function prepare(opts: QaContext) {
   const allPages = await opts.db.wikiPage.findMany({
     where: { projectId: opts.project.id, branch: opts.branch },
     select: { title: true, content: true },
-    orderBy: [{ sectionOrder: 'asc' }, { pageOrder: 'asc' }],
+    orderBy: [{ sectionOrder: "asc" }, { pageOrder: "asc" }],
     take: 40,
   });
 
@@ -165,7 +175,7 @@ async function prepare(opts: QaContext) {
   const history = (
     await opts.db.qaMessage.findMany({
       where: { threadId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 10,
       select: { role: true, content: true },
     })
@@ -174,14 +184,19 @@ async function prepare(opts: QaContext) {
   await opts.db.qaMessage.create({
     data: {
       threadId,
-      role: 'user',
+      role: "user",
       content: opts.question,
       modelUsed: `${keys.chatProvider}/${keys.chatModel}`,
     },
   });
 
   const scannedFiles = uniqueScannedFiles(chunks);
-  const prompt = buildPrompt({ question: opts.question, chunks, wikiPages, history });
+  const prompt = buildPrompt({
+    question: opts.question,
+    chunks,
+    wikiPages,
+    history,
+  });
 
   return {
     keys,
@@ -192,21 +207,48 @@ async function prepare(opts: QaContext) {
   };
 }
 
-export async function answerQuestionOnce(opts: QaContext): Promise<QaAnswerResult> {
+export async function answerQuestionOnce(
+  opts: QaContext,
+): Promise<QaAnswerResult> {
   const prepared = await prepare(opts);
 
-  const { text } = await generateText({
-    model: getModel(prepared.keys.chatProvider, prepared.keys.chatModel, prepared.keys.chatApiKey) as never,
+  let { text } = await generateText({
+    model: getModel(
+      prepared.keys.chatProvider,
+      prepared.keys.chatModel,
+      prepared.keys.chatApiKey,
+    ) as never,
     system: QA_SYSTEM_PROMPT,
     prompt: prepared.prompt,
     temperature: 0.2,
     abortSignal: AbortSignal.timeout(90_000),
   });
 
+  if (!verifyAnswerCitations(text, prepared.chunks).valid) {
+    const retry = await generateText({
+      model: getModel(
+        prepared.keys.chatProvider,
+        prepared.keys.chatModel,
+        prepared.keys.chatApiKey,
+      ) as never,
+      system: `${QA_SYSTEM_PROMPT}\n\nYour previous answer failed citation validation. Regenerate it using only the retrieved chunks and include at least one exact citation for every technical claim.`,
+      prompt: prepared.prompt,
+      temperature: 0.1,
+      abortSignal: AbortSignal.timeout(90_000),
+    });
+    text = retry.text;
+  }
+
+  if (!verifyAnswerCitations(text, prepared.chunks).valid) {
+    throw new Error(
+      "The answer could not be verified against the indexed source context.",
+    );
+  }
+
   await opts.db.qaMessage.create({
     data: {
       threadId: prepared.threadId,
-      role: 'assistant',
+      role: "assistant",
       content: text,
       scannedFiles: prepared.scannedFiles as unknown as Prisma.InputJsonValue,
       modelUsed: `${prepared.keys.chatProvider}/${prepared.keys.chatModel}`,
@@ -228,7 +270,7 @@ export async function answerQuestionOnce(opts: QaContext): Promise<QaAnswerResul
 }
 
 export async function streamQuestion(
-  opts: QaContext
+  opts: QaContext,
 ): Promise<ReadableStream<Uint8Array>> {
   const prepared = await prepare(opts);
   const encoder = new TextEncoder();
@@ -238,28 +280,28 @@ export async function streamQuestion(
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(send({ type: 'thread', threadId: prepared.threadId }));
+      controller.enqueue(send({ type: "thread", threadId: prepared.threadId }));
 
       for (const file of prepared.scannedFiles) {
-        controller.enqueue(send({ type: 'scanning', ...file }));
+        controller.enqueue(send({ type: "scanning", ...file }));
       }
 
       controller.enqueue(
         send({
-          type: 'meta',
+          type: "meta",
           model: prepared.keys.chatModel,
           provider: prepared.keys.chatProvider,
-        })
+        }),
       );
 
-      let fullText = '';
+      let fullText = "";
 
       try {
         const result = streamText({
           model: getModel(
             prepared.keys.chatProvider,
             prepared.keys.chatModel,
-            prepared.keys.chatApiKey
+            prepared.keys.chatApiKey,
           ) as never,
           system: QA_SYSTEM_PROMPT,
           prompt: prepared.prompt,
@@ -270,21 +312,44 @@ export async function streamQuestion(
         for await (const delta of result.textStream) {
           if (!delta) continue;
           fullText += delta;
-          controller.enqueue(send({ type: 'token', text: delta }));
+          controller.enqueue(send({ type: "token", text: delta }));
           await new Promise((resolve) => setTimeout(resolve, 8));
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Answer generation failed.';
-        controller.enqueue(send({ type: 'error', message }));
+        const message =
+          err instanceof Error ? err.message : "Answer generation failed.";
+        controller.enqueue(send({ type: "error", message }));
       }
 
       if (fullText) {
+        const verification = verifyAnswerCitations(fullText, prepared.chunks);
+        if (!verification.valid) {
+          controller.enqueue(
+            send({
+              type: "error",
+              code: "UNGROUNDED_ANSWER",
+              message:
+                "The answer could not be verified against the indexed source context.",
+            }),
+          );
+          controller.enqueue(
+            send({
+              type: "done",
+              threadId: prepared.threadId,
+              grounded: false,
+            }),
+          );
+          controller.close();
+          return;
+        }
+
         await opts.db.qaMessage.create({
           data: {
             threadId: prepared.threadId,
-            role: 'assistant',
+            role: "assistant",
             content: fullText,
-            scannedFiles: prepared.scannedFiles as unknown as Prisma.InputJsonValue,
+            scannedFiles:
+              prepared.scannedFiles as unknown as Prisma.InputJsonValue,
             modelUsed: `${prepared.keys.chatProvider}/${prepared.keys.chatModel}`,
           },
         });
@@ -295,31 +360,35 @@ export async function streamQuestion(
         });
 
         // Ensure question is saved in database so page reloads persist instance
-        const savedRecord = await opts.db.question.create({
-          data: {
-            question: opts.question,
-            answers: fullText,
-            fileReference: prepared.scannedFiles.map((f) => ({
-              fileName: f.filePath,
-              startLine: f.startLine,
-              endLine: f.endLine,
-              sourceCode: '',
-              summary: `Cited from ${f.filePath}:${f.startLine}-${f.endLine}`,
-            })) as unknown as Prisma.InputJsonValue,
-            projectId: opts.project.id,
-            userId: opts.userId,
-            branch: opts.branch,
-            isBookmarked: true,
-          },
-        }).catch(() => null);
+        const savedRecord = await opts.db.question
+          .create({
+            data: {
+              question: opts.question,
+              answers: fullText,
+              fileReference: prepared.scannedFiles.map((f) => ({
+                fileName: f.filePath,
+                startLine: f.startLine,
+                endLine: f.endLine,
+                sourceCode: "",
+                summary: `Cited from ${f.filePath}:${f.startLine}-${f.endLine}`,
+              })) as unknown as Prisma.InputJsonValue,
+              projectId: opts.project.id,
+              userId: opts.userId,
+              branch: opts.branch,
+              isBookmarked: true,
+            },
+          })
+          .catch(() => null);
 
-        controller.enqueue(send({
-          type: 'done',
-          threadId: prepared.threadId,
-          questionId: savedRecord?.id ?? prepared.threadId,
-        }));
+        controller.enqueue(
+          send({
+            type: "done",
+            threadId: prepared.threadId,
+            questionId: savedRecord?.id ?? prepared.threadId,
+          }),
+        );
       } else {
-        controller.enqueue(send({ type: 'done', threadId: prepared.threadId }));
+        controller.enqueue(send({ type: "done", threadId: prepared.threadId }));
       }
       controller.close();
     },

@@ -13,13 +13,21 @@ import {
 import { answerQuestionOnce, streamQuestion } from "~/lib/qa-engine";
 import { writesPaused } from "~/lib/emergency";
 
-const PROVIDERS = ["OPENAI", "ANTHROPIC", "GEMINI", "META", "DEEPSEEK", "XAI", "GROQ"] as const;
+const PROVIDERS = [
+  "OPENAI",
+  "ANTHROPIC",
+  "GEMINI",
+  "META",
+  "DEEPSEEK",
+  "XAI",
+  "GROQ",
+] as const;
 
 async function resolveKeys(
   userId: string,
   project: Parameters<typeof resolveProjectKeys>[1],
   overrideProvider?: ProviderId,
-  overrideModel?: string
+  overrideModel?: string,
 ) {
   const keys = await resolveProjectKeys(userId, project);
 
@@ -33,7 +41,7 @@ async function resolveKeys(
     if (!apiKey) {
       throw new ProviderAccessError(
         "MISSING_CHAT_KEY",
-        `Add a valid ${provider} API key in Settings to ask questions with this model.`
+        `Add a valid ${provider} API key in Settings to ask questions with this model.`,
       );
     }
 
@@ -48,7 +56,7 @@ async function resolveKeys(
 async function canReadProject(
   db: AuthContext["Variables"]["db"],
   userId: string,
-  projectId: string
+  projectId: string,
 ): Promise<boolean> {
   const project = await db.project.findFirst({
     where: {
@@ -64,15 +72,13 @@ async function canReadProject(
 async function resolveProjectBranch(
   db: AuthContext["Variables"]["db"],
   projectId: string,
-  requested?: string
+  _requested?: string,
 ): Promise<string> {
-  if (requested?.trim()) return requested.trim();
-
   const project = await db.project.findUnique({
     where: { id: projectId },
     select: { defaultBranch: true, lastIndexedBranch: true },
   });
-  return project?.defaultBranch ?? project?.lastIndexedBranch ?? "main";
+  return project?.defaultBranch ?? "main";
 }
 
 export const questionsRoutes = new Hono<AuthContext>()
@@ -85,7 +91,11 @@ export const questionsRoutes = new Hono<AuthContext>()
       return c.json({ error: "Project not found" }, 404);
     }
 
-    const branch = await resolveProjectBranch(db, projectId, c.req.query("branch"));
+    const branch = await resolveProjectBranch(
+      db,
+      projectId,
+      c.req.query("branch"),
+    );
     const threads = await db.qaThread.findMany({
       where: { projectId, userId, branch },
       orderBy: { updatedAt: "desc" },
@@ -111,7 +121,11 @@ export const questionsRoutes = new Hono<AuthContext>()
       return c.json({ error: "Project not found" }, 404);
     }
 
-    const branch = await resolveProjectBranch(db, projectId, c.req.query("branch"));
+    const branch = await resolveProjectBranch(
+      db,
+      projectId,
+      c.req.query("branch"),
+    );
     const thread = await db.qaThread.findFirst({
       where: { id: threadId, projectId, userId, branch },
       include: { messages: { orderBy: { createdAt: "asc" } } },
@@ -130,7 +144,7 @@ export const questionsRoutes = new Hono<AuthContext>()
         branch: z.string().max(255).optional(),
         chatProvider: z.enum(PROVIDERS).optional(),
         chatModel: z.string().optional(),
-      })
+      }),
     ),
     async (c) => {
       if (writesPaused()) {
@@ -140,15 +154,20 @@ export const questionsRoutes = new Hono<AuthContext>()
               "High traffic mode: Reading existing Public & Private DeepWikis is active, new indexing is temporarily paused.",
             code: "READ_ONLY_MODE",
           },
-          503
+          503,
         );
       }
 
       const db = c.get("db");
       const userId = c.get("userId");
       const projectId = c.req.param("id");
-      const { question, threadId, branch: requestedBranch, chatProvider, chatModel } =
-        c.req.valid("json");
+      const {
+        question,
+        threadId,
+        branch: requestedBranch,
+        chatProvider,
+        chatModel,
+      } = c.req.valid("json");
 
       const project = await db.project.findFirst({
         where: { id: projectId, deletedAt: null },
@@ -166,7 +185,12 @@ export const questionsRoutes = new Hono<AuthContext>()
       const branch = await resolveProjectBranch(db, projectId, requestedBranch);
 
       try {
-        const keys = await resolveKeys(userId, project, chatProvider, chatModel);
+        const keys = await resolveKeys(
+          userId,
+          project,
+          chatProvider,
+          chatModel,
+        );
         const stream = await streamQuestion({
           db,
           project,
@@ -187,10 +211,11 @@ export const questionsRoutes = new Hono<AuthContext>()
         if (err instanceof ProviderAccessError) {
           return c.json({ error: err.message, code: err.code }, 400);
         }
-        const message = err instanceof Error ? err.message : "Failed to answer question.";
+        const message =
+          err instanceof Error ? err.message : "Failed to answer question.";
         return c.json({ error: message, code: "QA_FAILED" }, 500);
       }
-    }
+    },
   )
   .post(
     "/:id/chat",
@@ -202,7 +227,7 @@ export const questionsRoutes = new Hono<AuthContext>()
         chatModel: z.string().optional(),
         threadId: z.string().max(64).optional(),
         branch: z.string().max(255).optional(),
-      })
+      }),
     ),
     async (c) => {
       if (writesPaused()) {
@@ -212,20 +237,28 @@ export const questionsRoutes = new Hono<AuthContext>()
               "High traffic mode: Reading existing Public & Private DeepWikis is active, new indexing is temporarily paused.",
             code: "READ_ONLY_MODE",
           },
-          503
+          503,
         );
       }
 
       const db = c.get("db");
       const userId = c.get("userId");
       const projectId = c.req.param("id");
-      const { query, chatProvider, chatModel, threadId, branch: requestedBranch } =
-        c.req.valid("json");
+      const {
+        query,
+        chatProvider,
+        chatModel,
+        threadId,
+        branch: requestedBranch,
+      } = c.req.valid("json");
 
       if (projectId === "general" || projectId === "unlinked") {
         return c.json(
-          { error: "Select a repository wiki before chatting.", code: "PROJECT_REQUIRED" },
-          400
+          {
+            error: "Select a repository wiki before chatting.",
+            code: "PROJECT_REQUIRED",
+          },
+          400,
         );
       }
 
@@ -242,7 +275,12 @@ export const questionsRoutes = new Hono<AuthContext>()
       const branch = await resolveProjectBranch(db, projectId, requestedBranch);
 
       try {
-        const keys = await resolveKeys(userId, project, chatProvider, chatModel);
+        const keys = await resolveKeys(
+          userId,
+          project,
+          chatProvider,
+          chatModel,
+        );
         const result = await answerQuestionOnce({
           db,
           project,
@@ -268,10 +306,11 @@ export const questionsRoutes = new Hono<AuthContext>()
         if (err instanceof ProviderAccessError) {
           return c.json({ error: err.message, code: err.code }, 400);
         }
-        const message = err instanceof Error ? err.message : "Failed to answer question.";
+        const message =
+          err instanceof Error ? err.message : "Failed to answer question.";
         return c.json({ error: message, code: "QA_FAILED" }, 500);
       }
-    }
+    },
   )
   .get("/:id/questions", async (c) => {
     const projectId = c.req.param("id");
@@ -288,7 +327,11 @@ export const questionsRoutes = new Hono<AuthContext>()
     });
     if (!member) return c.json({ error: "Project not found" }, 404);
 
-    const branch = await resolveProjectBranch(db, projectId, c.req.query("branch"));
+    const branch = await resolveProjectBranch(
+      db,
+      projectId,
+      c.req.query("branch"),
+    );
     const questions = await db.question.findMany({
       where: { projectId, branch },
       include: {
@@ -350,17 +393,22 @@ export const questionsRoutes = new Hono<AuthContext>()
               content: z.string(),
               fileReferences: z.unknown().optional(),
               createdAt: z.string().optional(),
-            })
+            }),
           )
           .optional(),
-      })
+      }),
     ),
     async (c) => {
       const projectId = c.req.param("id");
       const userId = c.get("userId");
       const db = c.get("db");
-      const { threadId, branch: requestedBranch, question, answers, turns } =
-        c.req.valid("json");
+      const {
+        threadId,
+        branch: requestedBranch,
+        question,
+        answers,
+        turns,
+      } = c.req.valid("json");
       const rawReference = c.req.valid("json").fileReference;
 
       const member = await db.userToProject.findUnique({
@@ -412,5 +460,5 @@ export const questionsRoutes = new Hono<AuthContext>()
           });
 
       return c.json({ question: saved });
-    }
+    },
   );

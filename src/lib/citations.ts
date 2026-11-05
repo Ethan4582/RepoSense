@@ -13,7 +13,8 @@ function positiveLine(value: unknown): number | null {
 export function extractCitationRanges(markdown: string): SourceLineRange[] {
   const ranges: SourceLineRange[] = [];
   const seen = new Set<string>();
-  const regex = /\[\[([^:\]\n]+):(\d+)(?:-(\d+))?\]\]/g;
+  const regex =
+    /\[\[((?:\[\[[^\]\n]+\]\]|\[[^\]\n]+\]|[^:\]\n])+?):(\d+)(?:-(\d+))?\]\]/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(markdown)) !== null) {
@@ -23,6 +24,23 @@ export function extractCitationRanges(markdown: string): SourceLineRange[] {
     if (!filePath || seen.has(filePath) || startLine < 1 || endLine < startLine)
       continue;
     seen.add(filePath);
+    ranges.push({ filePath, startLine, endLine });
+  }
+
+  return ranges;
+}
+
+export function extractAllCitationRanges(markdown: string): SourceLineRange[] {
+  const ranges: SourceLineRange[] = [];
+  const regex =
+    /\[\[((?:\[\[[^\]\n]+\]\]|\[[^\]\n]+\]|[^:\]\n])+?):(\d+)(?:-(\d+))?\]\]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(markdown)) !== null) {
+    const filePath = match[1]?.trim();
+    const startLine = Number(match[2]);
+    const endLine = match[3] ? Number(match[3]) : startLine;
+    if (!filePath || startLine < 1 || endLine < startLine) continue;
     ranges.push({ filePath, startLine, endLine });
   }
 
@@ -68,25 +86,45 @@ function rangeFromStoredReference(value: unknown): SourceLineRange | null {
 
 export function restoreCitationRanges(
   rawReferences: unknown,
-  answer: string,
+  markdownFallback?: string,
 ): SourceLineRange[] {
-  // The answer contains the exact ranges the user sees, so it takes precedence
-  // over broader retrieval ranges saved with the question.
-  const ranges = extractCitationRanges(answer);
-  const seen = new Set(ranges.map((range) => range.filePath));
-  const references = Array.isArray(rawReferences)
-    ? rawReferences
-    : rawReferences &&
-        typeof rawReferences === "object" &&
-        Array.isArray((rawReferences as { citations?: unknown[] }).citations)
-      ? (rawReferences as { citations: unknown[] }).citations
-      : [];
+  const parsedFromMarkdown = markdownFallback
+    ? extractCitationRanges(markdownFallback)
+    : [];
+  const markdownMap = new Map(
+    parsedFromMarkdown.map((item) => [item.filePath, item]),
+  );
 
-  for (const reference of references) {
-    const range = rangeFromStoredReference(reference);
-    if (!range || seen.has(range.filePath)) continue;
-    seen.add(range.filePath);
-    ranges.push(range);
+  const ranges: SourceLineRange[] = [];
+  const seen = new Set<string>();
+
+  if (Array.isArray(rawReferences)) {
+    for (const item of rawReferences) {
+      const fromStored = rangeFromStoredReference(item);
+      if (!fromStored) continue;
+
+      const matchingMarkdown = markdownMap.get(fromStored.filePath);
+      const startLine =
+        fromStored.startLine ?? matchingMarkdown?.startLine ?? 1;
+      const endLine =
+        fromStored.endLine ?? matchingMarkdown?.endLine ?? startLine;
+
+      if (!seen.has(fromStored.filePath)) {
+        seen.add(fromStored.filePath);
+        ranges.push({
+          filePath: fromStored.filePath,
+          startLine,
+          endLine: Math.max(startLine, endLine),
+        });
+      }
+    }
+  }
+
+  for (const item of parsedFromMarkdown) {
+    if (!seen.has(item.filePath)) {
+      seen.add(item.filePath);
+      ranges.push(item);
+    }
   }
 
   return ranges;

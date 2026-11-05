@@ -26,6 +26,10 @@ export const projectRouter = createTRPCRouter({
         createdAt: "desc",
       },
       include: {
+        userToProjects: {
+          where: { userId: ctx.user.userId },
+          select: { role: true },
+        },
         indexingJobs: {
           orderBy: { startedAt: "desc" },
           take: 1,
@@ -45,6 +49,7 @@ export const projectRouter = createTRPCRouter({
           }));
           return {
             ...withoutProjectSecrets(p),
+            role: p.userToProjects[0]?.role ?? "VIEWER",
             description: meta.description,
             stars: meta.stars,
             language: meta.language,
@@ -52,6 +57,7 @@ export const projectRouter = createTRPCRouter({
         } catch {
           return {
             ...withoutProjectSecrets(p),
+            role: p.userToProjects[0]?.role ?? "VIEWER",
             description: null,
             stars: 0,
             language: null,
